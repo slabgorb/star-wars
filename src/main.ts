@@ -9,6 +9,11 @@ import { stepGame } from './core/sim'
 import { createInputController } from './shell/input'
 import { createLoop } from './shell/loop'
 import { render } from './shell/render'
+import { loadVectorFont } from './shell/font'
+
+// Kick off the HUD vector font load. Best-effort and non-blocking: the loop
+// keeps drawing with the fallback font and picks up Vector Battle once it lands.
+void loadVectorFont()
 
 const canvas = document.getElementById('game') as HTMLCanvasElement
 const ctx = canvas.getContext('2d')!

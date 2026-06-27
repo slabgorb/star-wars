@@ -18,6 +18,12 @@ const FIRE_GLOW = '#ffd60a' // enemy fireball amber
 const NEAR = 1
 const FAR = 5000
 
+// The shared arcade vector face (loaded by shell/font.ts), with the same
+// 'Orbitron', monospace fallback chain tempest uses so the HUD reads even before
+// the web font lands.
+const HUD_FONT = "700 18px 'Vector Battle', 'Orbitron', monospace"
+const BANNER_FONT = "900 48px 'Vector Battle', 'Orbitron', monospace"
+
 export function render(ctx: CanvasRenderingContext2D, state: GameState, w: number, h: number): void {
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, w, h)
@@ -112,20 +118,56 @@ function drawCrosshair(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
   ctx.shadowBlur = 0
 }
 
-/** Shields, score, and the game-over banner — stroked glowing vector text. */
+/** Shields, score, and the game-over banner — glowing Vector Battle text. */
 function drawHud(ctx: CanvasRenderingContext2D, state: GameState, w: number, h: number): void {
-  ctx.lineWidth = 1
-  ctx.strokeStyle = GLOW
-  ctx.shadowColor = GLOW
-  ctx.shadowBlur = 8
-  ctx.font = 'bold 18px monospace'
-  ctx.strokeText(`SHIELDS ${state.lives}`, 24, 34)
-  const score = `SCORE ${state.score}`
-  ctx.strokeText(score, w - 24 - score.length * 11, 34)
+  ctx.textBaseline = 'alphabetic'
+
+  ctx.font = HUD_FONT
+  ctx.textAlign = 'left'
+  glowText(ctx, `SHIELDS ${state.lives}`, 24, 36, GLOW, 10)
+
+  ctx.textAlign = 'right'
+  glowText(ctx, `SCORE ${state.score}`, w - 24, 36, GLOW, 10)
+
   if (state.gameOver) {
-    ctx.font = 'bold 40px monospace'
-    const banner = 'GAME OVER'
-    ctx.strokeText(banner, w / 2 - banner.length * 12, h / 2)
+    ctx.font = BANNER_FONT
+    ctx.textAlign = 'center'
+    glowText(ctx, 'GAME OVER', w / 2, h / 2, TIE_GLOW, 24)
+  }
+
+  // Reset shared text state so nothing leaks into the next frame.
+  ctx.textAlign = 'left'
+  ctx.letterSpacing = '0px'
+  ctx.shadowBlur = 0
+}
+
+// Glowing vector-style text (caps): a wide bloom plus a tighter inner glow under
+// a crisp core, mirroring tempest's HUD so both games light their thin caps the
+// same way. Respects the caller's current font and textAlign.
+function glowText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  color: string,
+  blur: number,
+): void {
+  // ~0.1em tracking, derived from the current font's px size, for an airy
+  // arcade-marquee feel that also helps the thin vector caps read.
+  const px = /(\d+(?:\.\d+)?)px/.exec(ctx.font)
+  ctx.letterSpacing = `${((px ? parseFloat(px[1]) : 16) * 0.1).toFixed(2)}px`
+  const caps = text.toUpperCase() // Vector Battle is caps-only
+  ctx.fillStyle = color
+  ctx.shadowColor = color
+  if (blur > 0) {
+    ctx.save()
+    ctx.globalCompositeOperation = 'lighter'
+    ctx.shadowBlur = blur * 1.5
+    ctx.fillText(caps, x, y)
+    ctx.shadowBlur = blur * 0.8
+    ctx.fillText(caps, x, y)
+    ctx.restore()
   }
   ctx.shadowBlur = 0
+  ctx.fillText(caps, x, y)
 }
