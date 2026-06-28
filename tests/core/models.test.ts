@@ -558,3 +558,91 @@ describe('models — exhaust port (8-5)', () => {
     expect(isSingleComponent(m)).toBe(true)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Story 8-10 — RED phase (Han Solo / TEA): TIE_FIGHTER + DARTH_TIE ring topology.
+//
+// Inherited 8-3 debt, surfaced during 8-5: both TIE models still carry the 8-2
+// nearest-neighbour heuristic edges. They are well-formed (the universal suite
+// above passes for them) but visually TANGLED — their coplanar rims never close —
+// and until now had NO topology guard, despite context-epic-8.md claiming 8-3
+// fixed them. Story 8-10 re-authors both edge lists by STRUCTURE (solar panels +
+// pylons + cockpit ball), NOT by closing deriveRings() rings.
+//
+// REVISED (GREEN eyeball via the /models.html contact sheet): the 8-4
+// "close every derived ring" contract is WRONG for the TIEs. Their derived rings
+// are cross-panel / cross-body quads (4 corners sharing an axis coord + radius
+// that span BOTH solar panels), so closing them all BOXES the ship — rings close,
+// CI passes, but the model renders as a box. The guard below was therefore
+// changed from ring-closure to an isSingleComponent connectivity check; the
+// universal no-orphan-vertices and bilateral Y-symmetry suites cover the rest.
+// The deriveRings/inducedSingleCycle ground-truth notes that follow are retained
+// as the record of why the ring approach was abandoned for these two models.
+//
+// GROUND TRUTH (measured against the live registry, not assumed — see 8-5's note
+// on measuring premises, and this story's Delivery Findings):
+//   * TIE_FIGHTER: deriveRings() finds 9 coplanar equal-radius rings (all size 4,
+//     vertex-disjoint); 0 close under the current heuristic edges.
+//   * DARTH_TIE: deriveRings() finds 38 rings (size 4); 2 happen to close, 36 do
+//     NOT. (The story's "38 rings, none close" overstates it — 2 already close —
+//     but the guard still fails RED on the other 36. Logged as a finding.)
+// Verified FEASIBLE for GREEN before pinning this contract: ordering each ring's
+// members by polar angle and closing the perimeter makes all 9 / all 38 rings
+// single induced cycles (DARTH's 38 rings overlap — 72 pairs share 2 vertices —
+// yet still close simultaneously). TIE's 9 rings cover only 36 of its 52
+// vertices, so GREEN must ALSO strut in the remaining 16 cockpit-detail vertices
+// — already enforced by the universal "no orphan vertices" test above.
+//
+// As with 8-2/8-4/8-5, these assert well-formedness + topology, never a specific
+// edge list, so GREEN stays free to choose the actual loops/struts. Orientation
+// and scale stay RENDER concerns (context-epic-8.md) — eyeball both TIEs on first
+// Wave 1 render. Connectivity (both TIEs are currently fragmented, not a single
+// component) is logged as a non-blocking finding for that eyeball pass, not pinned
+// here — it is outside the 8-4 ring-closure contract this story mirrors.
+// ---------------------------------------------------------------------------
+
+const findDarth = () => findByName(/darth/i)
+
+describe('models — TIE fighter ring topology (8-10)', () => {
+  it('exists with vertices and edges', () => {
+    const m = findTie()
+    expect(m).toBeDefined()
+    if (!m) return
+    expect(m.vertices.length).toBeGreaterThan(0)
+    expect(m.edges.length).toBeGreaterThan(0)
+  })
+
+  it('is a single connected wireframe (panels + pylons + ball, not fragmented)', () => {
+    // 8-10 (revised): deriveRings() on the TIE finds cross-panel quads — 4 corners
+    // sharing an x and a y/z-radius that span BOTH solar panels — so closing every
+    // derived ring would BOX the ship (see models.ts). The TIE's real structure is
+    // panels + pylons + a faceted ball, so the topology guard here is connectivity:
+    // one component, no free-floating panel or ball. No-orphan-vertices and
+    // bilateral Y-symmetry remain covered by the universal suite above.
+    const m = findTie()
+    expect(m).toBeDefined()
+    if (!m) return
+    expect(isSingleComponent(m)).toBe(true)
+  })
+})
+
+describe('models — Darth Vader TIE ring topology (8-10)', () => {
+  it('exists with vertices and edges', () => {
+    const m = findDarth()
+    expect(m).toBeDefined()
+    if (!m) return
+    expect(m.vertices.length).toBeGreaterThan(0)
+    expect(m.edges.length).toBeGreaterThan(0)
+  })
+
+  it('is a single connected wireframe (bent wings + pylons + ball, not fragmented)', () => {
+    // 8-10 (revised): like TIE_FIGHTER, deriveRings() on Vader's TIE finds
+    // cross-body quads whose closure boxes the ship, so the topology guard here is
+    // connectivity, not ring-closure. No-orphan-vertices and bilateral Y-symmetry
+    // remain covered by the universal suite above.
+    const m = findDarth()
+    expect(m).toBeDefined()
+    if (!m) return
+    expect(isSingleComponent(m)).toBe(true)
+  })
+})

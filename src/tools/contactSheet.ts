@@ -13,7 +13,7 @@
 
 import { MODELS } from '../core/models'
 import {
-  perspective, multiply, rotationY, translation, IDENTITY, type Mat4, type Vec3,
+  perspective, multiply, rotationX, rotationY, translation, IDENTITY, type Mat4, type Vec3,
 } from '../core/math3d'
 import { drawWireframe, GLOW_FOR, DEFAULT_GLOW, NEAR, FAR } from '../shell/wireframe'
 import { SURFACE_ORIENT } from '../shell/render'
@@ -23,6 +23,7 @@ import { loadVectorFont } from '../shell/font'
 const FOV_Y = Math.PI / 3 // match the game camera
 const COLS = 3
 const SPIN_RATE = 0.6 // radians per second
+const VIEW_TILT = -Math.PI / 6 // fixed 3/4-view pitch so flat y=0 models aren't edge-on
 const GAMEPLAY_DISTANCE = 2200 // representative engagement distance for "G" mode
 const LABEL_FONT = "700 14px 'Vector Battle', 'Orbitron', monospace"
 const HINT_COLOR = '#7a8699'
@@ -97,9 +98,12 @@ function frame(now: number): void {
     const proj = perspective(FOV_Y, r.w / r.h, NEAR, FAR)
     const dist = fitToCell ? fitDistance(radius, FOV_Y) : GAMEPLAY_DISTANCE
 
-    // vertex -> recentre -> display-orient -> spin (matrices compose right-to-left)
+    // vertex -> recentre -> display-orient -> spin -> fixed view tilt
+    // (matrices compose right-to-left). The tilt lifts flat y=0-plane models
+    // (TRENCH, EXHAUST_PORT) out of edge-on and gives every model a 3/4 view.
     const recentre = translation(-center[0], -center[1], -center[2])
-    const orient = multiply(rotationY(spinAngle), multiply(orientFor(m.name), recentre))
+    const spun = multiply(rotationY(spinAngle), multiply(orientFor(m.name), recentre))
+    const orient = multiply(rotationX(VIEW_TILT), spun)
     drawWireframe(ctx, m, [0, 0, -dist] as Vec3, proj, r.w, r.h, color, orient)
 
     // cell labels
