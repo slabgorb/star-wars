@@ -11,6 +11,11 @@ export interface InputController {
 
 export function createInputController(canvas: HTMLCanvasElement): InputController {
   const state: Input = { aimX: 0, aimY: 0, fire: false }
+  // `start` is a one-shot edge (the start button / Enter / 1), not a held axis:
+  // it is latched on keydown and cleared the next time the core samples it, so a
+  // single press fires exactly one attract->play (or gameover->attract) transition
+  // however many fixed steps the frame runs.
+  let pendingStart = false
 
   window.addEventListener('pointermove', (e) => {
     const r = canvas.getBoundingClientRect()
@@ -19,12 +24,17 @@ export function createInputController(canvas: HTMLCanvasElement): InputControlle
   })
   window.addEventListener('pointerdown', () => { state.fire = true })
   window.addEventListener('pointerup', () => { state.fire = false })
-  window.addEventListener('keydown', (e) => { if (e.code === 'Space') state.fire = true })
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') state.fire = true
+    if (e.code === 'Enter' || e.code === 'Digit1' || e.code === 'Numpad1') pendingStart = true
+  })
   window.addEventListener('keyup', (e) => { if (e.code === 'Space') state.fire = false })
 
   return {
     sample(): Input {
-      return { ...state }
+      const sampled: Input = { ...state, start: pendingStart }
+      pendingStart = false
+      return sampled
     },
   }
 }

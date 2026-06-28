@@ -11,6 +11,7 @@
 // cockpit cost a shield. Every spatial test routes through the Math Box and the
 // rule helpers — there is no ad-hoc geometry in here.
 
+import { initialState } from './state'
 import type { GameState, Projectile, Enemy, Turret, Phase } from './state'
 import {
   PROJECTILE_TTL,
@@ -19,7 +20,6 @@ import {
   SPAWN_INTERVAL,
   SPAWN_DISTANCE,
   SPAWN_SPREAD,
-  ENEMY_SPEED,
   ENEMY_SHOT_SPEED,
   ENEMY_SHOT_TTL,
   ENEMY_FIRE_INTERVAL,
@@ -41,7 +41,7 @@ import {
 } from './state'
 import type { Input } from './input'
 import { add, scale, sub, normalize, type Vec3 } from './math3d'
-import { aimDirection, collides } from './gameRules'
+import { aimDirection, collides, waveParams } from './gameRules'
 import { nextFloat, nextInt, type Rng } from './rng'
 
 const COCKPIT: Vec3 = [0, 0, 0]
@@ -52,9 +52,18 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   const aimX = input.aimX
   const aimY = input.aimY
 
-  // Once the last shield is gone the wave is over: track time and aim, but leave
-  // the battlefield frozen as it lies.
-  if (state.gameOver) {
+  // --- Run lifecycle framing (story 8-6) -----------------------------------
+  // The attract/title screen idles (the wireframe keeps spinning on `t`) and only
+  // `start` matters — it begins a fresh run. A run that has ended holds the
+  // battlefield frozen until `start` returns to attract. Both screens ignore the
+  // gameplay inputs, so attract -> playing -> gameover -> attract is the whole
+  // loop. Active play is the fall-through below (mode === 'playing').
+  if (state.mode === 'attract') {
+    if (input.start) return startRun(state)
+    return { ...state, t }
+  }
+  if (state.mode === 'gameover' || state.gameOver) {
+    if (input.start) return { ...state, mode: 'attract', gameOver: false, t, aimX, aimY }
     return { ...state, t, aimX, aimY }
   }
 
@@ -84,12 +93,18 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   if (state.phase === 'surface') return progress(stepSurface(state, input, dt, common))
   if (state.phase === 'trench') return stepTrench(state, common)
 
+  // The wave's difficulty knobs: later waves spawn TIEs sooner, send them in
+  // faster, and lob fireballs more often (gameRules.waveParams; wave 1 is today's
+  // balance exactly). The phase machinery (quotas/transitions) is 8-8's and is
+  // untouched — this only scales how hard the space phase plays.
+  const params = waveParams(state.wave)
+
   // --- TIEs: advance, then spawn into a free slot --------------------------
   const enemies = state.enemies.map((e) => moveEnemy(e, dt))
   let spawnTimer = state.spawnTimer - dt
   if (spawnTimer <= 0 && enemies.length < WAVE_SIZE) {
-    enemies.push(spawnTie(rng))
-    spawnTimer = SPAWN_INTERVAL
+    enemies.push(spawnTie(rng, params.enemySpeed))
+    spawnTimer = params.spawnInterval
   }
 
   // --- Enemy fireballs: a TIE fires at the cockpit -------------------------
@@ -101,7 +116,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       vel: scale(toCockpit(shooter.pos), ENEMY_SHOT_SPEED),
       ttl: ENEMY_SHOT_TTL,
     })
-    enemyFireCooldown = ENEMY_FIRE_INTERVAL
+    enemyFireCooldown = params.enemyFireInterval
   }
 
   // --- Player bolts vs TIEs: destroy on contact, score per kill ------------
@@ -150,6 +165,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     score,
     lives,
     gameOver: lives <= 0,
+    mode: lives <= 0 ? 'gameover' : state.mode,
     phaseKills: state.phaseKills + killedTie.size,
     projectiles: liveBolts,
     enemies: liveEnemies,
@@ -158,6 +174,15 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     spawnTimer,
     enemyFireCooldown,
   })
+}
+
+/**
+ * Begin a fresh run from the attract/title (or game-over) screen: a brand-new
+ * wave-1 playing game. The current RNG seed carries forward untouched — framing
+ * transitions never consume randomness — so a run is reproducible from its seed.
+ */
+function startRun(s: GameState): GameState {
+  return initialState(s.rng.seed)
 }
 
 /** Pieces the shared prologue already computed, threaded into a phase step. */
@@ -252,6 +277,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     lives,
     altitude,
     gameOver: lives <= 0,
+    mode: lives <= 0 ? 'gameover' : state.mode,
     phaseKills: state.phaseKills + killed.size,
     projectiles: liveBolts,
     turrets: standingTurrets,
@@ -350,12 +376,13 @@ function moveEnemy(e: Enemy, dt: number): Enemy {
   return { ...e, pos: add(e.pos, scale(e.vel ?? ZERO, dt)) }
 }
 
-/** A fresh TIE: lateral-spread spawn far down −Z, aimed at the cockpit. */
-function spawnTie(rng: Rng): Enemy {
+/** A fresh TIE: lateral-spread spawn far down −Z, aimed at the cockpit at the
+ * wave's approach speed (gameRules.waveParams). */
+function spawnTie(rng: Rng, speed: number): Enemy {
   const x = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
   const y = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
   const pos: Vec3 = [x, y, -SPAWN_DISTANCE]
-  return { pos, vel: scale(toCockpit(pos), ENEMY_SPEED), kind: 'tie' }
+  return { pos, vel: scale(toCockpit(pos), speed), kind: 'tie' }
 }
 
 /** Unit vector from a world position back toward the cockpit at the origin. */
