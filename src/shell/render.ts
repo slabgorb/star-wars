@@ -15,7 +15,7 @@ import {
   TRENCH,
   EXHAUST_PORT,
 } from '../core/models'
-import { crosshairNdc } from '../core/gameRules'
+import { crosshairNdc, FOV_Y } from '../core/gameRules'
 import { perspective, add, rotationZ, IDENTITY, type Mat4, type Vec3 } from '../core/math3d'
 import { project, drawWireframe, GLOW_FOR, NEAR, FAR } from './wireframe'
 
@@ -82,7 +82,7 @@ export function render(
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, w, h)
 
-  const proj = perspective(Math.PI / 3, w / h, NEAR, FAR)
+  const proj = perspective(FOV_Y, w / h, NEAR, FAR)
 
   if (state.phase === 'surface') {
     // The floor drops away as the ship climbs, so the surface tracks altitude.
@@ -153,7 +153,9 @@ function drawSpark(
 function drawCrosshair(ctx: CanvasRenderingContext2D, state: GameState, w: number, h: number): void {
   const [nx, ny] = crosshairNdc(state.aimX, state.aimY)
   const cx = (nx * 0.5 + 0.5) * w
-  const cy = (ny * 0.5 + 0.5) * h
+  // Match project()'s NDC→screen mapping (which flips Y for the canvas), so the
+  // reticle sits exactly where a target at the same NDC is drawn: +aimY → top.
+  const cy = (-ny * 0.5 + 0.5) * h
   const r = 16
   ctx.lineWidth = 2
   ctx.strokeStyle = GLOW

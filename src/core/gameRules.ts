@@ -8,13 +8,28 @@
 import { length, sub, normalize, type Vec3 } from './math3d'
 import { SPAWN_INTERVAL, ENEMY_SPEED, ENEMY_FIRE_INTERVAL } from './state'
 
+/** Vertical field of view (radians) the renderer projects the scene with — the
+ * single source of truth shared by the camera (shell/render.ts) and the aim
+ * below, so a bolt flies toward exactly what the crosshair covers. */
+export const FOV_Y = Math.PI / 3
+
 /**
  * Unit firing direction for a given yoke position. At rest (0,0) it points
  * straight ahead, down −Z (the camera looks down −Z, OpenGL convention). The
- * yoke deflects it left/right and up/down while it stays unit length.
+ * yoke deflects it left/right (+aimX = right) and up/down (+aimY = up) while it
+ * stays unit length.
+ *
+ * Crucially, the deflection is the INVERSE of the perspective projection the
+ * scene is drawn under (FOV_Y, viewport `aspect` = width/height): a point down
+ * this ray projects back onto the crosshair at NDC [aimX, aimY] (crosshairNdc),
+ * so the bolt hits what the player aimed at. Without the f = 1/tan(FOV_Y/2) and
+ * aspect terms the bolt overshoots the reticle by ~f and misses — the 8-16
+ * kill-loop bug. `aspect` is a viewport property the shell supplies via Input; it
+ * defaults to 1 (square), which is all the pure-core vertical-axis tests need.
  */
-export function aimDirection(aimX: number, aimY: number): Vec3 {
-  return normalize([aimX, aimY, -1])
+export function aimDirection(aimX: number, aimY: number, aspect = 1): Vec3 {
+  const f = 1 / Math.tan(FOV_Y / 2)
+  return normalize([(aimX * aspect) / f, aimY / f, -1])
 }
 
 /**

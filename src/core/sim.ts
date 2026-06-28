@@ -86,7 +86,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   if (input.fire && fireCooldown <= 0) {
     projectiles.push({
       pos: [...COCKPIT] as Vec3,
-      vel: scale(aimDirection(aimX, aimY), PROJECTILE_SPEED),
+      vel: scale(aimDirection(aimX, aimY, input.aspect), PROJECTILE_SPEED),
       ttl: PROJECTILE_TTL,
     })
     fireCooldown = FIRE_INTERVAL
