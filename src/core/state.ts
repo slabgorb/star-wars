@@ -9,7 +9,7 @@
 // no DOM, no time, no randomness. The 3D math that moves and hits them lives in
 // math3d.ts (the Math Box) and the rule functions in gameRules.ts.
 
-import type { Vec3 } from './math3d'
+import type { Vec3, Mat4 } from './math3d'
 import type { GameEvent } from './events'
 import { createRng, type Rng } from './rng'
 
@@ -42,6 +42,11 @@ export interface Enemy {
   vel: Vec3
   /** Enemy type — a string union (no enum) so it stays cheap and serialisable. */
   kind: 'tie'
+  /** Per-enemy facing: a "look toward the cockpit" rotation recomputed each step
+   * from the TIE's current position, so it banks at the player like the cabinet
+   * (story 8-13). Computed in core (facing is sim state); render only applies it.
+   * Maps the model's forward axis (+Z) onto the direction to the cockpit. */
+  orient: Mat4
 }
 
 /** A laser turret standing on the Death Star surface (Wave 2). World space. */

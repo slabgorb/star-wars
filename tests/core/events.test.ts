@@ -37,6 +37,7 @@ import { stepGame } from '../../src/core/sim'
 import { initialState, SPACE_WAVE_QUOTA, MIN_SKIM_ALTITUDE } from '../../src/core/state'
 import type { Enemy, Turret, Projectile, GameState } from '../../src/core/state'
 import { NO_INPUT } from '../../src/core/input'
+import { IDENTITY } from '../../src/core/math3d'
 // Read core source as text via Vite's `?raw` (no Node `fs` types — the project is
 // deliberately browser-pure, which is exactly the boundary this suite guards).
 import eventsSrc from '../../src/core/events.ts?raw'
@@ -152,14 +153,14 @@ describe('event emission — space phase gameplay moments (AC1)', () => {
   })
 
   it("emits 'enemy-death' (tie) carrying enemyType + death position on a bolt hit", () => {
-    const tie: Enemy = { pos: [0, 0, -300], vel: [0, 0, 0], kind: 'tie' }
+    const tie: Enemy = { pos: [0, 0, -300], vel: [0, 0, 0], kind: 'tie', orient: IDENTITY }
     const bolt: Projectile = { pos: [0, 0, -300], vel: [0, 0, 0], ttl: 1 } // overlaps the TIE
     const out = stepGame(playing({ enemies: [tie], projectiles: [bolt] }), NO_INPUT, DT)
     expect(out.events).toContainEqual({ type: 'enemy-death', enemyType: 'tie', pos: [0, 0, -300] })
   })
 
   it("emits 'enemy-fire' carrying the bolt's spawn position when the formation fires", () => {
-    const tie: Enemy = { pos: [100, 0, -500], vel: [0, 0, 0], kind: 'tie' }
+    const tie: Enemy = { pos: [100, 0, -500], vel: [0, 0, 0], kind: 'tie', orient: IDENTITY }
     const out = stepGame(playing({ enemies: [tie], enemyFireCooldown: 0 }), NO_INPUT, DT)
     const fire = out.events.find((e) => e.type === 'enemy-fire')
     expect(fire).toBeDefined()
@@ -168,7 +169,7 @@ describe('event emission — space phase gameplay moments (AC1)', () => {
   })
 
   it("emits 'player-death' (cause 'enemy') and spends a shield when a TIE reaches the cockpit", () => {
-    const tie: Enemy = { pos: [0, 0, 0], vel: [0, 0, 0], kind: 'tie' } // already at the cockpit
+    const tie: Enemy = { pos: [0, 0, 0], vel: [0, 0, 0], kind: 'tie', orient: IDENTITY } // already at the cockpit
     const out = stepGame(playing({ enemies: [tie], lives: 6 }), NO_INPUT, DT)
     expect(out.events).toContainEqual({ type: 'player-death', cause: 'enemy' })
     expect(out.lives).toBe(5)

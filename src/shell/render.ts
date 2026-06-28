@@ -16,7 +16,7 @@ import {
   EXHAUST_PORT,
 } from '../core/models'
 import { crosshairNdc, FOV_Y } from '../core/gameRules'
-import { perspective, add, rotationZ, IDENTITY, type Mat4, type Vec3 } from '../core/math3d'
+import { perspective, add, multiply, rotationZ, IDENTITY, type Mat4, type Vec3 } from '../core/math3d'
 import { project, drawWireframe, GLOW_FOR, NEAR, FAR } from './wireframe'
 
 const GLOW = '#00e5ff' // cockpit cyan
@@ -43,6 +43,19 @@ const FIRE_GLOW = '#ffd60a' // enemy fireball amber
 export const SURFACE_ORIENT: Mat4 = rotationZ(-Math.PI / 2)
 export const TOWER_ORIENT: Mat4 = IDENTITY
 export const TRENCH_ORIENT: Mat4 = IDENTITY
+
+// TIE display correction (story 8-13). The authentic model stacks its two
+// hexagonal solar panels along the object-space Y axis (panels at y=±208, lying
+// flat in X/Z) — a TIE on its side. A +90° roll about Z stands them upright so
+// they sit left/right of the cockpit pod, with the model's depth axis on +Z.
+// This FIXED correction is composed with each enemy's DYNAMIC look-at-cockpit
+// `orient` (computed in core) so the upright TIE then banks at the player.
+//
+// NOTE: like the surface orients, the exact correction escapes structural tests
+// (the render guard only asserts `orient` is APPLIED) and MUST be eyeballed in
+// the dev server (port 5274) — confirm the panels read upright and the ship
+// faces the cockpit before sign-off.
+export const TIE_ORIENT: Mat4 = rotationZ(Math.PI / 2)
 
 // The camera skims just above the trench floor; both the floor and the exhaust
 // port are positioned from SIM STATE (see `trenchPlacement`), not static
@@ -106,7 +119,11 @@ export function render(
       drawWireframe(ctx, EXHAUST_PORT, add(port, SKIM_OFFSET), proj, w, h, PORT_GLOW, TRENCH_ORIENT)
     }
   } else {
-    for (const e of state.enemies) drawWireframe(ctx, TIE_FIGHTER, e.pos, proj, w, h, TIE_GLOW)
+    // Each TIE banks at the player: its per-enemy look-at `orient` (core) turned
+    // upright by the fixed TIE_ORIENT display correction (display first, then
+    // look => multiply(orient, TIE_ORIENT)).
+    for (const e of state.enemies)
+      drawWireframe(ctx, TIE_FIGHTER, e.pos, proj, w, h, TIE_GLOW, multiply(e.orient, TIE_ORIENT))
   }
   for (const p of state.projectiles) drawSpark(ctx, p.pos, proj, w, h, BOLT_GLOW, 4)
   for (const s of state.enemyShots) drawSpark(ctx, s.pos, proj, w, h, FIRE_GLOW, 6)
