@@ -109,7 +109,7 @@ function frame(now: number): void {
     ctx.shadowColor = color
     ctx.shadowBlur = 6
     ctx.fillText(m.name.toUpperCase(), 10, 22)
-    ctx.fillText(`V:${m.vertices.length} E:${m.edges.length}`, 10, r.h - 12)
+    ctx.fillText(`V:${m.vertices.length} E:${m.edges.length}`, 10, 40)
     ctx.shadowBlur = 0
     ctx.restore()
   }
