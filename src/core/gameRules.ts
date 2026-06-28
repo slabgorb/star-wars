@@ -6,6 +6,7 @@
 // single source of 3D truth.
 
 import { length, sub, normalize, type Vec3 } from './math3d'
+import { SPAWN_INTERVAL, ENEMY_SPEED, ENEMY_FIRE_INTERVAL } from './state'
 
 /**
  * Unit firing direction for a given yoke position. At rest (0,0) it points
@@ -36,4 +37,40 @@ export function collides(a: Vec3, b: Vec3, radius: number): boolean {
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v
+}
+
+// --- Difficulty ramp across waves -------------------------------------------
+//
+// A run escalates by WAVE: each completed run loops back harder. The ramp is a
+// PURE function of the wave number (no time, no randomness) so it stays in the
+// deterministic core. Mirrors tempest's `levelParams(level)`: a single `ramp`
+// multiplier tightens the spawn/fire cadence (down to positive playable floors,
+// so an arbitrarily deep wave never drives a cadence to zero) and speeds up the
+// enemy approach. Wave 1 reproduces today's space constants EXACTLY, so wiring
+// this in does not shift the Wave-1 balance the 8-3 suite depends on.
+
+/** Difficulty knobs for a wave, consumed by the space-combat step. */
+export interface WaveParams {
+  /** Seconds between TIE spawns into a free slot (tightens with the wave). */
+  spawnInterval: number
+  /** TIE approach speed, units/second (rises with the wave). */
+  enemySpeed: number
+  /** Seconds between enemy fireballs (tightens with the wave). */
+  enemyFireInterval: number
+}
+
+/** Each wave past the first stiffens the ramp by this fraction. */
+const RAMP_PER_WAVE = 0.15
+/** Spawn cadence never drops below this (seconds) however deep the run goes. */
+const SPAWN_INTERVAL_FLOOR = 0.3
+/** Enemy fire cadence never drops below this (seconds). */
+const ENEMY_FIRE_INTERVAL_FLOOR = 0.25
+
+export function waveParams(wave: number): WaveParams {
+  const ramp = 1 + (wave - 1) * RAMP_PER_WAVE
+  return {
+    spawnInterval: Math.max(SPAWN_INTERVAL_FLOOR, SPAWN_INTERVAL / ramp),
+    enemySpeed: ENEMY_SPEED * ramp,
+    enemyFireInterval: Math.max(ENEMY_FIRE_INTERVAL_FLOOR, ENEMY_FIRE_INTERVAL / ramp),
+  }
 }

@@ -15,6 +15,14 @@ import { createRng, type Rng } from './rng'
 /** The three phases of an attack run, in order. */
 export type Phase = 'space' | 'surface' | 'trench'
 
+/**
+ * The run lifecycle (story 8-6 framing). The cabinet idles on the attract/title
+ * screen, plays a run, then shows game-over; pressing start drives the loop
+ * attract -> playing -> gameover -> attract. The phases above happen WITHIN a
+ * 'playing' run; mode frames the run.
+ */
+export type Mode = 'attract' | 'playing' | 'gameover'
+
 /** A bolt in flight — the player's laser or an enemy fireball. World space. */
 export interface Projectile {
   /** World-space position. */
@@ -131,6 +139,10 @@ export const SPACE_WAVE_QUOTA = 6
 export const SURFACE_WAVE_QUOTA = 4
 
 export interface GameState {
+  /** Run lifecycle: attract/title, an active run, or the game-over screen. */
+  mode: Mode
+  /** Which wave the run is on (1-based); drives the HUD and the difficulty ramp. */
+  wave: number
   phase: Phase
   rng: Rng
   /** Crosshair / yoke aim, normalised [-1, 1] per axis. */
@@ -165,6 +177,8 @@ export interface GameState {
 
 export function initialState(seed = 1983): GameState {
   return {
+    mode: 'playing',
+    wave: 1,
     phase: 'space',
     rng: createRng(seed),
     aimX: 0,

@@ -7,6 +7,7 @@
 // does NO game math — it only consumes positions the core already computed.
 
 import type { GameState } from '../core/state'
+import type { HighScoreTable } from '../core/highscore'
 import {
   TIE_FIGHTER,
   DEATH_STAR_SURFACE,
@@ -59,8 +60,15 @@ const PORT_GLOW = '#ff9f0a' // exhaust-port target amber
 // the web font lands.
 const HUD_FONT = "700 18px 'Vector Battle', 'Orbitron', monospace"
 const BANNER_FONT = "900 48px 'Vector Battle', 'Orbitron', monospace"
+const TITLE_FONT = "900 64px 'Vector Battle', 'Orbitron', monospace"
 
-export function render(ctx: CanvasRenderingContext2D, state: GameState, w: number, h: number): void {
+export function render(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  w: number,
+  h: number,
+  highScores: HighScoreTable = [],
+): void {
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, w, h)
 
@@ -91,8 +99,17 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
   for (const p of state.projectiles) drawSpark(ctx, p.pos, proj, w, h, BOLT_GLOW, 4)
   for (const s of state.enemyShots) drawSpark(ctx, s.pos, proj, w, h, FIRE_GLOW, 6)
 
-  drawCrosshair(ctx, state, w, h)
-  drawHud(ctx, state, w, h)
+  // The framing layer (story 8-6): the playing HUD during a run, the attract/title
+  // screen at idle, the game-over board after. The 3D scene above renders behind
+  // all of them (an empty starfield on the framing screens).
+  if (state.mode === 'attract') {
+    drawAttract(ctx, highScores, w, h)
+  } else if (state.mode === 'gameover') {
+    drawGameOver(ctx, state, highScores, w, h)
+  } else {
+    drawCrosshair(ctx, state, w, h)
+    drawHud(ctx, state, w, h)
+  }
 }
 
 /** Project a world point to screen pixels, or null if it is behind the camera. */
@@ -177,27 +194,97 @@ function drawCrosshair(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
   ctx.shadowBlur = 0
 }
 
-/** Shields, score, and the game-over banner — glowing Vector Battle text. */
+/** In-run HUD: shields (left), the wave indicator (centre), score (right). */
 function drawHud(ctx: CanvasRenderingContext2D, state: GameState, w: number, h: number): void {
   ctx.textBaseline = 'alphabetic'
-
   ctx.font = HUD_FONT
+
   ctx.textAlign = 'left'
   glowText(ctx, `SHIELDS ${state.lives}`, 24, 36, GLOW, 10)
 
+  ctx.textAlign = 'center'
+  glowText(ctx, `WAVE ${state.wave}`, w / 2, 36, GLOW, 10)
+
   ctx.textAlign = 'right'
   glowText(ctx, `SCORE ${state.score}`, w - 24, 36, GLOW, 10)
-
-  if (state.gameOver) {
-    ctx.font = BANNER_FONT
-    ctx.textAlign = 'center'
-    glowText(ctx, 'GAME OVER', w / 2, h / 2, TIE_GLOW, 24)
-  }
 
   // Reset shared text state so nothing leaks into the next frame.
   ctx.textAlign = 'left'
   ctx.letterSpacing = '0px'
   ctx.shadowBlur = 0
+}
+
+/** The attract/title screen: the marquee, a start prompt, and the high-score board. */
+function drawAttract(
+  ctx: CanvasRenderingContext2D,
+  highScores: HighScoreTable,
+  w: number,
+  h: number,
+): void {
+  ctx.textBaseline = 'alphabetic'
+  ctx.textAlign = 'center'
+
+  ctx.font = TITLE_FONT
+  glowText(ctx, 'STAR WARS', w / 2, h * 0.26, GLOW, 28)
+
+  ctx.font = HUD_FONT
+  glowText(ctx, 'PRESS START', w / 2, h * 0.38, BOLT_GLOW, 12)
+
+  drawHighScoreBoard(ctx, highScores, w, h)
+
+  ctx.textAlign = 'left'
+  ctx.letterSpacing = '0px'
+  ctx.shadowBlur = 0
+}
+
+/** The game-over screen: the banner, the run's final score, and the board. */
+function drawGameOver(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  highScores: HighScoreTable,
+  w: number,
+  h: number,
+): void {
+  ctx.textBaseline = 'alphabetic'
+  ctx.textAlign = 'center'
+
+  ctx.font = BANNER_FONT
+  glowText(ctx, 'GAME OVER', w / 2, h * 0.24, TIE_GLOW, 24)
+
+  ctx.font = HUD_FONT
+  glowText(ctx, `SCORE ${state.score}`, w / 2, h * 0.33, GLOW, 12)
+  glowText(ctx, 'PRESS START', w / 2, h * 0.39, BOLT_GLOW, 12)
+
+  drawHighScoreBoard(ctx, highScores, w, h)
+
+  ctx.textAlign = 'left'
+  ctx.letterSpacing = '0px'
+  ctx.shadowBlur = 0
+}
+
+/** The local high-score ladder (descending), shared by the framing screens. */
+function drawHighScoreBoard(
+  ctx: CanvasRenderingContext2D,
+  highScores: HighScoreTable,
+  w: number,
+  h: number,
+): void {
+  ctx.textAlign = 'center'
+  ctx.font = HUD_FONT
+  glowText(ctx, 'HIGH SCORES', w / 2, h * 0.5, GLOW, 10)
+
+  let y = h * 0.5 + 30
+  if (highScores.length === 0) {
+    glowText(ctx, 'NO SCORES YET', w / 2, y, GLOW, 6)
+    return
+  }
+  for (let i = 0; i < highScores.length; i++) {
+    const e = highScores[i]
+    const rank = String(i + 1).padStart(2, ' ')
+    const pts = String(e.score).padStart(6, ' ')
+    glowText(ctx, `${rank}  ${e.name}  ${pts}  WAVE ${e.wave}`, w / 2, y, GLOW, 6)
+    y += 24
+  }
 }
 
 // Glowing vector-style text (caps): a wide bloom plus a tighter inner glow under

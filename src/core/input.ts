@@ -11,6 +11,9 @@ export interface Input {
   aimY: number
   /** Trigger held this frame. */
   fire: boolean
+  /** Start button — begins a run from the attract/title or game-over screen.
+   * Optional: gameplay frames never need it, only the framing transitions do. */
+  start?: boolean
 }
 
 export const NO_INPUT: Input = { aimX: 0, aimY: 0, fire: false }
