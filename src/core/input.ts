@@ -7,10 +7,16 @@
 export interface Input {
   /** Yoke X, normalised to [-1, 1] (left .. right). */
   aimX: number
-  /** Yoke Y, normalised to [-1, 1] (up .. down). */
+  /** Yoke Y, normalised to [-1, 1]; +aimY is UP (matches the render NDC and
+   * gameRules.aimDirection — the shell negates the downward-growing pointer Y). */
   aimY: number
   /** Trigger held this frame. */
   fire: boolean
+  /** Viewport aspect ratio (width / height) the scene is projected with. The
+   * shell supplies it so the firing aim inverts the SAME projection the crosshair
+   * is drawn under (gameRules.aimDirection). Optional: defaults to square in the
+   * pure core, which is all the vertical-axis tests need. */
+  aspect?: number
   /** Start button — begins a run from the attract/title or game-over screen.
    * Optional: gameplay frames never need it, only the framing transitions do. */
   start?: boolean
