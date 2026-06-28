@@ -6,7 +6,7 @@
 // their edges are stroked with `shadowBlur` for the vector-CRT glow. The shell
 // does NO game math — it only consumes positions the core already computed.
 
-import { EXHAUST_PORT_DISTANCE, type GameState } from '../core/state'
+import { EXHAUST_PORT_DISTANCE, SPAWN_DISTANCE, type GameState } from '../core/state'
 import type { HighScoreTable } from '../core/highscore'
 import {
   TIE_FIGHTER,
@@ -51,6 +51,28 @@ const TRENCH_SKIM = 60
 const SKIM_OFFSET: Vec3 = [0, -TRENCH_SKIM, 0] // lower the world so the camera rides above the floor
 const PORT_GLOW = GLOW_FOR['Exhaust Port'] // exhaust-port target amber (shared)
 
+// Where the shell seats the Death Star surface in Z (story 8-11). The relief is
+// DEEP (object Z spans ~ -3840..+6720) and SURFACE_ORIENT only ROLLS it about Z,
+// so its near end stays at +6720 in world Z. Drawn at Z=0 (the old bug) that near
+// end fell BEHIND the cockpit and was clipped by the near plane, leaving the
+// floor invisible while only a far speck survived ahead of the turrets. We shift
+// the whole relief forward so its near ring sits just inside the turret band
+// (turrets spawn at -SPAWN_DISTANCE and scroll in) and the rest recedes ahead to
+// the horizon — derived from the model so it tracks the geometry, not a literal.
+const SURFACE_NEAR_EXTENT = Math.max(...DEATH_STAR_SURFACE.vertices.map((v) => v[2]))
+const Z_SURFACE_PLACEMENT = SURFACE_NEAR_EXTENT + SPAWN_DISTANCE / 2
+
+/**
+ * Where the shell draws the Death Star surface floor — derived PURELY from sim
+ * state, mirroring `trenchPlacement` and honouring the core/shell boundary. The
+ * floor tracks the ship's altitude in Y (it drops away as the ship climbs) and
+ * sits a fixed distance ahead in Z so the relief reads as a skimmable floor in
+ * front of the cockpit instead of straddling it at the origin (the 8-11 bug).
+ */
+export function surfacePlacement(state: GameState): { floor: Vec3 } {
+  return { floor: [0, -state.altitude, -Z_SURFACE_PLACEMENT] }
+}
+
 /**
  * Where the shell draws the trench floor and the exhaust port — derived PURELY
  * from sim state, honouring the core/shell boundary: the core owns the port's
@@ -85,8 +107,9 @@ export function render(
   const proj = perspective(FOV_Y, w / h, NEAR, FAR)
 
   if (state.phase === 'surface') {
-    // The floor drops away as the ship climbs, so the surface tracks altitude.
-    const floor: Vec3 = [0, -state.altitude, 0]
+    // The floor drops away as the ship climbs (Y) and sits ahead of the cockpit
+    // (Z) so the relief actually reads — both come from surfacePlacement (8-11).
+    const { floor } = surfacePlacement(state)
     drawWireframe(ctx, DEATH_STAR_SURFACE, floor, proj, w, h, SURFACE_GLOW, SURFACE_ORIENT)
     for (const tu of state.turrets) {
       // Turrets STAND on the surface, so they live in the floor's altitude frame:
