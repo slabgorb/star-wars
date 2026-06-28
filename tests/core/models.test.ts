@@ -406,3 +406,155 @@ describe('models — surface tower ring topology (8-4)', () => {
     }
   })
 })
+
+// ---------------------------------------------------------------------------
+// Story 8-5 — RED phase (Han Solo / TEA): Wave 3 trench run geometry.
+//
+// GROUND TRUTH (measured against the live registry, not assumed — see the
+// session's Delivery Findings): the 8-3 architect note's "TRENCH renders tangled
+// / still carries heuristic edges" premise is FALSE for ring closure. TRENCH's
+// two concentric floor squares ([0,1,2,3] outer rim, [4,5,6,7] inner rim) ALREADY
+// close into clean single loops — the 8-vertex case was simple enough that the
+// 8-2 nearest-neighbour heuristic happened to land both rectangle perimeters.
+//
+// The real Wave 3 gaps are STRUCTURAL, not a tangle:
+//   (a) the two floor loops are DISCONNECTED components — nothing bridges them, so
+//       the trench reads as two free-floating rectangles instead of a channel with
+//       catwalk rails; and
+//   (b) the exhaust port (the run's target) has no geometry in the registry at all.
+//
+// These tests therefore: (1) GUARD the already-correct floor ring closure against
+// regression while GREEN adds rails; (2) drive the missing catwalk rails that
+// connect the floor loops into one wireframe; and (3) drive a ring-clean,
+// connected exhaust-port model authored with ring-based edges FROM THE START.
+// As with 8-2/8-4 they assert well-formedness + topology, never a specific edge
+// list, so GREEN stays free to choose the actual rails/port vertices.
+//
+// OUT OF SCOPE here, logged as findings: orientation/scale are RENDER concerns
+// kept out of core (context-epic-8.md → "Display orientation is a render concern")
+// and verified by eyeball on first render; the "bonus" scoring in the story title
+// is unspecified sim behaviour, not geometry. TIE_FIGHTER/DARTH_TIE still FAIL the
+// ring guard (heuristic edges, no topology test) — inherited 8-3 debt, not 8-5.
+// ---------------------------------------------------------------------------
+
+const findExhaustPort = () => findByName(/exhaust/i)
+
+/** True iff the model's edges link every vertex into ONE connected component. */
+function isSingleComponent(m: Model3D): boolean {
+  const n = m.vertices.length
+  if (n === 0) return false
+  const adj = new Map<number, number[]>()
+  for (let i = 0; i < n; i++) adj.set(i, [])
+  for (const [a, b] of m.edges) {
+    adj.get(a)!.push(b)
+    adj.get(b)!.push(a)
+  }
+  const seen = new Set<number>([0])
+  const stack = [0]
+  while (stack.length) {
+    const v = stack.pop()!
+    for (const w of adj.get(v)!) {
+      if (!seen.has(w)) {
+        seen.add(w)
+        stack.push(w)
+      }
+    }
+  }
+  return seen.size === n
+}
+
+/** Count edges whose endpoints lie in two DISTINCT derived rings (catwalk rails). */
+function countCrossRingRails(m: Model3D): number {
+  const rings = deriveRings(m.vertices).map((r) => new Set(r))
+  const ringOf = (i: number) => rings.findIndex((s) => s.has(i))
+  let rails = 0
+  for (const [a, b] of m.edges) {
+    const ra = ringOf(a)
+    const rb = ringOf(b)
+    if (ra !== -1 && rb !== -1 && ra !== rb) rails++
+  }
+  return rails
+}
+
+describe('isSingleComponent (connectivity helper self-check)', () => {
+  // Guard the guard: a helper that always returned true would silently pass the
+  // trench connectivity test below. These fixtures prove it discriminates.
+  it('accepts a single connected component', () => {
+    const connected: Model3D = {
+      name: 'c',
+      vertices: [[0, 0, 0], [1, 0, 0], [1, 1, 0]],
+      edges: [[0, 1], [1, 2]],
+    }
+    expect(isSingleComponent(connected)).toBe(true)
+  })
+
+  it('rejects two disjoint components sharing no edge', () => {
+    const split: Model3D = {
+      name: 's',
+      vertices: [[0, 0, 0], [1, 0, 0], [5, 0, 0], [6, 0, 0]],
+      edges: [[0, 1], [2, 3]],
+    }
+    expect(isSingleComponent(split)).toBe(false)
+  })
+})
+
+describe('models — trench floor ring topology (8-5 regression guard)', () => {
+  it('the two floor squares each close into one loop', () => {
+    // Already GREEN — locks the closure in so the GREEN rail work can't regress it.
+    const m = findTrench()
+    expect(m).toBeDefined()
+    if (!m) return
+    const rings = deriveRings(m.vertices)
+    expect(rings.length).toBeGreaterThanOrEqual(2)
+    for (const ring of rings) {
+      expect(inducedSingleCycle(m.edges, ring)).toBe(true)
+    }
+  })
+})
+
+describe('models — trench catwalk rails (8-5)', () => {
+  it('the trench is a single connected wireframe (rails bridge the floor loops)', () => {
+    // RED: the ported TRENCH is two disjoint squares. Wave 3 adds catwalk rails so
+    // the floor reads as one connected structure, not two free-floating rims.
+    const m = findTrench()
+    expect(m).toBeDefined()
+    if (!m) return
+    expect(isSingleComponent(m)).toBe(true)
+  })
+
+  it('has at least one catwalk rail bridging the inner and outer floor rings', () => {
+    // RED: zero cross-ring edges today. Derived from the rings, not hardcoded
+    // indices, so GREEN stays free to choose which vertices the rails join.
+    const m = findTrench()
+    expect(m).toBeDefined()
+    if (!m) return
+    expect(countCrossRingRails(m)).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('models — exhaust port (8-5)', () => {
+  it('the registry includes an exhaust-port model (the run target)', () => {
+    // RED: no exhaust-port geometry exists yet.
+    expect(findExhaustPort()).toBeDefined()
+  })
+
+  it('the exhaust port is a closed ring opening, not a heuristic tangle', () => {
+    // The port is an opening — at least one coplanar equal-radius ring that closes
+    // into a single loop. Ring-based edges from the start, per the epic contract.
+    const m = findExhaustPort()
+    expect(m).toBeDefined()
+    if (!m) return
+    const rings = deriveRings(m.vertices)
+    expect(rings.length).toBeGreaterThanOrEqual(1)
+    for (const ring of rings) {
+      expect(inducedSingleCycle(m.edges, ring)).toBe(true)
+    }
+  })
+
+  it('the exhaust port is one connected wireframe (no floating segments)', () => {
+    const m = findExhaustPort()
+    expect(m).toBeDefined()
+    if (!m) return
+    expect(isSingleComponent(m)).toBe(true)
+  })
+})
