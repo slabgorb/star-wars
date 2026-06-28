@@ -51,7 +51,12 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
     const floor: Vec3 = [0, -state.altitude, 0]
     drawModelAt(ctx, DEATH_STAR_SURFACE, floor, proj, w, h, SURFACE_GLOW, SURFACE_ORIENT)
     for (const tu of state.turrets) {
-      drawModelAt(ctx, SURFACE_TOWER, tu.pos, proj, w, h, TURRET_GLOW, TOWER_ORIENT)
+      // Turrets STAND on the surface, so they live in the floor's altitude frame:
+      // drop them by the skim height exactly as the floor is. Drawing them at the
+      // sim's world y=0 (the surface plane in core space) left them floating above
+      // the floor as the ship climbed — the 8-4 placement this story reconciles.
+      const base: Vec3 = [tu.pos[0], tu.pos[1] - state.altitude, tu.pos[2]]
+      drawModelAt(ctx, SURFACE_TOWER, base, proj, w, h, TURRET_GLOW, TOWER_ORIENT)
     }
   } else {
     for (const e of state.enemies) drawModelAt(ctx, TIE_FIGHTER, e.pos, proj, w, h, TIE_GLOW)

@@ -116,6 +116,20 @@ export const ALTITUDE_RATE = 200
 /** How fast the surface scrolls turrets toward the cockpit (units/second). */
 export const TURRET_SCROLL_SPEED = 600
 
+// --- Wave/phase progression constants ---------------------------------------
+//
+// A run escalates through the three phases in order (space -> surface ->
+// trench); a phase is "cleared" when the player destroys its kill quota, at
+// which point the run drops into the next phase. Authentic-FEEL like the Wave
+// 1/2 constants: StarWars.asm carries no symbolic wave tables, so these are
+// chosen to play right and single-sourced here for easy correction once deeper
+// reverse-engineering recovers the real numbers.
+
+/** TIEs to destroy to clear the space phase and dive to the Death Star surface. */
+export const SPACE_WAVE_QUOTA = 6
+/** Turrets to destroy to clear the surface phase and drop into the trench. */
+export const SURFACE_WAVE_QUOTA = 4
+
 export interface GameState {
   phase: Phase
   rng: Rng
@@ -128,6 +142,9 @@ export interface GameState {
   lives: number
   /** Player height above the y=0 surface (Wave 2 terrain skim). */
   altitude: number
+  /** Enemies destroyed in the CURRENT phase; clears the phase at its quota,
+   * then resets to 0 on the transition into the next phase. */
+  phaseKills: number
   /** Player bolts currently in flight. */
   projectiles: Projectile[]
   /** Live TIE fighters. */
@@ -156,6 +173,7 @@ export function initialState(seed = 1983): GameState {
     score: 0,
     lives: STARTING_LIVES,
     altitude: SKIM_ALTITUDE,
+    phaseKills: 0,
     projectiles: [],
     enemies: [],
     turrets: [],
