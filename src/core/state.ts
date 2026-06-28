@@ -10,6 +10,7 @@
 // math3d.ts (the Math Box) and the rule functions in gameRules.ts.
 
 import type { Vec3 } from './math3d'
+import type { GameEvent } from './events'
 import { createRng, type Rng } from './rng'
 
 /** The three phases of an attack run, in order. */
@@ -194,6 +195,10 @@ export interface GameState {
   spawnTimer: number
   /** Seconds until the formation fires its next bolt. */
   enemyFireCooldown: number
+  /** Gameplay moments emitted THIS frame for the shell's SFX engine to react
+   * to (story 8-7). A fresh list every frame — never carried between frames —
+   * so the channel stays pure DATA and replays identically from a seed. */
+  events: GameEvent[]
 }
 
 export function initialState(seed = 1983): GameState {
@@ -218,5 +223,6 @@ export function initialState(seed = 1983): GameState {
     fireCooldown: 0,
     spawnTimer: SPAWN_INTERVAL,
     enemyFireCooldown: ENEMY_FIRE_INTERVAL,
+    events: [],
   }
 }

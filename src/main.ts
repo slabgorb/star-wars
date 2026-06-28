@@ -9,6 +9,7 @@ import { stepGame } from './core/sim'
 import { qualifiesForHighScore, insertHighScore } from './core/highscore'
 import { createInputController } from './shell/input'
 import { createLoop } from './shell/loop'
+import { createAudioEngine } from './shell/audio'
 import { render } from './shell/render'
 import { loadHighScores, saveHighScores } from './shell/storage'
 import { loadVectorFont } from './shell/font'
@@ -37,6 +38,17 @@ window.addEventListener('resize', resize)
 resize()
 
 const input = createInputController(canvas)
+// Wave-5 audio (story 8-7): the SFX engine consumes the core's GameEvent channel.
+const audio = createAudioEngine()
+// Browsers forbid starting an AudioContext before a user gesture, so the engine
+// stays inert until the first click/keypress unlocks it. resume() is idempotent
+// (only the first call builds the context and loads samples), so every later
+// gesture is a harmless no-op.
+function unlockAudio(): void {
+  audio.resume()
+}
+canvas.addEventListener('pointerdown', unlockAudio)
+window.addEventListener('keydown', unlockAudio)
 // The cabinet boots on the attract/title screen, not mid-run (story 8-6). The
 // pure core's initialState() is a fresh PLAYING run; the shell frames it.
 let state: GameState = { ...initialState(), mode: 'attract' }
@@ -47,6 +59,43 @@ const loop = createLoop(
   (dt) => {
     const prev = state
     state = stepGame(state, input.sample(), dt)
+    // Play one sound per gameplay event the core emitted this frame. The pump
+    // lives here (not loop.ts) because the game state — and its `events` channel
+    // — lives here; loop.ts is a generic, state-agnostic driver. play() is a
+    // no-op until the gesture above unlocks the engine, so pre-interaction events
+    // are silently skipped.
+    for (const event of state.events) {
+      switch (event.type) {
+        case 'fire':
+          audio.play('fire')
+          break
+        case 'enemy-fire':
+          audio.play('enemyFire')
+          break
+        case 'enemy-death':
+          audio.play('enemyDeath')
+          break
+        case 'player-death':
+          audio.play('playerDeath')
+          break
+        case 'level-clear':
+          audio.play('levelClear')
+          break
+        case 'player-spawn':
+          audio.play('playerSpawn')
+          break
+        case 'terrain-crash':
+          audio.play('terrainCrash')
+          break
+      }
+    }
+    // Wave-5 speech (story 8-7): Obi-Wan's "Use the Force, Luke" cues the trench
+    // approach — the climactic moment it plays in the film and the cabinet. Fire
+    // it once on the space/surface -> trench edge, during an active run. speak()
+    // lazily loads the line and is a no-op until the audio gesture unlocks it.
+    if (state.mode === 'playing' && prev.phase !== 'trench' && state.phase === 'trench') {
+      audio.speak('useTheForceLuke')
+    }
     // On the playing -> gameover edge, bank a qualifying score and persist it.
     // (Initials entry is a follow-up; runs record under a default tag for now.)
     if (prev.mode === 'playing' && state.mode === 'gameover') {
