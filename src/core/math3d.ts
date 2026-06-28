@@ -132,3 +132,28 @@ export function normalize(a: Vec3): Vec3 {
   const len = length(a)
   return len === 0 ? [0, 0, 0] : scale(a, 1 / len)
 }
+
+/**
+ * A pure rotation whose local forward axis (+Z) maps onto `forward` — i.e. it
+ * turns a model so its nose points along `forward`. The other two axes complete
+ * a right-handed orthonormal basis using `up` as the reference up (default world
+ * +Y); when `forward` is (near-)parallel to `up`, a fallback reference keeps the
+ * basis from degenerating (gimbal lock). No scale, shear, or translation. A zero
+ * `forward` yields IDENTITY. `forward` is normalised here, so callers may pass an
+ * un-normalised direction.
+ */
+export function lookRotation(forward: Vec3, up: Vec3 = [0, 1, 0]): Mat4 {
+  const f = normalize(forward)
+  if (f[0] === 0 && f[1] === 0 && f[2] === 0) return IDENTITY
+  // A reference up not parallel to f keeps cross() well-conditioned.
+  const ref: Vec3 = Math.abs(dot(f, up)) > 0.999 ? [0, 0, 1] : up
+  const r = normalize(cross(ref, f)) // local +X
+  const u = cross(f, r) // local +Y (unit: f and r are orthonormal)
+  // Columns [r, u, f] in row-major storage: local x->r, y->u, z->f.
+  return [
+    r[0], u[0], f[0], 0,
+    r[1], u[1], f[1], 0,
+    r[2], u[2], f[2], 0,
+    0, 0, 0, 1,
+  ]
+}

@@ -45,7 +45,7 @@ import {
 } from './state'
 import type { Input } from './input'
 import type { GameEvent } from './events'
-import { add, scale, sub, normalize, type Vec3 } from './math3d'
+import { add, scale, sub, normalize, lookRotation, type Vec3 } from './math3d'
 import { aimDirection, collides, waveParams } from './gameRules'
 import { nextFloat, nextInt, type Rng } from './rng'
 
@@ -465,18 +465,21 @@ function advance(bolts: readonly Projectile[], dt: number): Projectile[] {
   return out
 }
 
-/** Advance a TIE along its velocity toward the cockpit. New object. */
+/** Advance a TIE along its velocity, then re-face it at the cockpit from its new
+ * position so it banks toward the player as it flies (story 8-13). New object. */
 function moveEnemy(e: Enemy, dt: number): Enemy {
-  return { ...e, pos: add(e.pos, scale(e.vel ?? ZERO, dt)) }
+  const pos = add(e.pos, scale(e.vel ?? ZERO, dt))
+  return { ...e, pos, orient: lookRotation(toCockpit(pos)) }
 }
 
 /** A fresh TIE: lateral-spread spawn far down −Z, aimed at the cockpit at the
- * wave's approach speed (gameRules.waveParams). */
+ * wave's approach speed (gameRules.waveParams), already banked to face it. */
 function spawnTie(rng: Rng, speed: number): Enemy {
   const x = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
   const y = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
   const pos: Vec3 = [x, y, -SPAWN_DISTANCE]
-  return { pos, vel: scale(toCockpit(pos), speed), kind: 'tie' }
+  const dir = toCockpit(pos)
+  return { pos, vel: scale(dir, speed), kind: 'tie', orient: lookRotation(dir) }
 }
 
 /** Unit vector from a world position back toward the cockpit at the origin. */
