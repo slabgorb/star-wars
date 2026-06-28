@@ -6,7 +6,7 @@
 // their edges are stroked with `shadowBlur` for the vector-CRT glow. The shell
 // does NO game math — it only consumes positions the core already computed.
 
-import type { GameState } from '../core/state'
+import { EXHAUST_PORT_DISTANCE, type GameState } from '../core/state'
 import type { HighScoreTable } from '../core/highscore'
 import {
   TIE_FIGHTER,
@@ -46,14 +46,26 @@ export const SURFACE_ORIENT: Mat4 = rotationZ(-Math.PI / 2)
 export const TOWER_ORIENT: Mat4 = IDENTITY
 export const TRENCH_ORIENT: Mat4 = IDENTITY
 
-// Static trench-run placement for the first-render eyeball: the floor sits just
-// below the skimming camera and recedes down −Z, with the exhaust port further
-// along the run. Trench-run gameplay (scroll, approach, the bonus) is a follow-up
-// (the core `stepTrench` is still a safe terminal hold).
+// The camera skims just above the trench floor; both the floor and the exhaust
+// port are positioned from SIM STATE (see `trenchPlacement`), not static
+// constants, so the port scrolls up the channel and always sits inside it.
 const TRENCH_SKIM = 60
-const TRENCH_FLOOR_Z = 700
-const TRENCH_PORT_Z = 1200
+const SKIM_OFFSET: Vec3 = [0, -TRENCH_SKIM, 0] // lower the world so the camera rides above the floor
 const PORT_GLOW = '#ff9f0a' // exhaust-port target amber
+
+/**
+ * Where the shell draws the trench floor and the exhaust port — derived PURELY
+ * from sim state, honouring the core/shell boundary: the core owns the port's
+ * world position (`state.exhaustPort.pos`), the shell only consumes it. The
+ * floor channel follows the port up the run so the port always sits inside it
+ * (closing the ~244-unit float of the old static placement); with no active port
+ * it rests at the spawn distance. The display skim (camera height) is applied by
+ * the caller, so `port` here is the verbatim sim position.
+ */
+export function trenchPlacement(state: GameState): { floor: Vec3; port: Vec3 } {
+  const port: Vec3 = state.exhaustPort?.pos ?? [0, 0, -EXHAUST_PORT_DISTANCE]
+  return { floor: [0, 0, port[2]], port }
+}
 
 // The shared arcade vector face (loaded by shell/font.ts), with the same
 // 'Orbitron', monospace fallback chain tempest uses so the HUD reads even before
@@ -87,12 +99,14 @@ export function render(
       drawModelAt(ctx, SURFACE_TOWER, base, proj, w, h, TURRET_GLOW, TOWER_ORIENT)
     }
   } else if (state.phase === 'trench') {
-    // Wave 3 — the trench run. Floor + catwalk rails ahead and below the skimming
-    // camera; the exhaust port (the run's target) sits further down the channel.
-    const floor: Vec3 = [0, -TRENCH_SKIM, -TRENCH_FLOOR_Z]
-    drawModelAt(ctx, TRENCH, floor, proj, w, h, SURFACE_GLOW, TRENCH_ORIENT)
-    const port: Vec3 = [0, -TRENCH_SKIM, -TRENCH_PORT_Z]
-    drawModelAt(ctx, EXHAUST_PORT, port, proj, w, h, PORT_GLOW, TRENCH_ORIENT)
+    // Wave 3 — the trench run. Floor channel and the exhaust port both come from
+    // sim state, so the port scrolls up the channel and stays seated in it; the
+    // camera skims just above the floor (SKIM_OFFSET).
+    const { floor, port } = trenchPlacement(state)
+    drawModelAt(ctx, TRENCH, add(floor, SKIM_OFFSET), proj, w, h, SURFACE_GLOW, TRENCH_ORIENT)
+    if (state.exhaustPort) {
+      drawModelAt(ctx, EXHAUST_PORT, add(port, SKIM_OFFSET), proj, w, h, PORT_GLOW, TRENCH_ORIENT)
+    }
   } else {
     for (const e of state.enemies) drawModelAt(ctx, TIE_FIGHTER, e.pos, proj, w, h, TIE_GLOW)
   }
