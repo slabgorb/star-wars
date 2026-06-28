@@ -124,6 +124,24 @@ export const ALTITUDE_RATE = 200
 /** How fast the surface scrolls turrets toward the cockpit (units/second). */
 export const TURRET_SCROLL_SPEED = 600
 
+// --- Wave 3 trench constants ------------------------------------------------
+//
+// Authentic-FEEL, single-sourced here exactly as the Wave 1/2 constants are:
+// StarWars.asm carries no symbolic trench tables, so these are chosen to play
+// right and named for easy correction once deeper reverse-engineering recovers
+// the real numbers. The trench run has ONE target — the exhaust port — that
+// scrolls up the channel toward the cockpit; the player destroys it for the
+// bonus or it reaches the cockpit and costs a shield.
+
+/** Distance ahead (−Z) at which the exhaust port appears when the trench opens. */
+export const EXHAUST_PORT_DISTANCE = 2400
+/** Points awarded for destroying the exhaust port — the run's big payoff. */
+export const TRENCH_BONUS = 1000
+/** How fast the exhaust port scrolls toward the cockpit (units/second). */
+export const TRENCH_SCROLL_SPEED = 500
+/** Hit sphere around the exhaust port for player bolts (the octagon spans ~64). */
+export const PORT_HIT_RADIUS = 120
+
 // --- Wave/phase progression constants ---------------------------------------
 //
 // A run escalates through the three phases in order (space -> surface ->
@@ -163,6 +181,9 @@ export interface GameState {
   enemies: Enemy[]
   /** Laser turrets standing on the surface (Wave 2). */
   turrets: Turret[]
+  /** The trench run's target (Wave 3): the exhaust port scrolling toward the
+   * cockpit, or `null` when no run is active (space/surface, or destroyed). */
+  exhaustPort: { pos: Vec3 } | null
   /** Enemy fireballs currently in flight. */
   enemyShots: Projectile[]
   /** True once the last shield is lost — the wave is over. */
@@ -191,6 +212,7 @@ export function initialState(seed = 1983): GameState {
     projectiles: [],
     enemies: [],
     turrets: [],
+    exhaustPort: null,
     enemyShots: [],
     gameOver: false,
     fireCooldown: 0,

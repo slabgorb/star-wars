@@ -38,6 +38,10 @@ import {
   TURRET_HIT_RADIUS,
   SPACE_WAVE_QUOTA,
   SURFACE_WAVE_QUOTA,
+  EXHAUST_PORT_DISTANCE,
+  TRENCH_SCROLL_SPEED,
+  TRENCH_BONUS,
+  PORT_HIT_RADIUS,
 } from './state'
 import type { Input } from './input'
 import { add, scale, sub, normalize, type Vec3 } from './math3d'
@@ -91,7 +95,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // drops the run into the next phase once the wave is cleared. The trench is
   // terminal here — its gameplay is story 8-5; for now it just holds safely.
   if (state.phase === 'surface') return progress(stepSurface(state, input, dt, common))
-  if (state.phase === 'trench') return stepTrench(state, common)
+  if (state.phase === 'trench') return stepTrench(state, common, dt)
 
   // The wave's difficulty knobs: later waves spawn TIEs sooner, send them in
   // faster, and lob fireballs more often (gameRules.waveParams; wave 1 is today's
@@ -289,15 +293,49 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
 }
 
 /**
- * Wave 3 — the trench run. Its gameplay (catwalks, the exhaust port, the bonus)
- * is story 8-5 and not built yet; reaching the trench is what story 8-8 wires.
- * Until 8-5 lands the trench is a SAFE TERMINAL HOLD: the run arrives and the
- * cockpit still tracks and fires, but nothing spawns, scores, or damages, and the
- * phase does not advance. 8-5 replaces this hold with the real trench.
+ * Wave 3 — the trench run (story 8-9). One target, the exhaust port, scrolls up
+ * the channel toward the cockpit. The player either lands a bolt on it — the run
+ * CLEARS, the bonus scores, and the next (harder) wave opens in the space phase —
+ * or it reaches the cockpit un-destroyed and costs a shield. A trench with no
+ * active port holds safely (the run's bolts still fly, but nothing scrolls,
+ * scores, or damages), preserving the 8-8 terminal-hold edge case.
  */
-function stepTrench(state: GameState, common: StepCommon): GameState {
+function stepTrench(state: GameState, common: StepCommon, dt: number): GameState {
   const { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots } = common
-  return { ...state, rng, t, aimX, aimY, projectiles, enemyShots, fireCooldown }
+  const base: GameState = { ...state, rng, t, aimX, aimY, projectiles, enemyShots, fireCooldown }
+
+  // No active port → safe hold (no scroll, no score, no damage).
+  if (state.exhaustPort === null) return base
+
+  // Scroll the port up the channel toward the cockpit (+Z, toward z=0). A fresh
+  // array keeps the step pure — the input state is never mutated.
+  const port: Vec3 = [
+    state.exhaustPort.pos[0],
+    state.exhaustPort.pos[1],
+    state.exhaustPort.pos[2] + TRENCH_SCROLL_SPEED * dt,
+  ]
+
+  // --- Player bolt vs the port: a hit clears the run and scores the bonus -----
+  const hitBolt = projectiles.findIndex((b) => collides(port, b.pos, PORT_HIT_RADIUS))
+  if (hitBolt >= 0) {
+    const liveBolts = projectiles.filter((_, i) => i !== hitBolt)
+    return clearRun({ ...base, projectiles: liveBolts, score: state.score + TRENCH_BONUS })
+  }
+
+  // --- The port reaching the cockpit un-destroyed is a crash: costs a shield --
+  if (collides(port, COCKPIT, COCKPIT_HIT_RADIUS)) {
+    const lives = Math.max(0, state.lives - 1)
+    return {
+      ...base,
+      lives,
+      gameOver: lives <= 0,
+      mode: lives <= 0 ? 'gameover' : state.mode,
+      exhaustPort: spawnPort(), // another pass down the trench
+    }
+  }
+
+  // Otherwise the port keeps scrolling in toward the cockpit.
+  return { ...base, exhaustPort: { pos: port } }
 }
 
 // --- Wave/phase progression -------------------------------------------------
@@ -310,10 +348,14 @@ function stepTrench(state: GameState, common: StepCommon): GameState {
 const NEXT_PHASE: Record<Phase, Phase | null> = {
   space: 'surface',
   surface: 'trench',
-  trench: null, // terminal until story 8-5 builds the trench gameplay
+  // The trench has no quota-driven next phase: it clears via the exhaust-port
+  // hit in stepTrench (which loops to the next wave), not through progress().
+  trench: null,
 }
 
-/** Kills that clear a phase. The trench never auto-clears (end of the run). */
+/** Kills that clear a phase. The trench never clears by KILL count — it ends
+ * when the exhaust port is destroyed (handled in stepTrench), so its quota is
+ * unreachable here. */
 const PHASE_QUOTA: Record<Phase, number> = {
   space: SPACE_WAVE_QUOTA,
   surface: SURFACE_WAVE_QUOTA,
@@ -346,11 +388,29 @@ function enterPhase(s: GameState, phase: Phase): GameState {
     phaseKills: 0,
     enemies: [],
     turrets: [],
+    // The trench opens with its target downrange; other phases carry no port.
+    exhaustPort: phase === 'trench' ? spawnPort() : null,
     enemyShots: [],
     altitude: phase === 'surface' ? SKIM_ALTITUDE : s.altitude,
     spawnTimer: phase === 'surface' ? TURRET_SPAWN_INTERVAL : SPAWN_INTERVAL,
     enemyFireCooldown: ENEMY_FIRE_INTERVAL,
   }
+}
+
+/** A fresh exhaust port: centred on the run, far down −Z toward the player. */
+function spawnPort(): { pos: Vec3 } {
+  return { pos: [0, 0, -EXHAUST_PORT_DISTANCE] }
+}
+
+/**
+ * Clear a completed run: the player nailed the exhaust port, so the whole run
+ * (space → surface → trench) is done. Loop back to the space phase one wave
+ * harder — this is the one place `wave` advances, engaging the difficulty ramp
+ * (gameRules.waveParams). Score and lives carry forward; the bonus is already
+ * added by the caller.
+ */
+function clearRun(s: GameState): GameState {
+  return { ...enterPhase(s, 'space'), wave: s.wave + 1 }
 }
 
 /** A fresh turret: lateral-spread spawn far down −Z, standing on the floor. */
