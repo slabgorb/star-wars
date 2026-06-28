@@ -35,6 +35,12 @@ export interface Enemy {
   kind: 'tie'
 }
 
+/** A laser turret standing on the Death Star surface (Wave 2). World space. */
+export interface Turret {
+  /** World-space position (y ≈ 0, on the floor). The hit-test reads this. */
+  pos: Vec3
+}
+
 // --- Wave 1 gameplay constants ----------------------------------------------
 //
 // Two of these are AUTHENTIC, from Mitchell Gant's "Atari Star Wars Theory of
@@ -83,6 +89,33 @@ export const TIE_HIT_RADIUS = 250
 /** Hit sphere around the cockpit for enemy contact and fire. */
 export const COCKPIT_HIT_RADIUS = 80
 
+// --- Wave 2 surface constants -----------------------------------------------
+//
+// Authentic-FEEL, single-sourced here exactly as the Wave 1 constants are:
+// StarWars.asm is raw 6809 with no symbolic surface tables (the 8-3 port already
+// noted this), so these are chosen to play right and named for easy correction
+// once deeper reverse-engineering recovers the real numbers.
+
+/** Nominal skim height above the surface (the y=0 floor) at phase start. */
+export const SKIM_ALTITUDE = 120
+/** Below this clearance the ship scrapes the surface — a terrain crash. */
+export const MIN_SKIM_ALTITUDE = 40
+/** Points awarded for destroying a laser turret. */
+export const TURRET_SCORE = 200
+/** Seconds between turret spawns onto the surface ahead. */
+export const TURRET_SPAWN_INTERVAL = 1.5
+/** Maximum turrets on the surface at once. */
+export const MAX_TURRETS = 4
+/** Hit sphere around a turret for player bolts. */
+export const TURRET_HIT_RADIUS = 200
+
+// Internal tuning (not part of the test contract).
+
+/** How fast the yoke flies the ship up/down (altitude units/second). */
+export const ALTITUDE_RATE = 200
+/** How fast the surface scrolls turrets toward the cockpit (units/second). */
+export const TURRET_SCROLL_SPEED = 600
+
 export interface GameState {
   phase: Phase
   rng: Rng
@@ -93,10 +126,14 @@ export interface GameState {
   t: number
   score: number
   lives: number
+  /** Player height above the y=0 surface (Wave 2 terrain skim). */
+  altitude: number
   /** Player bolts currently in flight. */
   projectiles: Projectile[]
   /** Live TIE fighters. */
   enemies: Enemy[]
+  /** Laser turrets standing on the surface (Wave 2). */
+  turrets: Turret[]
   /** Enemy fireballs currently in flight. */
   enemyShots: Projectile[]
   /** True once the last shield is lost — the wave is over. */
@@ -118,8 +155,10 @@ export function initialState(seed = 1983): GameState {
     t: 0,
     score: 0,
     lives: STARTING_LIVES,
+    altitude: SKIM_ALTITUDE,
     projectiles: [],
     enemies: [],
+    turrets: [],
     enemyShots: [],
     gameOver: false,
     fireCooldown: 0,

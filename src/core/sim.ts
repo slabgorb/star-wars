@@ -11,7 +11,7 @@
 // cockpit cost a shield. Every spatial test routes through the Math Box and the
 // rule helpers — there is no ad-hoc geometry in here.
 
-import type { GameState, Projectile, Enemy } from './state'
+import type { GameState, Projectile, Enemy, Turret } from './state'
 import {
   PROJECTILE_TTL,
   PROJECTILE_SPEED,
@@ -28,6 +28,14 @@ import {
   TIE_SCORE,
   TIE_HIT_RADIUS,
   COCKPIT_HIT_RADIUS,
+  SKIM_ALTITUDE,
+  MIN_SKIM_ALTITUDE,
+  ALTITUDE_RATE,
+  TURRET_SPAWN_INTERVAL,
+  TURRET_SCROLL_SPEED,
+  MAX_TURRETS,
+  TURRET_SCORE,
+  TURRET_HIT_RADIUS,
 } from './state'
 import type { Input } from './input'
 import { add, scale, sub, normalize, type Vec3 } from './math3d'
@@ -51,7 +59,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // Clone the RNG so the step never mutates its input — purity intact.
   const rng: Rng = { seed: state.rng.seed }
 
-  // --- Player bolts: advance & expire, then fire on the trigger -------------
+  // --- Player bolts: advance & expire, then fire on the trigger (all phases) -
   const projectiles = advance(state.projectiles, dt)
   let fireCooldown = state.fireCooldown - dt
   if (input.fire && fireCooldown <= 0) {
@@ -63,6 +71,13 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     fireCooldown = FIRE_INTERVAL
   }
 
+  // Enemy/turret fire advances & expires the same way in every phase.
+  const enemyShots = advance(state.enemyShots, dt)
+
+  if (state.phase === 'surface') {
+    return stepSurface(state, input, dt, { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots })
+  }
+
   // --- TIEs: advance, then spawn into a free slot --------------------------
   const enemies = state.enemies.map((e) => moveEnemy(e, dt))
   let spawnTimer = state.spawnTimer - dt
@@ -71,8 +86,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     spawnTimer = SPAWN_INTERVAL
   }
 
-  // --- Enemy fireballs: advance & expire, then a TIE fires at the cockpit ---
-  const enemyShots = advance(state.enemyShots, dt)
+  // --- Enemy fireballs: a TIE fires at the cockpit -------------------------
   let enemyFireCooldown = state.enemyFireCooldown - dt
   if (enemyFireCooldown <= 0 && enemies.length > 0 && enemyShots.length < MAX_FIREBALL_SLOTS) {
     const shooter = enemies[nextInt(rng, enemies.length)]
@@ -137,6 +151,114 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     spawnTimer,
     enemyFireCooldown,
   }
+}
+
+/** Pieces the shared prologue already computed, threaded into a phase step. */
+interface StepCommon {
+  t: number
+  aimX: number
+  aimY: number
+  rng: Rng
+  projectiles: Projectile[]
+  fireCooldown: number
+  enemyShots: Projectile[]
+}
+
+/**
+ * Wave 2 — Death Star surface. The ship skims the y=0 floor (the yoke flies it
+ * up/down, and dipping too low scrapes a shield); laser turrets scroll in from
+ * ahead, lob bolts at the cockpit, and fall to the player's fire.
+ */
+function stepSurface(state: GameState, input: Input, dt: number, common: StepCommon): GameState {
+  const { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots } = common
+
+  // --- Terrain skim: yoke flies up/down; can't pass the floor; scrape crashes
+  let altitude = state.altitude + aimY * ALTITUDE_RATE * dt
+  if (altitude < 0) altitude = 0
+  let damage = 0
+  if (altitude < MIN_SKIM_ALTITUDE) {
+    damage++ // crashed into the surface — costs a shield...
+    altitude = SKIM_ALTITUDE // ...and bumps the ship back to a safe height
+  }
+
+  // --- Turrets: scroll toward the cockpit with the surface, then spawn ------
+  const turrets = state.turrets
+    .map((turret): Turret => {
+      const pos: Vec3 = [turret.pos[0], turret.pos[1], turret.pos[2] + TURRET_SCROLL_SPEED * dt]
+      return { pos }
+    })
+    .filter((turret) => turret.pos[2] < 0) // drop those that have scrolled past
+  let spawnTimer = state.spawnTimer - dt
+  if (spawnTimer <= 0 && turrets.length < MAX_TURRETS) {
+    turrets.push(spawnTurret(rng))
+    spawnTimer = TURRET_SPAWN_INTERVAL
+  }
+
+  // --- A turret lobs a bolt at the cockpit on the fire cadence --------------
+  let enemyFireCooldown = state.enemyFireCooldown - dt
+  if (enemyFireCooldown <= 0 && turrets.length > 0 && enemyShots.length < MAX_FIREBALL_SLOTS) {
+    const shooter = turrets[nextInt(rng, turrets.length)]
+    enemyShots.push({
+      pos: [...shooter.pos] as Vec3,
+      vel: scale(toCockpit(shooter.pos), ENEMY_SHOT_SPEED),
+      ttl: ENEMY_SHOT_TTL,
+    })
+    enemyFireCooldown = ENEMY_FIRE_INTERVAL
+  }
+
+  // --- Player bolts vs turrets: destroy on contact, score per kill ---------
+  let score = state.score
+  const killed = new Set<number>()
+  const spentBolt = new Set<number>()
+  for (let ti = 0; ti < turrets.length; ti++) {
+    for (let pi = 0; pi < projectiles.length; pi++) {
+      if (spentBolt.has(pi)) continue
+      if (collides(turrets[ti].pos, projectiles[pi].pos, TURRET_HIT_RADIUS)) {
+        killed.add(ti)
+        spentBolt.add(pi)
+        score += TURRET_SCORE
+        break
+      }
+    }
+  }
+  const standingTurrets = turrets.filter((_, i) => !killed.has(i))
+  const liveBolts = projectiles.filter((_, i) => !spentBolt.has(i))
+
+  // --- Cockpit damage: any turret bolt that lands --------------------------
+  const liveShots = enemyShots.filter((s) => {
+    if (collides(s.pos, COCKPIT, COCKPIT_HIT_RADIUS)) {
+      damage++
+      return false
+    }
+    return true
+  })
+
+  const lives = Math.max(0, state.lives - damage)
+
+  return {
+    ...state,
+    rng,
+    t,
+    aimX,
+    aimY,
+    score,
+    lives,
+    altitude,
+    gameOver: lives <= 0,
+    projectiles: liveBolts,
+    turrets: standingTurrets,
+    enemyShots: liveShots,
+    fireCooldown,
+    spawnTimer,
+    enemyFireCooldown,
+  }
+}
+
+/** A fresh turret: lateral-spread spawn far down −Z, standing on the floor. */
+function spawnTurret(rng: Rng): Turret {
+  const x = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
+  const pos: Vec3 = [x, 0, -SPAWN_DISTANCE]
+  return { pos }
 }
 
 /** Move bolts by their velocity, age them, and drop the expired. New array. */

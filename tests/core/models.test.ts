@@ -215,3 +215,194 @@ describe('models — trench authentic invariants', () => {
     expect(spread).toBeCloseTo(0)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Story 8-4 — RED phase (Han Solo / TEA): ring-reconstruction topology guard.
+//
+// DEATH_STAR_SURFACE and SURFACE_TOWER still carry the 8-2 nearest-neighbour
+// heuristic edges — well-formed (valid indices, no orphans) but visually
+// tangled: polygon rims never close and spokes jump to arbitrary vertices.
+// Story 8-4 re-authors both models' edges from the vertices' OWN ring structure.
+// This guard catches the tangle WITHOUT pinning a specific edge list, mirroring
+// the 8-2 "assert well-formedness, never specific edges" contract.
+//
+//   * deriveRings() recovers candidate rings from the VERTICES ALONE: coplanar
+//     sets (sharing one axis coordinate) that ALSO share a radius about that
+//     axis — a genuine ring, not a line or a hub+rim mix. Hubs (radius ~0) and
+//     stray points fall out naturally. It reads no edges, so the topology check
+//     can't be satisfied by hand-listing edges, and it is uniform-scale
+//     invariant, so it survives the DEV normalising the raw 16-bit coords.
+//   * inducedSingleCycle() asserts the edges restricted to a ring form exactly
+//     ONE closed loop (a connected 2-regular graph is precisely a single cycle).
+//     Spokes/struts to vertices outside the ring are ignored, so the
+//     reconstruction stays free to add them.
+//
+// NOTE for GREEN/REVIEW: structural topology catches tangles but NOT orientation
+// or scale — every model MUST be eyeballed in the dev server on first render
+// (see context-epic-8.md → "Geometry connectivity").
+// ---------------------------------------------------------------------------
+
+/**
+ * Recover candidate rings from raw geometry. For each axis, group vertices that
+ * share that axis coordinate (coplanar), then split each group by radius about
+ * the axis; a sub-group of >= 3 equal-radius vertices is a ring. Derived from
+ * the vertices alone and invariant under uniform scaling.
+ */
+function deriveRings(vertices: Model3D['vertices']): number[][] {
+  const maxAbs = Math.max(
+    1,
+    ...vertices.flatMap((v) => [Math.abs(v[0]), Math.abs(v[1]), Math.abs(v[2])]),
+  )
+  const eps = 1e-6 * maxAbs
+  const key = (x: number) => Math.round(x / eps)
+  const rings: number[][] = []
+  const seen = new Set<string>()
+  for (let axis = 0; axis < 3; axis++) {
+    const o1 = (axis + 1) % 3
+    const o2 = (axis + 2) % 3
+    const planes = new Map<number, number[]>()
+    vertices.forEach((v, i) => {
+      const k = key(v[axis])
+      const g = planes.get(k)
+      if (g) g.push(i)
+      else planes.set(k, [i])
+    })
+    for (const group of planes.values()) {
+      if (group.length < 3) continue
+      const byRadius = new Map<number, number[]>()
+      for (const i of group) {
+        const v = vertices[i]
+        const k = key(Math.hypot(v[o1], v[o2]))
+        const g = byRadius.get(k)
+        if (g) g.push(i)
+        else byRadius.set(k, [i])
+      }
+      for (const sub of byRadius.values()) {
+        if (sub.length < 3) continue
+        const id = [...sub].sort((a, b) => a - b).join(',')
+        if (seen.has(id)) continue
+        seen.add(id)
+        rings.push(sub)
+      }
+    }
+  }
+  return rings
+}
+
+/**
+ * True iff the subgraph that `edges` induces on the index set `ring` (edges with
+ * both endpoints in `ring`) is exactly one simple cycle visiting every member:
+ * every ring vertex has induced-degree 2, and a single walk reaches them all
+ * before closing back to the start.
+ */
+function inducedSingleCycle(
+  edges: Model3D['edges'],
+  ring: readonly number[],
+): boolean {
+  if (ring.length < 3) return false
+  const ringSet = new Set(ring)
+  const adj = new Map<number, number[]>()
+  for (const v of ring) adj.set(v, [])
+  for (const [a, b] of edges) {
+    if (a !== b && ringSet.has(a) && ringSet.has(b)) {
+      adj.get(a)!.push(b)
+      adj.get(b)!.push(a)
+    }
+  }
+  for (const v of ring) {
+    if (adj.get(v)!.length !== 2) return false
+  }
+  let prev = -1
+  let cur = ring[0]
+  const visited = new Set<number>()
+  for (let i = 0; i < ring.length; i++) {
+    if (visited.has(cur)) break
+    visited.add(cur)
+    const [n0, n1] = adj.get(cur)!
+    const next = n0 !== prev ? n0 : n1
+    prev = cur
+    cur = next
+  }
+  return visited.size === ring.length && cur === ring[0]
+}
+
+const findSurface = () => findByName(/death\s*star\s*surface/i)
+const findTower = () => findByName(/surface\s*tower/i)
+
+describe('inducedSingleCycle (topology helper self-check)', () => {
+  // Guard the guard: a helper that always returned true/false would silently
+  // pass the model tests below. These fixtures prove it discriminates.
+  const triangle: Model3D['edges'] = [[0, 1], [1, 2], [2, 0]]
+  const openPath: Model3D['edges'] = [[0, 1], [1, 2]] // rim that never closes
+  const square: Model3D['edges'] = [[0, 1], [1, 2], [2, 3], [3, 0]]
+
+  it('accepts a closed loop', () => {
+    expect(inducedSingleCycle(triangle, [0, 1, 2])).toBe(true)
+    expect(inducedSingleCycle(square, [0, 1, 2, 3])).toBe(true)
+  })
+
+  it('rejects an unclosed rim (a vertex with induced-degree != 2)', () => {
+    expect(inducedSingleCycle(openPath, [0, 1, 2])).toBe(false)
+  })
+
+  it('rejects two disjoint loops sharing the ring set', () => {
+    // Two triangles {0,1,2} and {3,4,5}: every vertex is degree 2, but it is two
+    // cycles, not one — the walk from 0 only reaches three of the six.
+    const twoLoops: Model3D['edges'] = [
+      [0, 1], [1, 2], [2, 0], [3, 4], [4, 5], [5, 3],
+    ]
+    expect(inducedSingleCycle(twoLoops, [0, 1, 2, 3, 4, 5])).toBe(false)
+  })
+
+  it('rejects a ring that ignores spokes to outside vertices', () => {
+    // A closed rim {0,1,2} plus a hub 3 with spokes; the rim is still one cycle.
+    const rimPlusHub: Model3D['edges'] = [
+      [0, 1], [1, 2], [2, 0], [3, 0], [3, 1], [3, 2],
+    ]
+    expect(inducedSingleCycle(rimPlusHub, [0, 1, 2])).toBe(true)
+  })
+})
+
+describe('models — Death Star surface ring topology (8-4)', () => {
+  it('exists with vertices and edges', () => {
+    const m = findSurface()
+    expect(m).toBeDefined()
+    if (!m) return
+    expect(m.vertices.length).toBeGreaterThan(0)
+    expect(m.edges.length).toBeGreaterThan(0)
+  })
+
+  it('every coplanar ring closes into a single loop (no nearest-neighbour tangle)', () => {
+    const m = findSurface()
+    expect(m).toBeDefined()
+    if (!m) return
+    const rings = deriveRings(m.vertices)
+    // The authentic surface has five cross-section rings stacked along Z.
+    expect(rings.length).toBeGreaterThanOrEqual(5)
+    for (const ring of rings) {
+      expect(inducedSingleCycle(m.edges, ring)).toBe(true)
+    }
+  })
+})
+
+describe('models — surface tower ring topology (8-4)', () => {
+  it('exists with vertices and edges', () => {
+    const m = findTower()
+    expect(m).toBeDefined()
+    if (!m) return
+    expect(m.vertices.length).toBeGreaterThan(0)
+    expect(m.edges.length).toBeGreaterThan(0)
+  })
+
+  it('every coplanar ring closes into a single loop (base + stacked rings)', () => {
+    const m = findTower()
+    expect(m).toBeDefined()
+    if (!m) return
+    const rings = deriveRings(m.vertices)
+    // At minimum the y=0 base square and the upper stack ring.
+    expect(rings.length).toBeGreaterThanOrEqual(2)
+    for (const ring of rings) {
+      expect(inducedSingleCycle(m.edges, ring)).toBe(true)
+    }
+  })
+})
