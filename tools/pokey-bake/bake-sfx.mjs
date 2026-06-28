@@ -100,6 +100,68 @@ function expandAlsoun({ audf, audc }) {
   };
 }
 
+// ── Star Wars 4-byte FX-record expander ───────────────────────────────────────
+// Star Wars stores each effect as per-channel *lists* of 4-byte records
+// `[count, duration, value, delta]` (NOT Tempest's single 6-byte ALSOUN record).
+// The sound IRQ runs at 4.096 ms; a record emits `count` values stepping by
+// `delta`, each held `duration` ticks, then the list advances. A `count=0`
+// record terminates the list and writes 0 to the register (so a volume list's
+// terminator silences the channel — that's what ends the effect). See
+// sfx-data.mjs and the cabinet's FX_Functions.asm (`Sound_FX_1`).
+const SW_BEAT = 0.004096; // sound-IRQ period (6532 timer, ~244 Hz)
+
+// Walk one register list → { steps: [[value, time], …], dur }.
+function expandRecords(records) {
+  const steps = [];
+  let t = 0;
+  for (const [count, duration, value, delta] of records) {
+    if (count === 0) {
+      steps.push([0, t]); // terminator: write 0 (AUDC=0 ⇒ silence) and stop
+      break;
+    }
+    const stepDur = Math.max(1, duration) * SW_BEAT;
+    let v = value;
+    for (let i = 0; i < count; i++) {
+      if (t > MAX_SFX_S) return { steps, dur: t };
+      steps.push([v & 0xff, Number(t.toFixed(5))]);
+      v = (v + delta) & 0xff;
+      t += stepDur;
+    }
+  }
+  return { steps, dur: t };
+}
+
+// Expand a `spec.swfx = { channels: [{ freq, vol }, …] }` dispatch entry.
+// Channels map to AUDF/AUDC pairs across two POKEY chips (≤4 channels each),
+// mirroring the cabinet's 2-POKEY, 8-channel FX board. The volume list's
+// terminator bounds each channel's audible length; freq writes past it are
+// dropped (the channel is already silent).
+function expandSwfx({ channels }) {
+  const feeds = { 1: [], 2: [] }; // chip → [[reg, value, time], …]
+  let maxDur = 0;
+  channels.forEach((ch, i) => {
+    const chip = i < 4 ? 1 : 2;
+    const fReg = (i % 4) * 2;     // AUDFn
+    const vReg = fReg + 1;        // AUDCn
+    const vol = expandRecords(ch.vol);
+    const freq = expandRecords(ch.freq);
+    const chanEnd = vol.dur;
+    if (chanEnd > maxDur) maxDur = chanEnd;
+    for (const [val, t] of freq.steps) {
+      if (t <= chanEnd + 1e-9) feeds[chip].push([fReg, val, t]);
+    }
+    for (const [val, t] of vol.steps) feeds[chip].push([vReg, val, t]);
+  });
+  const build = (arr) => (arr.length
+    ? [8, 0x00, 0.0, ...arr.sort((a, b) => a[2] - b[2]).flat()]
+    : null);
+  return {
+    pokey1: build(feeds[1]),
+    pokey2: build(feeds[2]),
+    durationMs: Math.max(20, Math.round((Math.min(MAX_SFX_S, maxDur) + 0.02) * 1000)),
+  };
+}
+
 // ── render one SFX to a Float32 sample buffer ─────────────────────────────────
 function renderSfx(spec) {
   const nSamples = Math.max(1, Math.ceil((spec.durationMs / 1000) * SAMPLE_RATE));
@@ -167,8 +229,14 @@ console.log(`Baking ${SFX.length} SFX @ ${SAMPLE_RATE} Hz → ${outDir}\n`);
 let made = 0;
 let silent = 0;
 for (const spec of SFX) {
-  // Authentic entries carry an ALSOUN envelope; expand it to register events.
-  if (spec.alsoun) {
+  // Authentic Star Wars entries carry a 4-byte-record `swfx` dispatch entry;
+  // expand it to per-chip register events. (Tempest's `alsoun` form still works.)
+  if (spec.swfx) {
+    const e = expandSwfx(spec.swfx);
+    spec.pokey1 = e.pokey1;
+    spec.pokey2 = e.pokey2;
+    spec.durationMs = e.durationMs;
+  } else if (spec.alsoun) {
     const e = expandAlsoun(spec.alsoun);
     spec.pokey1 = e.pokey1;
     spec.durationMs = e.durationMs;
