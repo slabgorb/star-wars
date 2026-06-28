@@ -14,19 +14,17 @@ import {
   SURFACE_TOWER,
   TRENCH,
   EXHAUST_PORT,
-  type Model3D,
 } from '../core/models'
 import { crosshairNdc } from '../core/gameRules'
-import { perspective, transform, add, rotationZ, IDENTITY, type Mat4, type Vec3 } from '../core/math3d'
+import { perspective, add, rotationZ, IDENTITY, type Mat4, type Vec3 } from '../core/math3d'
+import { project, drawWireframe, GLOW_FOR, NEAR, FAR } from './wireframe'
 
 const GLOW = '#00e5ff' // cockpit cyan
-const TIE_GLOW = '#ff3b30' // enemy red
-const TURRET_GLOW = '#ff3b30' // surface turret red
-const SURFACE_GLOW = '#5a6b8c' // death star steel
+const TIE_GLOW = GLOW_FOR['TIE Fighter'] // enemy red (shared)
+const TURRET_GLOW = GLOW_FOR['Surface Tower'] // surface turret red (shared)
+const SURFACE_GLOW = GLOW_FOR['Death Star Surface'] // death star steel (shared)
 const BOLT_GLOW = '#9dff00' // player laser green
 const FIRE_GLOW = '#ffd60a' // enemy fireball amber
-const NEAR = 1
-const FAR = 5000
 
 // Display orientation per surface model (story 8-4). The authentic object-space
 // axes do not match the in-game view, so each model is rotated into place before
@@ -51,7 +49,7 @@ export const TRENCH_ORIENT: Mat4 = IDENTITY
 // constants, so the port scrolls up the channel and always sits inside it.
 const TRENCH_SKIM = 60
 const SKIM_OFFSET: Vec3 = [0, -TRENCH_SKIM, 0] // lower the world so the camera rides above the floor
-const PORT_GLOW = '#ff9f0a' // exhaust-port target amber
+const PORT_GLOW = GLOW_FOR['Exhaust Port'] // exhaust-port target amber (shared)
 
 /**
  * Where the shell draws the trench floor and the exhaust port — derived PURELY
@@ -89,26 +87,26 @@ export function render(
   if (state.phase === 'surface') {
     // The floor drops away as the ship climbs, so the surface tracks altitude.
     const floor: Vec3 = [0, -state.altitude, 0]
-    drawModelAt(ctx, DEATH_STAR_SURFACE, floor, proj, w, h, SURFACE_GLOW, SURFACE_ORIENT)
+    drawWireframe(ctx, DEATH_STAR_SURFACE, floor, proj, w, h, SURFACE_GLOW, SURFACE_ORIENT)
     for (const tu of state.turrets) {
       // Turrets STAND on the surface, so they live in the floor's altitude frame:
       // drop them by the skim height exactly as the floor is. Drawing them at the
       // sim's world y=0 (the surface plane in core space) left them floating above
       // the floor as the ship climbed — the 8-4 placement this story reconciles.
       const base: Vec3 = [tu.pos[0], tu.pos[1] - state.altitude, tu.pos[2]]
-      drawModelAt(ctx, SURFACE_TOWER, base, proj, w, h, TURRET_GLOW, TOWER_ORIENT)
+      drawWireframe(ctx, SURFACE_TOWER, base, proj, w, h, TURRET_GLOW, TOWER_ORIENT)
     }
   } else if (state.phase === 'trench') {
     // Wave 3 — the trench run. Floor channel and the exhaust port both come from
     // sim state, so the port scrolls up the channel and stays seated in it; the
     // camera skims just above the floor (SKIM_OFFSET).
     const { floor, port } = trenchPlacement(state)
-    drawModelAt(ctx, TRENCH, add(floor, SKIM_OFFSET), proj, w, h, SURFACE_GLOW, TRENCH_ORIENT)
+    drawWireframe(ctx, TRENCH, add(floor, SKIM_OFFSET), proj, w, h, SURFACE_GLOW, TRENCH_ORIENT)
     if (state.exhaustPort) {
-      drawModelAt(ctx, EXHAUST_PORT, add(port, SKIM_OFFSET), proj, w, h, PORT_GLOW, TRENCH_ORIENT)
+      drawWireframe(ctx, EXHAUST_PORT, add(port, SKIM_OFFSET), proj, w, h, PORT_GLOW, TRENCH_ORIENT)
     }
   } else {
-    for (const e of state.enemies) drawModelAt(ctx, TIE_FIGHTER, e.pos, proj, w, h, TIE_GLOW)
+    for (const e of state.enemies) drawWireframe(ctx, TIE_FIGHTER, e.pos, proj, w, h, TIE_GLOW)
   }
   for (const p of state.projectiles) drawSpark(ctx, p.pos, proj, w, h, BOLT_GLOW, 4)
   for (const s of state.enemyShots) drawSpark(ctx, s.pos, proj, w, h, FIRE_GLOW, 6)
@@ -124,40 +122,6 @@ export function render(
     drawCrosshair(ctx, state, w, h)
     drawHud(ctx, state, w, h)
   }
-}
-
-/** Project a world point to screen pixels, or null if it is behind the camera. */
-function project(p: Vec3, proj: Mat4, w: number, h: number): [number, number] | null {
-  if (p[2] >= -NEAR) return null // at or behind the cockpit
-  const ndc = transform(proj, p)
-  return [(ndc[0] * 0.5 + 0.5) * w, (-ndc[1] * 0.5 + 0.5) * h]
-}
-
-function drawModelAt(
-  ctx: CanvasRenderingContext2D,
-  m: Model3D,
-  pos: Vec3,
-  proj: Mat4,
-  w: number,
-  h: number,
-  color: string,
-  orient: Mat4 = IDENTITY,
-): void {
-  ctx.lineWidth = 1.5
-  ctx.strokeStyle = color
-  ctx.shadowColor = color
-  ctx.shadowBlur = 10
-  ctx.beginPath()
-  for (const [a, b] of m.edges) {
-    // Orient the model into the view, then place it at its world position.
-    const pa = project(add(transform(orient, m.vertices[a]), pos), proj, w, h)
-    const pb = project(add(transform(orient, m.vertices[b]), pos), proj, w, h)
-    if (!pa || !pb) continue
-    ctx.moveTo(pa[0], pa[1])
-    ctx.lineTo(pb[0], pb[1])
-  }
-  ctx.stroke()
-  ctx.shadowBlur = 0
 }
 
 /** A small glowing '+' for a bolt in flight. */
