@@ -4,6 +4,15 @@ export default defineConfig({
   // Served under /star-wars/ on arcade.slabgorb.com, mirroring tempest's
   // /tempest/ base so root-relative asset URLs resolve in dev and build.
   base: '/star-wars/',
+  build: {
+    // Multi-page: ship the game (index.html) AND the model contact sheet.
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        models: 'models.html',
+      },
+    },
+  },
   // Pin a dedicated port next to tempest's 5273. strictPort fails loudly on a
   // collision instead of silently wandering to the next free port.
   server: {
