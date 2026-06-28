@@ -11,10 +11,16 @@
 // EDGES are authored here, not ported: Object_3D_Data.asm holds vertex tables
 // only — the line-segment connectivity lived in the AVG vector-draw routines,
 // which are not recoverable by object name from the disassembly we have. The
-// wireframe is therefore derived from the geometry itself (nearest-neighbour
-// links per vertex; explicit square loops for the trench floor), giving a
-// well-formed mesh that follows each model's true surface. Refining these toward
-// the exact cabinet draw list is future work once Wave 1+ render them in anger.
+// wireframe is therefore derived from the geometry itself.
+//
+// DEATH_STAR_SURFACE and SURFACE_TOWER edges were RE-AUTHORED from their own ring
+// structure (story 8-4): each coplanar, equal-radius vertex set is closed into a
+// single loop, then joined with radial spokes (rim → hub) and struts (between
+// stacked rings). This replaces the original 8-2 nearest-neighbour heuristic,
+// which was well-formed but rendered as a tangle (rims never closed). The
+// reconstruction is guarded by an induced-single-cycle topology test
+// (tests/core/models.test.ts). TIE_FIGHTER, DARTH_TIE, and TRENCH still carry the
+// 8-2 heuristic edges — owed work for a later pass (TRENCH lands with 8-5).
 //
 // PURE data. No DOM, no time, no randomness — safe for the deterministic core.
 
@@ -211,10 +217,25 @@ export const DEATH_STAR_SURFACE: Model3D = {
     [0, 720, -3120],
     [0, -720, -3120],
   ],
+  // Five triangular cross-sections (rings) stacked along Z, each a fin trio at
+  // (-X, +Y, -Y); the z=-3840 ring also carries a central hub (vertex 0).
+  // Reconstruction: close each ring into a loop, spoke the hub to its rim, and
+  // run three longitudinal struts (the -X / +Y / -Y fins) down the surface.
   edges: [
-    [0, 1], [0, 2], [0, 3], [0, 13], [0, 14], [0, 15], [1, 13], [2, 14],
-    [3, 15], [4, 5], [4, 6], [5, 8], [6, 9], [7, 8], [7, 9], [10, 11],
-    [10, 12], [11, 12],
+    // ring loops (one per Z cross-section)
+    [1, 2], [2, 3], [3, 1], // z = -3840 rim
+    [13, 14], [14, 15], [15, 13], // z = -3120
+    [10, 11], [11, 12], [12, 10], // z = -1440
+    [7, 8], [8, 9], [9, 7], // z = 6000
+    [4, 5], [5, 6], [6, 4], // z = 6720
+    // hub spokes (z = -3840 centre → its rim)
+    [0, 1], [0, 2], [0, 3],
+    // longitudinal struts: -X fin ridge
+    [1, 13], [13, 10], [10, 7], [7, 4],
+    // +Y fin ridge
+    [2, 14], [14, 11], [11, 8], [8, 5],
+    // -Y fin ridge
+    [3, 15], [15, 12], [12, 9], [9, 6],
   ],
 }
 
@@ -237,10 +258,21 @@ export const SURFACE_TOWER: Model3D = {
     [-96, 72, -32],
     [-96, 56, -32],
   ],
+  // Two rings — the y=0 base rectangle (0-3) and the y=32 turret-box rectangle
+  // (5,6,8,9) — plus the -X back panel (4,7) up at y=96 and an inner detail
+  // rectangle (10-13). Reconstruction: close both rings, strut the base corners
+  // up to the box, frame the back panel, and anchor the inner detail.
   edges: [
-    [0, 4], [0, 9], [1, 5], [1, 6], [2, 5], [2, 6], [3, 7], [3, 8],
-    [4, 10], [4, 11], [5, 6], [5, 9], [6, 8], [7, 12], [7, 13], [8, 12],
-    [8, 13], [9, 10], [9, 11], [10, 11], [12, 13],
+    // base ring (y = 0)
+    [0, 1], [1, 2], [2, 3], [3, 0],
+    // upper box ring (y = 32)
+    [5, 6], [6, 8], [8, 9], [9, 5],
+    // base → box struts
+    [0, 9], [1, 5], [2, 6], [3, 8],
+    // back panel up to y = 96
+    [4, 7], [4, 9], [7, 8],
+    // inner detail rectangle, anchored to the panel
+    [10, 11], [11, 13], [13, 12], [12, 10], [4, 10], [7, 12],
   ],
 }
 

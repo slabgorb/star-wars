@@ -7,16 +7,32 @@
 // does NO game math — it only consumes positions the core already computed.
 
 import type { GameState } from '../core/state'
-import { TIE_FIGHTER, type Model3D } from '../core/models'
+import { TIE_FIGHTER, DEATH_STAR_SURFACE, SURFACE_TOWER, type Model3D } from '../core/models'
 import { crosshairNdc } from '../core/gameRules'
-import { perspective, transform, add, type Mat4, type Vec3 } from '../core/math3d'
+import { perspective, transform, add, rotationZ, IDENTITY, type Mat4, type Vec3 } from '../core/math3d'
 
 const GLOW = '#00e5ff' // cockpit cyan
 const TIE_GLOW = '#ff3b30' // enemy red
+const TURRET_GLOW = '#ff3b30' // surface turret red
+const SURFACE_GLOW = '#5a6b8c' // death star steel
 const BOLT_GLOW = '#9dff00' // player laser green
 const FIRE_GLOW = '#ffd60a' // enemy fireball amber
 const NEAR = 1
 const FAR = 5000
+
+// Display orientation per surface model (story 8-4). The authentic object-space
+// axes do not match the in-game view, so each model is rotated into place before
+// it is drawn (the vertex data in core/models.ts stays untouched).
+//
+//   SURFACE — the cross-sections stand in the X/Y plane in object space; a -90°
+//   roll about Z lays them down so the relief rises in +Y from the y=0 floor.
+//   TOWER   — already authored upright (base in y=0, structure climbing +Y), so
+//   it needs no reorientation.
+//
+// NOTE: structural tests can't catch orientation/scale — these MUST be eyeballed
+// in the dev server once the surface phase is reachable in play.
+export const SURFACE_ORIENT: Mat4 = rotationZ(-Math.PI / 2)
+export const TOWER_ORIENT: Mat4 = IDENTITY
 
 // The shared arcade vector face (loaded by shell/font.ts), with the same
 // 'Orbitron', monospace fallback chain tempest uses so the HUD reads even before
@@ -30,7 +46,16 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
 
   const proj = perspective(Math.PI / 3, w / h, NEAR, FAR)
 
-  for (const e of state.enemies) drawModelAt(ctx, TIE_FIGHTER, e.pos, proj, w, h, TIE_GLOW)
+  if (state.phase === 'surface') {
+    // The floor drops away as the ship climbs, so the surface tracks altitude.
+    const floor: Vec3 = [0, -state.altitude, 0]
+    drawModelAt(ctx, DEATH_STAR_SURFACE, floor, proj, w, h, SURFACE_GLOW, SURFACE_ORIENT)
+    for (const tu of state.turrets) {
+      drawModelAt(ctx, SURFACE_TOWER, tu.pos, proj, w, h, TURRET_GLOW, TOWER_ORIENT)
+    }
+  } else {
+    for (const e of state.enemies) drawModelAt(ctx, TIE_FIGHTER, e.pos, proj, w, h, TIE_GLOW)
+  }
   for (const p of state.projectiles) drawSpark(ctx, p.pos, proj, w, h, BOLT_GLOW, 4)
   for (const s of state.enemyShots) drawSpark(ctx, s.pos, proj, w, h, FIRE_GLOW, 6)
 
@@ -53,6 +78,7 @@ function drawModelAt(
   w: number,
   h: number,
   color: string,
+  orient: Mat4 = IDENTITY,
 ): void {
   ctx.lineWidth = 1.5
   ctx.strokeStyle = color
@@ -60,8 +86,9 @@ function drawModelAt(
   ctx.shadowBlur = 10
   ctx.beginPath()
   for (const [a, b] of m.edges) {
-    const pa = project(add(m.vertices[a], pos), proj, w, h)
-    const pb = project(add(m.vertices[b], pos), proj, w, h)
+    // Orient the model into the view, then place it at its world position.
+    const pa = project(add(transform(orient, m.vertices[a]), pos), proj, w, h)
+    const pb = project(add(transform(orient, m.vertices[b]), pos), proj, w, h)
     if (!pa || !pb) continue
     ctx.moveTo(pa[0], pa[1])
     ctx.lineTo(pb[0], pb[1])
