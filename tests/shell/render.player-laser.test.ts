@@ -188,6 +188,26 @@ describe('Story 8-12 — player shots render as cyan converging laser beams', ()
     }
   })
 
+  it('is a transient flash: an aged in-flight bolt draws no beams, and none bleed onto a non-playing screen', () => {
+    // A freshly-fired bolt flashes the cannon-tip beams…
+    const fresh = makeCtx()
+    render(fresh.ctx, scene({ projectiles: [shotAt([0, 0, -1000])] }), W, H)
+    expect(laserBeams(fresh.segments).length).toBeGreaterThan(0)
+
+    // …but an OLD bolt (long past the muzzle flash) draws none — the laser is a
+    // brief "pew", not a line trailing the bolt for its whole flight. Otherwise
+    // rapid fire builds a static cyan web that never clears.
+    const aged = makeCtx()
+    render(aged.ctx, scene({ projectiles: [{ pos: [0, 0, -1000], vel: [0, 0, 0], ttl: 0.01 }] }), W, H)
+    expect(laserBeams(aged.segments)).toHaveLength(0)
+
+    // …and the sim FREEZES in-flight bolts on the game-over screen (sim.ts), so
+    // the laser must not bleed its beams over the framing screens.
+    const over = makeCtx()
+    render(over.ctx, { ...scene({ projectiles: [shotAt([0, 0, -1000])] }), mode: 'gameover' }, W, H)
+    expect(laserBeams(over.segments)).toHaveLength(0)
+  })
+
   it('leaves enemy fireballs as amber sparks — no cannon-tip beams (scope guard for 8-18)', () => {
     const { ctx, segments } = makeCtx()
     render(ctx, scene({ enemyShots: [shotAt([0, 0, -1000])] }), W, H)
