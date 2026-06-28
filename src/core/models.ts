@@ -21,8 +21,9 @@
 // reconstruction is guarded by an induced-single-cycle topology test
 // (tests/core/models.test.ts). TRENCH's floor squares already closed cleanly; story
 // 8-5 connected them with catwalk rails and added the ring-based EXHAUST_PORT.
-// TIE_FIGHTER and DARTH_TIE still carry the 8-2 nearest-neighbour heuristic edges
-// (they fail the ring guard and have no topology test yet) — owed 8-3 follow-up debt.
+// TIE_FIGHTER and DARTH_TIE were likewise RE-AUTHORED from their own ring structure
+// (story 8-10), clearing the inherited 8-2 heuristic-edge debt; both are now closed
+// into ring loops + symmetric struts and guarded by the same topology test.
 //
 // PURE data. No DOM, no time, no randomness — safe for the deterministic core.
 
@@ -112,16 +113,39 @@ export const TIE_FIGHTER: Model3D = {
     [-52, 26, -78],
     [-104, 26, 0],
   ],
+  // RE-AUTHORED by structure (story 8-10, revised). The disassembly gives only
+  // vertices, so edges are hand-authored. The TIE is built as its real sub-bodies
+  // — two hexagonal solar panels, two pylons, and a faceted cockpit ball — NOT by
+  // closing deriveRings() rings: those rings are cross-panel quads (4 corners that
+  // share an x and a y/z-radius span BOTH panels), so closing them boxes the ship.
+  // Instead: each panel is an outer rim + inner hub joined by radial spokes; a
+  // hexagonal-prism pylon joins each panel hub to a cockpit cap; the ball is two
+  // cap hexagons (y=±78) and two equator octagon belts (y=±26) chained together.
+  // Guarded by an isSingleComponent connectivity test (the deriveRings ring-closure
+  // guard is wrong for this geometry); kept bilaterally Y-symmetric, no orphans.
   edges: [
-    [0, 1], [0, 6], [1, 7], [2, 7], [2, 8], [3, 4], [3, 9], [4, 10],
-    [5, 6], [5, 11], [6, 7], [6, 11], [7, 8], [8, 9], [9, 10], [10, 11],
-    [12, 13], [12, 18], [13, 19], [14, 19], [14, 20], [15, 16], [15, 21], [16, 22],
-    [17, 18], [17, 23], [18, 19], [18, 23], [19, 20], [20, 21], [21, 22], [22, 23],
-    [24, 25], [24, 29], [24, 36], [25, 26], [26, 27], [27, 28], [28, 29], [28, 42],
-    [29, 43], [30, 31], [30, 35], [30, 44], [31, 32], [32, 33], [33, 34], [34, 35],
-    [34, 50], [35, 51], [36, 44], [37, 38], [37, 45], [38, 39], [38, 46], [39, 40],
-    [40, 41], [40, 48], [41, 49], [42, 50], [43, 51], [45, 46], [46, 47], [47, 48],
-    [48, 49],
+    // bottom solar panel (y=-208): outer rim, inner hub, radial spokes
+    [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0],
+    [6, 7], [7, 8], [8, 9], [9, 10], [10, 11], [11, 6],
+    [0, 6], [1, 7], [2, 8], [3, 9], [4, 10], [5, 11],
+    // top solar panel (y=208): outer rim, inner hub, radial spokes
+    [12, 13], [13, 14], [14, 15], [15, 16], [16, 17], [17, 12],
+    [18, 19], [19, 20], [20, 21], [21, 22], [22, 23], [23, 18],
+    [12, 18], [13, 19], [14, 20], [15, 21], [16, 22], [17, 23],
+    // pylons: panel hub -> cockpit cap (vertically aligned hexagonal prisms)
+    [6, 24], [7, 25], [8, 26], [9, 27], [10, 28], [11, 29],
+    [18, 30], [19, 31], [20, 32], [21, 33], [22, 34], [23, 35],
+    // cockpit caps (hexagons at y=-78 / y=78)
+    [24, 25], [25, 26], [26, 27], [27, 28], [28, 29], [29, 24],
+    [30, 31], [31, 32], [32, 33], [33, 34], [34, 35], [35, 30],
+    // cockpit-ball equator belts (octagons at y=-26 / y=26)
+    [36, 37], [37, 38], [38, 39], [39, 40], [40, 41], [41, 42], [42, 43], [43, 36],
+    [44, 45], [45, 46], [46, 47], [47, 48], [48, 49], [49, 50], [50, 51], [51, 44],
+    // belt struts: lower belt <-> upper belt (the equator)
+    [36, 44], [37, 45], [38, 46], [39, 47], [40, 48], [41, 49], [42, 50], [43, 51],
+    // cap -> belt struts: cockpit cap down/up to the ball equator
+    [24, 36], [25, 37], [26, 39], [27, 41], [28, 42], [29, 43],
+    [30, 44], [31, 45], [32, 47], [33, 49], [34, 50], [35, 51],
   ],
 }
 
@@ -186,15 +210,41 @@ export const DARTH_TIE: Model3D = {
     [80, -60, -20],
     [80, -60, 20],
   ],
+  // RE-AUTHORED by structure (story 8-10, revised) — like TIE_FIGHTER, built from
+  // the real sub-bodies rather than by closing deriveRings() rings (which would
+  // box it). Vader's TIE Advanced has BENT solar wings, so each wing is an outer
+  // octagon rim + a small inner square hub (the bend line, at y=±270) joined by
+  // spokes; a 4-strut pylon joins each wing hub to a cockpit square (y=±60); and
+  // the ball is two cockpit squares, two pod-belt octagons (y=±30/±80), and a +x
+  // nose octagon, all chained together. Guarded by an isSingleComponent
+  // connectivity test; kept bilaterally Y-symmetric, no orphans.
   edges: [
-    [0, 7], [0, 39], [1, 2], [1, 34], [2, 3], [3, 4], [4, 35], [5, 6],
-    [5, 38], [6, 7], [8, 9], [8, 11], [9, 10], [10, 11], [12, 19], [12, 47],
-    [13, 14], [13, 42], [14, 15], [15, 16], [16, 43], [17, 18], [17, 46], [18, 19],
-    [20, 21], [20, 23], [21, 22], [22, 23], [24, 32], [24, 39], [25, 33], [25, 34],
-    [25, 55], [26, 35], [26, 36], [26, 54], [27, 37], [27, 38], [28, 40], [28, 47],
-    [29, 41], [29, 42], [29, 50], [30, 43], [30, 44], [30, 51], [31, 45], [31, 46],
-    [32, 33], [32, 40], [33, 48], [34, 55], [35, 54], [36, 37], [36, 53], [37, 45],
-    [38, 39], [41, 49], [42, 50], [43, 51], [44, 52], [46, 47], [48, 49], [52, 53],
+    // bottom wing (y=-180/-270): outer octagon rim, inner square hub, spokes
+    [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 0],
+    [8, 9], [9, 10], [10, 11], [11, 8],
+    [0, 8], [7, 8], [1, 9], [2, 9], [3, 10], [4, 10], [5, 11], [6, 11],
+    // top wing (y=180/270)
+    [12, 13], [13, 14], [14, 15], [15, 16], [16, 17], [17, 18], [18, 19], [19, 12],
+    [20, 21], [21, 22], [22, 23], [23, 20],
+    [12, 20], [19, 20], [13, 21], [14, 21], [15, 22], [16, 22], [17, 23], [18, 23],
+    // pylons: wing inner square -> cockpit square (y=±60)
+    [8, 24], [9, 25], [10, 26], [11, 27],
+    [20, 28], [21, 29], [22, 30], [23, 31],
+    // cockpit squares (y=-60 / y=60)
+    [24, 25], [25, 26], [26, 27], [27, 24],
+    [28, 29], [29, 30], [30, 31], [31, 28],
+    // pod-belt octagons (y=-30/-80 and y=30/80)
+    [32, 33], [33, 34], [34, 35], [35, 36], [36, 37], [37, 38], [38, 39], [39, 32],
+    [40, 41], [41, 42], [42, 43], [43, 44], [44, 45], [45, 46], [46, 47], [47, 40],
+    // belt struts: lower belt <-> upper belt (the equator)
+    [32, 40], [33, 41], [34, 42], [35, 43], [36, 44], [37, 45], [38, 46], [39, 47],
+    // cockpit square -> belt struts
+    [24, 39], [25, 34], [26, 35], [27, 38],
+    [28, 47], [29, 42], [30, 43], [31, 46],
+    // +x nose octagon and its attachment to the belts
+    [48, 49], [49, 50], [50, 51], [51, 52], [52, 53], [53, 54], [54, 55], [55, 48],
+    [55, 34], [54, 35], [50, 42], [51, 43],
+    [48, 33], [49, 41], [52, 44], [53, 36],
   ],
 }
 
