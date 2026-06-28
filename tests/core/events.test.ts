@@ -37,7 +37,6 @@ import { stepGame } from '../../src/core/sim'
 import { initialState, SPACE_WAVE_QUOTA, MIN_SKIM_ALTITUDE } from '../../src/core/state'
 import type { Enemy, Turret, Projectile, GameState } from '../../src/core/state'
 import { NO_INPUT } from '../../src/core/input'
-import type { Vec3 } from '../../src/core/math3d'
 // Read core source as text via Vite's `?raw` (no Node `fs` types — the project is
 // deliberately browser-pure, which is exactly the boundary this suite guards).
 import eventsSrc from '../../src/core/events.ts?raw'

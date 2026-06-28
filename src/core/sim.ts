@@ -44,6 +44,7 @@ import {
   PORT_HIT_RADIUS,
 } from './state'
 import type { Input } from './input'
+import type { GameEvent } from './events'
 import { add, scale, sub, normalize, type Vec3 } from './math3d'
 import { aimDirection, collides, waveParams } from './gameRules'
 import { nextFloat, nextInt, type Rng } from './rng'
@@ -64,15 +65,20 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // loop. Active play is the fall-through below (mode === 'playing').
   if (state.mode === 'attract') {
     if (input.start) return startRun(state)
-    return { ...state, t }
+    return { ...state, t, events: [] }
   }
   if (state.mode === 'gameover' || state.gameOver) {
-    if (input.start) return { ...state, mode: 'attract', gameOver: false, t, aimX, aimY }
-    return { ...state, t, aimX, aimY }
+    if (input.start) return { ...state, mode: 'attract', gameOver: false, t, aimX, aimY, events: [] }
+    return { ...state, t, aimX, aimY, events: [] }
   }
 
   // Clone the RNG so the step never mutates its input — purity intact.
   const rng: Rng = { seed: state.rng.seed }
+
+  // The frame's event channel — a FRESH list every step (story 8-7). Every phase
+  // pushes its gameplay moments here; `progress` appends level-clear on a
+  // transition. Never seeded from `state.events`, so events never carry over.
+  const events: GameEvent[] = []
 
   // --- Player bolts: advance & expire, then fire on the trigger (all phases) -
   const projectiles = advance(state.projectiles, dt)
@@ -84,12 +90,13 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       ttl: PROJECTILE_TTL,
     })
     fireCooldown = FIRE_INTERVAL
+    events.push({ type: 'fire' })
   }
 
   // Enemy/turret fire advances & expires the same way in every phase.
   const enemyShots = advance(state.enemyShots, dt)
 
-  const common: StepCommon = { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots }
+  const common: StepCommon = { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots, events }
 
   // Each phase runs its own combat, then `progress` checks the kill quota and
   // drops the run into the next phase once the wave is cleared. The trench is
@@ -121,6 +128,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       ttl: ENEMY_SHOT_TTL,
     })
     enemyFireCooldown = params.enemyFireInterval
+    events.push({ type: 'enemy-fire', pos: [...shooter.pos] as Vec3 })
   }
 
   // --- Player bolts vs TIEs: destroy on contact, score per kill ------------
@@ -134,6 +142,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
         killedTie.add(ei)
         spentBolt.add(pi)
         score += TIE_SCORE
+        events.push({ type: 'enemy-death', enemyType: 'tie', pos: [...enemies[ei].pos] as Vec3 })
         break
       }
     }
@@ -142,10 +151,12 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   const liveBolts = projectiles.filter((_, i) => !spentBolt.has(i))
 
   // --- Cockpit damage: any TIE that reaches it, any fireball that lands -----
+  // In space, every cockpit hit is an enemy kill of the player (cause 'enemy').
   let damage = 0
   const liveEnemies = standingEnemies.filter((e) => {
     if (collides(e.pos, COCKPIT, COCKPIT_HIT_RADIUS)) {
       damage++
+      events.push({ type: 'player-death', cause: 'enemy' })
       return false
     }
     return true
@@ -153,6 +164,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   const liveShots = enemyShots.filter((s) => {
     if (collides(s.pos, COCKPIT, COCKPIT_HIT_RADIUS)) {
       damage++
+      events.push({ type: 'player-death', cause: 'enemy' })
       return false
     }
     return true
@@ -177,6 +189,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     fireCooldown,
     spawnTimer,
     enemyFireCooldown,
+    events,
   })
 }
 
@@ -186,7 +199,8 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
  * transitions never consume randomness — so a run is reproducible from its seed.
  */
 function startRun(s: GameState): GameState {
-  return initialState(s.rng.seed)
+  // The ship spawns into the cockpit — emit the run-start cue (story 8-7).
+  return { ...initialState(s.rng.seed), events: [{ type: 'player-spawn' }] }
 }
 
 /** Pieces the shared prologue already computed, threaded into a phase step. */
@@ -198,6 +212,9 @@ interface StepCommon {
   projectiles: Projectile[]
   fireCooldown: number
   enemyShots: Projectile[]
+  /** The frame's event channel, pre-seeded with any player `fire`; each phase
+   * pushes its own moments and `progress` appends level-clear. */
+  events: GameEvent[]
 }
 
 /**
@@ -206,7 +223,7 @@ interface StepCommon {
  * ahead, lob bolts at the cockpit, and fall to the player's fire.
  */
 function stepSurface(state: GameState, input: Input, dt: number, common: StepCommon): GameState {
-  const { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots } = common
+  const { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots, events } = common
 
   // --- Terrain skim: yoke flies up/down; can't pass the floor; scrape crashes
   let altitude = state.altitude + aimY * ALTITUDE_RATE * dt
@@ -215,6 +232,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
   if (altitude < MIN_SKIM_ALTITUDE) {
     damage++ // crashed into the surface — costs a shield...
     altitude = SKIM_ALTITUDE // ...and bumps the ship back to a safe height
+    events.push({ type: 'terrain-crash' }) // its own cue, not a player-death
   }
 
   // --- Turrets: scroll toward the cockpit with the surface, then spawn ------
@@ -240,6 +258,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
       ttl: ENEMY_SHOT_TTL,
     })
     enemyFireCooldown = ENEMY_FIRE_INTERVAL
+    events.push({ type: 'enemy-fire', pos: [...shooter.pos] as Vec3 })
   }
 
   // --- Player bolts vs turrets: destroy on contact, score per kill ---------
@@ -253,6 +272,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
         killed.add(ti)
         spentBolt.add(pi)
         score += TURRET_SCORE
+        events.push({ type: 'enemy-death', enemyType: 'turret', pos: [...turrets[ti].pos] as Vec3 })
         break
       }
     }
@@ -260,10 +280,11 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
   const standingTurrets = turrets.filter((_, i) => !killed.has(i))
   const liveBolts = projectiles.filter((_, i) => !spentBolt.has(i))
 
-  // --- Cockpit damage: any turret bolt that lands --------------------------
+  // --- Cockpit damage: any turret bolt that lands (cause 'turret') ----------
   const liveShots = enemyShots.filter((s) => {
     if (collides(s.pos, COCKPIT, COCKPIT_HIT_RADIUS)) {
       damage++
+      events.push({ type: 'player-death', cause: 'turret' })
       return false
     }
     return true
@@ -289,6 +310,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     fireCooldown,
     spawnTimer,
     enemyFireCooldown,
+    events,
   }
 }
 
@@ -301,8 +323,11 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
  * scores, or damages), preserving the 8-8 terminal-hold edge case.
  */
 function stepTrench(state: GameState, common: StepCommon, dt: number): GameState {
-  const { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots } = common
-  const base: GameState = { ...state, rng, t, aimX, aimY, projectiles, enemyShots, fireCooldown }
+  const { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots, events } = common
+  // `events` carries the prologue's `fire` cue (story 8-7) and accumulates the
+  // trench's own moments below; it rides every return path so the channel stays
+  // a fresh per-frame list.
+  const base: GameState = { ...state, rng, t, aimX, aimY, projectiles, enemyShots, fireCooldown, events }
 
   // No active port → safe hold (no scroll, no score, no damage).
   if (state.exhaustPort === null) return base
@@ -319,12 +344,19 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   const hitBolt = projectiles.findIndex((b) => collides(port, b.pos, PORT_HIT_RADIUS))
   if (hitBolt >= 0) {
     const liveBolts = projectiles.filter((_, i) => i !== hitBolt)
+    // The Death Star blows: the whole run clears and loops to the next wave's
+    // space phase — emit the warp / wave-clear cue (8-7), as `clearRun` re-opens
+    // 'space'. `clearRun` → `enterPhase` spreads `...s`, so this event rides along.
+    events.push({ type: 'level-clear', next: 'space' })
     return clearRun({ ...base, projectiles: liveBolts, score: state.score + TRENCH_BONUS })
   }
 
   // --- The port reaching the cockpit un-destroyed is a crash: costs a shield --
   if (collides(port, COCKPIT, COCKPIT_HIT_RADIUS)) {
     const lives = Math.max(0, state.lives - 1)
+    // Flying into the trench structure is a crash, not hostile fire — reuse the
+    // terrain-crash cue (8-7) rather than widen player-death's cause union.
+    events.push({ type: 'terrain-crash' })
     return {
       ...base,
       lives,
@@ -372,7 +404,9 @@ function progress(s: GameState): GameState {
   if (s.phaseKills < PHASE_QUOTA[s.phase]) return s
   const next = NEXT_PHASE[s.phase]
   if (next === null) return s
-  return enterPhase(s, next)
+  // The phase cleared — carry the frame's events forward and announce the warp.
+  const advanced = enterPhase(s, next)
+  return { ...advanced, events: [...s.events, { type: 'level-clear', next }] }
 }
 
 /**
