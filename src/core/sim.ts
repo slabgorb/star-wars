@@ -11,7 +11,7 @@
 // cockpit cost a shield. Every spatial test routes through the Math Box and the
 // rule helpers — there is no ad-hoc geometry in here.
 
-import type { GameState, Projectile, Enemy, Turret } from './state'
+import type { GameState, Projectile, Enemy, Turret, Phase } from './state'
 import {
   PROJECTILE_TTL,
   PROJECTILE_SPEED,
@@ -36,6 +36,8 @@ import {
   MAX_TURRETS,
   TURRET_SCORE,
   TURRET_HIT_RADIUS,
+  SPACE_WAVE_QUOTA,
+  SURFACE_WAVE_QUOTA,
 } from './state'
 import type { Input } from './input'
 import { add, scale, sub, normalize, type Vec3 } from './math3d'
@@ -74,9 +76,13 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // Enemy/turret fire advances & expires the same way in every phase.
   const enemyShots = advance(state.enemyShots, dt)
 
-  if (state.phase === 'surface') {
-    return stepSurface(state, input, dt, { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots })
-  }
+  const common: StepCommon = { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots }
+
+  // Each phase runs its own combat, then `progress` checks the kill quota and
+  // drops the run into the next phase once the wave is cleared. The trench is
+  // terminal here — its gameplay is story 8-5; for now it just holds safely.
+  if (state.phase === 'surface') return progress(stepSurface(state, input, dt, common))
+  if (state.phase === 'trench') return stepTrench(state, common)
 
   // --- TIEs: advance, then spawn into a free slot --------------------------
   const enemies = state.enemies.map((e) => moveEnemy(e, dt))
@@ -135,7 +141,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
 
   const lives = Math.max(0, state.lives - damage)
 
-  return {
+  return progress({
     ...state,
     rng,
     t,
@@ -144,13 +150,14 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     score,
     lives,
     gameOver: lives <= 0,
+    phaseKills: state.phaseKills + killedTie.size,
     projectiles: liveBolts,
     enemies: liveEnemies,
     enemyShots: liveShots,
     fireCooldown,
     spawnTimer,
     enemyFireCooldown,
-  }
+  })
 }
 
 /** Pieces the shared prologue already computed, threaded into a phase step. */
@@ -245,12 +252,78 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     lives,
     altitude,
     gameOver: lives <= 0,
+    phaseKills: state.phaseKills + killed.size,
     projectiles: liveBolts,
     turrets: standingTurrets,
     enemyShots: liveShots,
     fireCooldown,
     spawnTimer,
     enemyFireCooldown,
+  }
+}
+
+/**
+ * Wave 3 — the trench run. Its gameplay (catwalks, the exhaust port, the bonus)
+ * is story 8-5 and not built yet; reaching the trench is what story 8-8 wires.
+ * Until 8-5 lands the trench is a SAFE TERMINAL HOLD: the run arrives and the
+ * cockpit still tracks and fires, but nothing spawns, scores, or damages, and the
+ * phase does not advance. 8-5 replaces this hold with the real trench.
+ */
+function stepTrench(state: GameState, common: StepCommon): GameState {
+  const { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots } = common
+  return { ...state, rng, t, aimX, aimY, projectiles, enemyShots, fireCooldown }
+}
+
+// --- Wave/phase progression -------------------------------------------------
+//
+// A run escalates through the three phases in order; clearing a phase's kill
+// quota drops it into the next. The order and quotas are total over Phase, so
+// the third phase can never be forgotten (the type makes the table exhaustive).
+
+/** The phase a cleared phase advances into — `null` for the terminal trench. */
+const NEXT_PHASE: Record<Phase, Phase | null> = {
+  space: 'surface',
+  surface: 'trench',
+  trench: null, // terminal until story 8-5 builds the trench gameplay
+}
+
+/** Kills that clear a phase. The trench never auto-clears (end of the run). */
+const PHASE_QUOTA: Record<Phase, number> = {
+  space: SPACE_WAVE_QUOTA,
+  surface: SURFACE_WAVE_QUOTA,
+  trench: Infinity,
+}
+
+/**
+ * Drop the run into the next phase once the current one is cleared. A finished
+ * run never advances; phases advance in order, one at a time; score and lives
+ * carry forward untouched.
+ */
+function progress(s: GameState): GameState {
+  if (s.gameOver) return s
+  if (s.phaseKills < PHASE_QUOTA[s.phase]) return s
+  const next = NEXT_PHASE[s.phase]
+  if (next === null) return s
+  return enterPhase(s, next)
+}
+
+/**
+ * Open a fresh phase: zero the kill counter and clear what the previous phase
+ * left behind — no TIEs on the surface, no turrets in the trench, no stray
+ * ordnance chasing the ship between phases. Score and lives are preserved; the
+ * surface opens at the nominal skim height so the run never arrives mid-crash.
+ */
+function enterPhase(s: GameState, phase: Phase): GameState {
+  return {
+    ...s,
+    phase,
+    phaseKills: 0,
+    enemies: [],
+    turrets: [],
+    enemyShots: [],
+    altitude: phase === 'surface' ? SKIM_ALTITUDE : s.altitude,
+    spawnTimer: phase === 'surface' ? TURRET_SPAWN_INTERVAL : SPAWN_INTERVAL,
+    enemyFireCooldown: ENEMY_FIRE_INTERVAL,
   }
 }
 
