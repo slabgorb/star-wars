@@ -89,6 +89,13 @@ const loop = createLoop(
           break
       }
     }
+    // Wave-5 speech (story 8-7): Obi-Wan's "Use the Force, Luke" cues the trench
+    // approach — the climactic moment it plays in the film and the cabinet. Fire
+    // it once on the space/surface -> trench edge, during an active run. speak()
+    // lazily loads the line and is a no-op until the audio gesture unlocks it.
+    if (state.mode === 'playing' && prev.phase !== 'trench' && state.phase === 'trench') {
+      audio.speak('useTheForceLuke')
+    }
     // On the playing -> gameover edge, bank a qualifying score and persist it.
     // (Initials entry is a follow-up; runs record under a default tag for now.)
     if (prev.mode === 'playing' && state.mode === 'gameover') {

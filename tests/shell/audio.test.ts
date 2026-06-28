@@ -128,6 +128,47 @@ describe('audio engine graceful degradation (AC3)', () => {
   })
 })
 
+describe('audio engine speech (AC6 — TMS5220 lines)', () => {
+  // Speech lines live under their own R2 prefix and load LAZILY (on first speak),
+  // not eagerly on resume() like the SFX.
+  const R2_SPEECH = 'https://arcade-assets.slabgorb.com/star-wars/speech/'
+
+  it('does not eagerly load any speech on resume() (SFX only)', () => {
+    createAudioEngine().resume()
+    expect(fetched.length).toBeGreaterThan(0) // SFX did load
+    for (const url of fetched) expect(url.startsWith(R2_SPEECH)).toBe(false)
+  })
+
+  it('lazily fetches a speech line from the R2 speech prefix on first speak()', () => {
+    const engine = createAudioEngine()
+    engine.resume()
+    const before = fetched.length
+    engine.speak('useTheForceLuke')
+    const speech = fetched.slice(before)
+    expect(speech.length).toBe(1)
+    expect(speech[0].startsWith(R2_SPEECH)).toBe(true)
+    expect(speech[0].endsWith('.wav')).toBe(true)
+  })
+
+  it('coalesces repeated speak() of the same line into one in-flight fetch', () => {
+    const engine = createAudioEngine()
+    engine.resume()
+    const before = fetched.length
+    engine.speak('useTheForceLuke')
+    engine.speak('useTheForceLuke')
+    expect(fetched.length - before).toBe(1) // the second cue drops while loading
+  })
+
+  it('speak() is a safe no-op when WebAudio is unavailable', () => {
+    vi.stubGlobal('AudioContext', undefined)
+    vi.stubGlobal('webkitAudioContext', undefined)
+    const engine = createAudioEngine()
+    engine.resume()
+    expect(() => engine.speak('useTheForceLuke')).not.toThrow()
+    expect(fetched).toEqual([]) // no context => no fetch attempted
+  })
+})
+
 describe('event -> sound wiring in main.ts (AC4)', () => {
   // The core emits GameEvents (story 8-7); the shell's per-frame pump in main.ts
   // drains state.events after stepGame and maps each to a sample. Asserted at the
@@ -163,5 +204,10 @@ describe('event -> sound wiring in main.ts (AC4)', () => {
     ]) {
       expect(mainSrc).toMatch(new RegExp(`['"]${type}['"]`))
     }
+  })
+
+  it('cues the iconic speech line on the trench approach (AC6)', () => {
+    expect(mainSrc).toMatch(/\.speak\(\s*['"]useTheForceLuke['"]\s*\)/)
+    expect(mainSrc).toMatch(/['"]trench['"]/)
   })
 })

@@ -34,6 +34,20 @@ const SOUNDS = {
 
 export type SoundName = keyof typeof SOUNDS
 
+// TMS5220 LPC speech (story 8-7), under its own R2 prefix. These are AUTHENTIC
+// re-synthesis bakes of the cabinet's speech-ROM bitstreams (tools/speech-bake/),
+// decoded from the Speech*.asm disassembly. Speech samples are larger and rarely
+// triggered, so unlike SFX they are loaded LAZILY (on first `speak()`), not
+// eagerly on resume(). Only the lines the game actually cues are listed here; the
+// full set of 23 is hosted on R2 for future use.
+const SPEECH_BASE_URL = 'https://arcade-assets.slabgorb.com/star-wars/speech/'
+
+const SPEECH = {
+  useTheForceLuke: 'use_the_force_luke.wav', // Obi-Wan, cued at the trench approach
+} as const
+
+export type SpeechName = keyof typeof SPEECH
+
 export interface AudioEngine {
   // Create/resume the AudioContext and start loading samples. Safe to call
   // repeatedly (e.g. on every user gesture); only the first call does work.
@@ -41,6 +55,9 @@ export interface AudioEngine {
   // Play a loaded sample once. No-op if the sound is not loaded, the context is
   // not ready, or audio is unavailable.
   play(name: SoundName): void
+  // Speak a TMS5220 line once, loading it lazily on first use. No-op if audio is
+  // unavailable; the first call fetches+plays, later calls play from cache.
+  speak(name: SpeechName): void
   // True once at least one sample has decoded. Mainly for tests / readiness UI.
   ready(): boolean
 }
@@ -62,6 +79,8 @@ export function createAudioEngine(baseUrl: string = DEFAULT_BASE_URL): AudioEngi
   let master: GainNode | null = null
   let loadStarted = false
   const buffers = new Map<SoundName, AudioBuffer>()
+  const speechBuffers = new Map<SpeechName, AudioBuffer>()
+  const speechLoading = new Set<SpeechName>()
 
   // Fetch + decode every manifest sample once. A failure on any one sample
   // (network, CORS, undecodable) is swallowed — that sound simply never plays.
@@ -102,10 +121,9 @@ export function createAudioEngine(baseUrl: string = DEFAULT_BASE_URL): AudioEngi
     load()
   }
 
-  function play(name: SoundName): void {
+  // Fire a decoded buffer through the master gain. Shared by play() and speak().
+  function playBuffer(buffer: AudioBuffer): void {
     if (!ctx || !master) return
-    const buffer = buffers.get(name)
-    if (!buffer) return // not loaded (yet) or failed to decode — silent no-op
     try {
       const source = ctx.createBufferSource()
       source.buffer = buffer
@@ -116,9 +134,37 @@ export function createAudioEngine(baseUrl: string = DEFAULT_BASE_URL): AudioEngi
     }
   }
 
+  function play(name: SoundName): void {
+    const buffer = buffers.get(name)
+    if (!buffer) return // not loaded (yet) or failed to decode — silent no-op
+    playBuffer(buffer)
+  }
+
+  function speak(name: SpeechName): void {
+    if (!ctx) return // no context — engine inert, stay silent
+    const cached = speechBuffers.get(name)
+    if (cached) {
+      playBuffer(cached)
+      return
+    }
+    if (speechLoading.has(name)) return // a fetch is already in flight; drop this cue
+    speechLoading.add(name)
+    const context = ctx
+    fetch(SPEECH_BASE_URL + SPEECH[name])
+      .then((res) => res.arrayBuffer())
+      .then((data) => context.decodeAudioData(data))
+      .then((buffer) => {
+        speechBuffers.set(name, buffer)
+        playBuffer(buffer) // play the line that requested it, once decoded
+      })
+      .catch(() => {
+        speechLoading.delete(name) // fetch/decode failed — allow a later retry, stay silent
+      })
+  }
+
   function ready(): boolean {
     return buffers.size > 0
   }
 
-  return { resume, play, ready }
+  return { resume, play, speak, ready }
 }
