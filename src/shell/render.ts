@@ -7,7 +7,14 @@
 // does NO game math — it only consumes positions the core already computed.
 
 import type { GameState } from '../core/state'
-import { TIE_FIGHTER, DEATH_STAR_SURFACE, SURFACE_TOWER, type Model3D } from '../core/models'
+import {
+  TIE_FIGHTER,
+  DEATH_STAR_SURFACE,
+  SURFACE_TOWER,
+  TRENCH,
+  EXHAUST_PORT,
+  type Model3D,
+} from '../core/models'
 import { crosshairNdc } from '../core/gameRules'
 import { perspective, transform, add, rotationZ, IDENTITY, type Mat4, type Vec3 } from '../core/math3d'
 
@@ -28,11 +35,24 @@ const FAR = 5000
 //   roll about Z lays them down so the relief rises in +Y from the y=0 floor.
 //   TOWER   — already authored upright (base in y=0, structure climbing +Y), so
 //   it needs no reorientation.
+//   TRENCH  — the floor squares, catwalk rails, and exhaust port are authored flat
+//   in the y=0 plane, so like the tower they need no reorientation; the camera
+//   skims just above the floor (story 8-5).
 //
 // NOTE: structural tests can't catch orientation/scale — these MUST be eyeballed
 // in the dev server once the surface phase is reachable in play.
 export const SURFACE_ORIENT: Mat4 = rotationZ(-Math.PI / 2)
 export const TOWER_ORIENT: Mat4 = IDENTITY
+export const TRENCH_ORIENT: Mat4 = IDENTITY
+
+// Static trench-run placement for the first-render eyeball: the floor sits just
+// below the skimming camera and recedes down −Z, with the exhaust port further
+// along the run. Trench-run gameplay (scroll, approach, the bonus) is a follow-up
+// (the core `stepTrench` is still a safe terminal hold).
+const TRENCH_SKIM = 60
+const TRENCH_FLOOR_Z = 700
+const TRENCH_PORT_Z = 1200
+const PORT_GLOW = '#ff9f0a' // exhaust-port target amber
 
 // The shared arcade vector face (loaded by shell/font.ts), with the same
 // 'Orbitron', monospace fallback chain tempest uses so the HUD reads even before
@@ -58,6 +78,13 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
       const base: Vec3 = [tu.pos[0], tu.pos[1] - state.altitude, tu.pos[2]]
       drawModelAt(ctx, SURFACE_TOWER, base, proj, w, h, TURRET_GLOW, TOWER_ORIENT)
     }
+  } else if (state.phase === 'trench') {
+    // Wave 3 — the trench run. Floor + catwalk rails ahead and below the skimming
+    // camera; the exhaust port (the run's target) sits further down the channel.
+    const floor: Vec3 = [0, -TRENCH_SKIM, -TRENCH_FLOOR_Z]
+    drawModelAt(ctx, TRENCH, floor, proj, w, h, SURFACE_GLOW, TRENCH_ORIENT)
+    const port: Vec3 = [0, -TRENCH_SKIM, -TRENCH_PORT_Z]
+    drawModelAt(ctx, EXHAUST_PORT, port, proj, w, h, PORT_GLOW, TRENCH_ORIENT)
   } else {
     for (const e of state.enemies) drawModelAt(ctx, TIE_FIGHTER, e.pos, proj, w, h, TIE_GLOW)
   }

@@ -19,8 +19,10 @@
 // stacked rings). This replaces the original 8-2 nearest-neighbour heuristic,
 // which was well-formed but rendered as a tangle (rims never closed). The
 // reconstruction is guarded by an induced-single-cycle topology test
-// (tests/core/models.test.ts). TIE_FIGHTER, DARTH_TIE, and TRENCH still carry the
-// 8-2 heuristic edges — owed work for a later pass (TRENCH lands with 8-5).
+// (tests/core/models.test.ts). TRENCH's floor squares already closed cleanly; story
+// 8-5 connected them with catwalk rails and added the ring-based EXHAUST_PORT.
+// TIE_FIGHTER and DARTH_TIE still carry the 8-2 nearest-neighbour heuristic edges
+// (they fail the ring guard and have no topology test yet) — owed 8-3 follow-up debt.
 //
 // PURE data. No DOM, no time, no randomness — safe for the deterministic core.
 
@@ -276,7 +278,15 @@ export const SURFACE_TOWER: Model3D = {
   ],
 }
 
-/** Authentic `Obj_Trench_Squares` geometry from the cabinet disassembly. */
+/**
+ * Authentic `Obj_Trench_Squares` geometry from the cabinet disassembly: two
+ * concentric floor squares (outer 0-3, inner 4-7) lying flat in y=0. The ported
+ * floor rings already close cleanly; story 8-5 adds the CATWALK RAILS that bridge
+ * each outer corner to its matching inner corner, so the trench reads as one
+ * connected channel instead of two free-floating rims. Rails stay in the y=0
+ * plane (the camera skims the floor) and span the rings without disturbing either
+ * loop, so the induced-single-cycle topology guard still holds.
+ */
 export const TRENCH: Model3D = {
   name: 'Trench',
   vertices: [
@@ -290,7 +300,39 @@ export const TRENCH: Model3D = {
     [128, 0, -64],
   ],
   edges: [
-    [0, 1], [0, 3], [1, 2], [2, 3], [4, 5], [4, 7], [5, 6], [6, 7],
+    // outer floor square
+    [0, 1], [0, 3], [1, 2], [2, 3],
+    // inner floor square
+    [4, 5], [4, 7], [5, 6], [6, 7],
+    // catwalk rails: each outer corner to its matching inner corner
+    [0, 4], [1, 5], [2, 6], [3, 7],
+  ],
+}
+
+/**
+ * The trench exhaust port — the run's target. No authentic vertex table exists
+ * for it in `Object_3D_Data.asm`, so the geometry is authored here: a small
+ * octagonal opening lying flat in the y=0 floor plane, ring-based from the start
+ * (a single closed loop), per the epic's geometry-connectivity contract. The
+ * symmetric (±64,±27)/(±27,±64) octagon keeps every vertex at one exact integer
+ * radius, so it reads as a single ring and avoids floating-point drift. Display
+ * orientation (recessing it into the trench floor / facing the run) is a render
+ * concern applied in the shell, not baked into this object-space data.
+ */
+export const EXHAUST_PORT: Model3D = {
+  name: 'Exhaust Port',
+  vertices: [
+    [64, 0, 27],
+    [27, 0, 64],
+    [-27, 0, 64],
+    [-64, 0, 27],
+    [-64, 0, -27],
+    [-27, 0, -64],
+    [27, 0, -64],
+    [64, 0, -27],
+  ],
+  edges: [
+    [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 0],
   ],
 }
 
@@ -305,4 +347,5 @@ export const MODELS: readonly Model3D[] = [
   DEATH_STAR_SURFACE,
   SURFACE_TOWER,
   TRENCH,
+  EXHAUST_PORT,
 ]
