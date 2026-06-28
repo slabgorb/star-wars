@@ -6,7 +6,7 @@
 // their edges are stroked with `shadowBlur` for the vector-CRT glow. The shell
 // does NO game math — it only consumes positions the core already computed.
 
-import { EXHAUST_PORT_DISTANCE, SPAWN_DISTANCE, type GameState } from '../core/state'
+import { EXHAUST_PORT_DISTANCE, PROJECTILE_TTL, SPAWN_DISTANCE, type GameState } from '../core/state'
 import type { HighScoreTable } from '../core/highscore'
 import {
   TIE_FIGHTER,
@@ -25,6 +25,10 @@ const TURRET_GLOW = GLOW_FOR['Surface Tower'] // surface turret red (shared)
 const SURFACE_GLOW = GLOW_FOR['Death Star Surface'] // death star steel (shared)
 const BOLT_GLOW = '#9dff00' // player laser green
 const FIRE_GLOW = '#ffd60a' // enemy fireball amber
+
+// How long after a bolt is fired its cannon-tip laser beams stay lit — a brief
+// muzzle flash ("pew"), not a line trailing the bolt for its whole flight.
+const LASER_FLASH_SECONDS = 0.12
 
 // Display orientation per surface model (story 8-4). The authentic object-space
 // axes do not match the in-game view, so each model is rotated into place before
@@ -148,7 +152,15 @@ export function render(
     for (const e of state.enemies)
       drawWireframe(ctx, TIE_FIGHTER, e.pos, proj, w, h, TIE_GLOW, multiply(e.orient, TIE_ORIENT))
   }
-  for (const p of state.projectiles) drawSpark(ctx, p.pos, proj, w, h, BOLT_GLOW, 4)
+  // The player laser is a brief "pew" flash from the cannon tips at the moment of
+  // firing — NOT a line that trails the bolt for its whole 2s flight (that builds
+  // a static cyan web under rapid fire). Draw it only for freshly-fired bolts, and
+  // only during an active run so it never bleeds onto the attract/game-over screens
+  // (the sim freezes in-flight bolts there).
+  if (state.mode === 'playing') {
+    for (const p of state.projectiles)
+      if (PROJECTILE_TTL - p.ttl <= LASER_FLASH_SECONDS) drawPlayerLaser(ctx, p.pos, proj, w, h)
+  }
   for (const s of state.enemyShots) drawSpark(ctx, s.pos, proj, w, h, FIRE_GLOW, 6)
 
   // The framing layer (story 8-6): the playing HUD during a run, the attract/title
@@ -162,6 +174,42 @@ export function render(
     drawCrosshair(ctx, state, w, h)
     drawHud(ctx, state, w, h)
   }
+}
+
+/**
+ * The player's shot as cabinet-style converging laser beams — the "pew pew".
+ * Four cyan lines fire from the cannon tips at the screen corners and meet at the
+ * bolt's projected position, replacing the old '+' spark placeholder. The cannon
+ * tips are a fixed SCREEN-space frame (the cockpit guns), so they don't move with
+ * the 3D camera; only the convergence point (the projected bolt) tracks the shot.
+ * Off-screen/behind-camera bolts (no projection) simply draw nothing.
+ */
+function drawPlayerLaser(
+  ctx: CanvasRenderingContext2D,
+  pos: Vec3,
+  proj: Mat4,
+  w: number,
+  h: number,
+): void {
+  const tip = project(pos, proj, w, h)
+  if (!tip) return
+  const cannons: ReadonlyArray<readonly [number, number]> = [
+    [0, 0],
+    [w, 0],
+    [0, h],
+    [w, h],
+  ]
+  ctx.lineWidth = 2
+  ctx.strokeStyle = GLOW
+  ctx.shadowColor = GLOW
+  ctx.shadowBlur = 12
+  ctx.beginPath()
+  for (const [cx, cy] of cannons) {
+    ctx.moveTo(cx, cy)
+    ctx.lineTo(tip[0], tip[1])
+  }
+  ctx.stroke()
+  ctx.shadowBlur = 0
 }
 
 /** A small glowing '+' for a bolt in flight. */
