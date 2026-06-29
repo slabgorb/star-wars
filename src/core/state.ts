@@ -42,11 +42,16 @@ export interface Enemy {
   vel: Vec3
   /** Enemy type — a string union (no enum) so it stays cheap and serialisable. */
   kind: 'tie'
-  /** Per-enemy facing: a "look toward the cockpit" rotation recomputed each step
-   * from the TIE's current position, so it banks at the player like the cabinet
-   * (story 8-13). Computed in core (facing is sim state); render only applies it.
-   * Maps the model's forward axis (+Z) onto the direction to the cockpit. */
+  /** Per-enemy facing (sim state; render only applies it). Story 8-13 made it a
+   * look-toward-the-cockpit rotation; story 9-2 evolves it to BANK along the
+   * flight path — the look-along-heading frame rolled into the swoop. Maps the
+   * model's forward axis (+Z) onto the TIE's heading. */
   orient: Mat4
+  /** Per-TIE lateral swoop bias (signed), seeded from the RNG at spawn: which way
+   * the fighter banks its approach arc so it curves in instead of flying straight
+   * at the cockpit (story 9-2, the RE'd flight model). Optional — collision/test
+   * fixtures that only exercise hit-tests omit it (treated as 0: no swoop). */
+  bank?: number
 }
 
 /** A laser turret standing on the Death Star surface (Wave 2). World space. */
@@ -112,6 +117,25 @@ export const ENEMY_SHOT_HIT_RADIUS = 90
 export const TIE_HIT_RADIUS = 250
 /** Hit sphere around the cockpit for enemy contact and fire. */
 export const COCKPIT_HIT_RADIUS = 80
+
+// --- Wave 1 — TIE flight model (story 9-2) ----------------------------------
+//
+// The RE'd cabinet TIE does not fly dead-straight at the cockpit: it thrusts
+// along its own heading while banking + steering toward the player, tracing a
+// swooping arc (docs/tie-flight-ai-model.md §5). We port the confirmed
+// kinematics at a CONSTANT approach speed (|vel| is preserved as the heading
+// turns, so the 8-6 difficulty ramp still rides spawn speed); the full
+// accelerate-from-rest + per-fighter script VM (§5.1/§5.3) is deferred. These are
+// authentic-FEEL tuning values — the disassembly's rates are per cabinet-tick and
+// not yet pinned to our dt (model §5.3 caveat) — single-sourced here for easy
+// correction, like the rest of the Wave-1 constants.
+
+/** Lateral bias blended into a TIE's homing heading, as a fraction of its forward
+ * approach. 0 = the old beeline; >0 curves the path into a banking swoop arc. */
+export const TIE_SWOOP_BIAS = 0.5
+/** Roll angle (radians) a TIE holds while banking into its swoop (~34°), so the
+ * orientation leans into the turn rather than sitting level (extends story 8-13). */
+export const TIE_BANK_ANGLE = 0.6
 
 // --- Wave 2 surface constants -----------------------------------------------
 //
