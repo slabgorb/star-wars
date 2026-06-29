@@ -66,6 +66,15 @@ export interface TerrainCrashEvent {
   type: 'terrain-crash'
 }
 
+// A player bolt shot an enemy fireball out of the air before it reached the
+// cockpit (story 8-18). `pos` is where it died, for particle/SFX placement.
+// Distinct from `enemy-death` because a fireball is hostile ordnance, not an
+// `Enemy` — the same reason `terrain-crash` stays separate from `player-death`.
+export interface FireballDestroyedEvent {
+  type: 'fireball-destroyed'
+  pos: Vec3
+}
+
 export type GameEvent =
   | FireEvent
   | EnemyFireEvent
@@ -74,3 +83,4 @@ export type GameEvent =
   | LevelClearEvent
   | PlayerSpawnEvent
   | TerrainCrashEvent
+  | FireballDestroyedEvent

@@ -22,10 +22,12 @@ import {
   SPAWN_SPREAD,
   ENEMY_SHOT_SPEED,
   ENEMY_SHOT_TTL,
+  ENEMY_SHOT_HIT_RADIUS,
   ENEMY_FIRE_INTERVAL,
   WAVE_SIZE,
   MAX_FIREBALL_SLOTS,
   TIE_SCORE,
+  FIREBALL_SCORE,
   TIE_HIT_RADIUS,
   COCKPIT_HIT_RADIUS,
   SKIM_ALTITUDE,
@@ -148,6 +150,26 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     }
   }
   const standingEnemies = enemies.filter((_, i) => !killedTie.has(i))
+
+  // --- Player bolts vs enemy fireballs: shoot incoming fire down (story 8-18) -
+  // Mirror the TIE loop: one bolt downs one fireball, sharing `spentBolt` so a
+  // bolt already spent on a TIE can't also kill a fireball. Intercepted
+  // fireballs drop out HERE, before the cockpit-damage pass below, so a fireball
+  // shot down never also costs a shield.
+  const killedShot = new Set<number>()
+  for (let si = 0; si < enemyShots.length; si++) {
+    for (let pi = 0; pi < projectiles.length; pi++) {
+      if (spentBolt.has(pi)) continue
+      if (collides(enemyShots[si].pos, projectiles[pi].pos, ENEMY_SHOT_HIT_RADIUS)) {
+        killedShot.add(si)
+        spentBolt.add(pi)
+        score += FIREBALL_SCORE
+        events.push({ type: 'fireball-destroyed', pos: [...enemyShots[si].pos] as Vec3 })
+        break
+      }
+    }
+  }
+  const standingShots = enemyShots.filter((_, i) => !killedShot.has(i))
   const liveBolts = projectiles.filter((_, i) => !spentBolt.has(i))
 
   // --- Cockpit damage: any TIE that reaches it, any fireball that lands -----
@@ -161,7 +183,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     }
     return true
   })
-  const liveShots = enemyShots.filter((s) => {
+  const liveShots = standingShots.filter((s) => {
     if (collides(s.pos, COCKPIT, COCKPIT_HIT_RADIUS)) {
       damage++
       events.push({ type: 'player-death', cause: 'enemy' })
