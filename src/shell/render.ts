@@ -6,8 +6,15 @@
 // their edges are stroked with `shadowBlur` for the vector-CRT glow. The shell
 // does NO game math — it only consumes positions the core already computed.
 
-import { EXHAUST_PORT_DISTANCE, PROJECTILE_TTL, SPAWN_DISTANCE, type GameState } from '../core/state'
+import {
+  EXHAUST_PORT_DISTANCE,
+  PROJECTILE_TTL,
+  SPAWN_DISTANCE,
+  STARTING_LIVES,
+  type GameState,
+} from '../core/state'
 import type { HighScoreTable } from '../core/highscore'
+import { formatScore, formatLives, formatWave, formatLevel, formatShield } from '../core/hud'
 import {
   TIE_FIGHTER,
   DEATH_STAR_SURFACE,
@@ -175,7 +182,7 @@ export function render(
     // reads on top of it; both composite over the 3D scene (drawn above).
     drawLockOn(ctx, state, proj, w, h)
     drawCrosshair(ctx, state, w, h)
-    drawHud(ctx, state, w, h)
+    drawHudHeader(ctx, state, w, h)
   }
 }
 
@@ -323,23 +330,109 @@ function drawCrosshair(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
   ctx.shadowBlur = 0
 }
 
-/** In-run HUD: shields (left), the wave indicator (centre), score (right). */
-function drawHud(ctx: CanvasRenderingContext2D, state: GameState, w: number, h: number): void {
+// HUD header geometry (story 8-17). Side inset and the meter width scale with
+// the viewport width so the header reflows instead of clipping; the vertical
+// offsets are small top-anchored constants, the cabinet's top status strip.
+const HUD_MARGIN_FRAC = 0.025 // side inset as a fraction of width
+const HUD_METER_FRAC = 0.16 // shield-meter width as a fraction of width
+const HUD_ROW1_Y = 34 // SCORE / WAVE / LEVEL baseline (top row)
+const HUD_ROW2_Y = 58 // SHIELDS baseline (second left-column row)
+const HUD_METER_Y = 42 // shield-meter top — sits just under the LEVEL label
+const HUD_METER_H = 10 // shield-meter height
+const HUD_FRAME_TOP_Y = 10 // top bracket line, clear above the text row
+const HUD_FRAME_BOTTOM_Y = 68 // bottom bracket line, clear below the meter/shields
+
+/**
+ * In-run HUD header (story 8-17): SCORE over shields (left), the shield METER
+ * graphic with the level number (centre), and the WAVE number (right), bracketed
+ * by two glowing frame lines. All text is the shared Vector Battle face via
+ * glowText; every value is formatted by the pure core (`core/hud.ts`) so the
+ * shell only lays out what the core computed — the boundary holds.
+ */
+function drawHudHeader(ctx: CanvasRenderingContext2D, state: GameState, w: number, _h: number): void {
+  const margin = Math.round(w * HUD_MARGIN_FRAC)
+
   ctx.textBaseline = 'alphabetic'
   ctx.font = HUD_FONT
 
+  // Left: score over remaining shields (lives). Two short lines keep the block
+  // tight against the left bracket.
   ctx.textAlign = 'left'
-  glowText(ctx, `SHIELDS ${state.lives}`, 24, 36, GLOW, 10)
+  glowText(ctx, `SCORE ${formatScore(state.score)}`, margin, HUD_ROW1_Y, GLOW, 10)
+  glowText(ctx, `SHIELDS ${formatLives(state.lives)}`, margin, HUD_ROW2_Y, GLOW, 10)
 
-  ctx.textAlign = 'center'
-  glowText(ctx, `WAVE ${state.wave}`, w / 2, 36, GLOW, 10)
-
+  // Right: the enemy wave.
   ctx.textAlign = 'right'
-  glowText(ctx, `SCORE ${state.score}`, w - 24, 36, GLOW, 10)
+  glowText(ctx, `WAVE ${formatWave(state.wave)}`, w - margin, HUD_ROW1_Y, GLOW, 10)
+
+  // Centre: the shield meter graphic with the level number above it.
+  drawShieldMeter(ctx, state, w)
+
+  // Frame: top and bottom glowing brackets spanning the inset width.
+  glowLine(ctx, margin, HUD_FRAME_TOP_Y, w - margin, HUD_FRAME_TOP_Y, GLOW)
+  glowLine(ctx, margin, HUD_FRAME_BOTTOM_Y, w - margin, HUD_FRAME_BOTTOM_Y, GLOW)
 
   // Reset shared text state so nothing leaks into the next frame.
   ctx.textAlign = 'left'
   ctx.letterSpacing = '0px'
+  ctx.shadowBlur = 0
+}
+
+/**
+ * The centre shield meter: a glowing horizontal bar whose fill tracks remaining
+ * shields. Shields are the player's lives in this cabinet (a hit costs one), so
+ * the percentage is `lives / STARTING_LIVES` routed through the pure
+ * `formatShield`. The OUTLINE always spans full capacity (the player reads the
+ * max); the inner FILL shrinks one segment per lost shield. The level number
+ * sits just above, per the cabinet's centre grouping.
+ */
+function drawShieldMeter(ctx: CanvasRenderingContext2D, state: GameState, w: number): void {
+  const barW = Math.round(w * HUD_METER_FRAC)
+  const x = Math.round(w / 2 - barW / 2)
+  const y = HUD_METER_Y
+  const fill = formatShield((state.lives / STARTING_LIVES) * 100)
+
+  ctx.font = HUD_FONT
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'alphabetic'
+  glowText(ctx, `LEVEL ${formatLevel(state.wave)}`, w / 2, y - 8, GLOW, 8)
+
+  ctx.save()
+  ctx.globalCompositeOperation = 'lighter'
+  // Outline: full shield capacity, cockpit cyan.
+  ctx.lineWidth = 2
+  ctx.strokeStyle = GLOW
+  ctx.shadowColor = GLOW
+  ctx.shadowBlur = 8
+  ctx.strokeRect(x, y, barW, HUD_METER_H)
+  // Fill: remaining shields, player-laser green so it reads against the outline.
+  ctx.fillStyle = BOLT_GLOW
+  ctx.shadowColor = BOLT_GLOW
+  ctx.fillRect(x + 1, y + 1, (barW - 2) * fill, HUD_METER_H - 2)
+  ctx.restore()
+  ctx.shadowBlur = 0
+}
+
+/** A single glowing frame line — the HUD header's top/bottom brackets. */
+function glowLine(
+  ctx: CanvasRenderingContext2D,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  color: string,
+): void {
+  ctx.save()
+  ctx.globalCompositeOperation = 'lighter'
+  ctx.strokeStyle = color
+  ctx.shadowColor = color
+  ctx.shadowBlur = 8
+  ctx.lineWidth = 1.5
+  ctx.beginPath()
+  ctx.moveTo(x0, y0)
+  ctx.lineTo(x1, y1)
+  ctx.stroke()
+  ctx.restore()
   ctx.shadowBlur = 0
 }
 

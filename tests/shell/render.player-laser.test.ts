@@ -59,6 +59,7 @@ function makeCtx() {
       return curColor
     },
     fillRect() {},
+    strokeRect() {}, // story 8-17: HUD shield-meter outline (drawShieldMeter)
     beginPath() {},
     moveTo(x: number, y: number) {
       pen = [x, y]
