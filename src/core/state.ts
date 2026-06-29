@@ -52,6 +52,11 @@ export interface Enemy {
    * at the cockpit (story 9-2, the RE'd flight model). Optional — collision/test
    * fixtures that only exercise hit-tests omit it (treated as 0: no swoop). */
   bank?: number
+  /** True once this TIE has begun its peel-away / fly-past exit (story 9-3): it
+   * completed its attack pass without landing a hit and is now thrusting outward,
+   * receding out of the play volume. Latched — an approaching TIE omits it (treated
+   * as false), so a fighter already peeling never re-homes on the cockpit. */
+  peeling?: boolean
 }
 
 /** A laser turret standing on the Death Star surface (Wave 2). World space. */
@@ -136,6 +141,33 @@ export const TIE_SWOOP_BIAS = 0.5
 /** Roll angle (radians) a TIE holds while banking into its swoop (~34°), so the
  * orientation leans into the turn rather than sitting level (extends story 8-13). */
 export const TIE_BANK_ANGLE = 0.6
+
+// --- Wave 1 — TIE peel-away / fly-past lifecycle (story 9-3) -----------------
+//
+// An un-killed TIE must not fly all the way into the cockpit and balloon to a
+// full-frame wall (the Image-1 defect). When it closes to TIE_NEAR_BOUND without
+// landing a hit, it completes its pass and PEELS AWAY — thrusting outward so it
+// flies past the cockpit and recedes out of the play volume, freeing its slot
+// (docs/tie-flight-ai-model.md §7). A near-dead-center fighter (lateral offset
+// inside the cockpit hit sphere) has no room to veer and still strafes through —
+// a genuine collision still costs a shield (story AC#3; the model itself has no
+// body collision, but the story deliberately keeps it — see the session
+// deviations). Authentic-FEEL values, single-sourced here like the rest of the
+// Wave-1 constants.
+
+/** Range at which an un-killed TIE stops homing and peels away. It bounds the
+ * nearest a peeling fighter ever gets, so no TIE renders as a full-frame wall
+ * (the AC#2 near-bound). Sits well outside the cockpit hit sphere and well inside
+ * the spawn distance. */
+export const TIE_NEAR_BOUND = 350
+/** Once a peeling TIE has receded past this range it has left the play volume and
+ * its slot is freed. Above the farthest spawn (≈1298 = the corner of the spawn
+ * box) so a freshly spawned TIE is never culled on arrival. */
+export const TIE_EXIT_RANGE = 1800
+/** How hard a peeling TIE sweeps sideways as it departs — the tangential blend
+ * against the straight-outward radial. 0 = straight back out; 1 ≈ a 45° peel-off
+ * to the side (the banking fly-past look). */
+export const TIE_PEEL_SWEEP = 1
 
 // --- Wave 2 surface constants -----------------------------------------------
 //
