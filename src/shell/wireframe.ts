@@ -17,8 +17,8 @@ export const FAR = 5000
 // Per-model gameplay glow colour: the single source of truth for both the game
 // renderer and the contact sheet. Keyed by Model3D.name.
 export const GLOW_FOR: Record<string, string> = {
-  'TIE Fighter': '#ff3b30', // enemy red
-  'Darth Vader TIE': '#ff3b30', // boss TIE, enemy red
+  'TIE Fighter': '#30d158', // enemy green (cabinet colour)
+  'Darth Vader TIE': '#30d158', // boss TIE, enemy green (cabinet colour)
   'Death Star Surface': '#5a6b8c', // death star steel
   'Surface Tower': '#ff3b30', // surface turret red
   'Trench': '#5a6b8c', // death star steel
