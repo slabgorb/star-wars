@@ -15,7 +15,7 @@ import {
   TRENCH,
   EXHAUST_PORT,
 } from '../core/models'
-import { crosshairNdc, FOV_Y } from '../core/gameRules'
+import { crosshairNdc, lockedEnemy, LOCK_RADIUS_NDC, FOV_Y } from '../core/gameRules'
 import { perspective, add, multiply, rotationZ, IDENTITY, type Mat4, type Vec3 } from '../core/math3d'
 import { project, drawWireframe, GLOW_FOR, NEAR, FAR } from './wireframe'
 
@@ -171,9 +171,43 @@ export function render(
   } else if (state.mode === 'gameover') {
     drawGameOver(ctx, state, highScores, w, h)
   } else {
+    // The green lock-on ring sits UNDER the cyan reticle so the crosshair always
+    // reads on top of it; both composite over the 3D scene (drawn above).
+    drawLockOn(ctx, state, proj, w, h)
     drawCrosshair(ctx, state, w, h)
     drawHud(ctx, state, w, h)
   }
+}
+
+/**
+ * The green lock-on ring (story 8-14). The core decides WHICH enemy is under the
+ * reticle — `lockedEnemy` returns the nearest TIE a shot would hit — and the shell
+ * only rings it, honouring the boundary. Drawn at the target's projected screen
+ * position with the lock radius scaled NDC→pixels (LOCK_RADIUS_NDC spans the NDC
+ * half-height, i.e. h/2 px). Nothing is drawn when no target is locked, so the
+ * ring is the player's "your next shot connects" confirmation. Naturally limited
+ * to the space phase: surface/trench carry no `enemies`, so nothing locks there.
+ */
+function drawLockOn(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  proj: Mat4,
+  w: number,
+  h: number,
+): void {
+  const target = lockedEnemy(state, w / h)
+  if (!target) return
+  const c = project(target.pos, proj, w, h)
+  if (!c) return
+  const r = LOCK_RADIUS_NDC * (h / 2)
+  ctx.lineWidth = 2
+  ctx.strokeStyle = BOLT_GLOW
+  ctx.shadowColor = BOLT_GLOW
+  ctx.shadowBlur = 12
+  ctx.beginPath()
+  ctx.arc(c[0], c[1], r, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.shadowBlur = 0
 }
 
 /**
@@ -237,7 +271,13 @@ function drawSpark(
   ctx.shadowBlur = 0
 }
 
-/** The cockpit reticle, tracking the yoke (core-computed via crosshairNdc). */
+/**
+ * The cockpit reticle, tracking the yoke (core-computed via crosshairNdc): a
+ * centre cross for the precise aim point, framed by four cabinet chevrons at the
+ * cardinals — inward-pointing arrowheads converging on the centre (story 8-14).
+ * The chevrons are static screen geometry (no game logic), drawn in the same cyan
+ * glow as the cross.
+ */
 function drawCrosshair(ctx: CanvasRenderingContext2D, state: GameState, w: number, h: number): void {
   const [nx, ny] = crosshairNdc(state.aimX, state.aimY)
   const cx = (nx * 0.5 + 0.5) * w
@@ -250,6 +290,7 @@ function drawCrosshair(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
   ctx.shadowColor = GLOW
   ctx.shadowBlur = 10
   ctx.beginPath()
+  // Centre cross with a gap at the aim point.
   ctx.moveTo(cx - r, cy)
   ctx.lineTo(cx - 5, cy)
   ctx.moveTo(cx + 5, cy)
@@ -258,6 +299,26 @@ function drawCrosshair(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
   ctx.lineTo(cx, cy - 5)
   ctx.moveTo(cx, cy + 5)
   ctx.lineTo(cx, cy + r)
+  // Four converging chevrons: each apex points inward toward the centre, set just
+  // outside the cross (GAP > r) with arms of length CHEV.
+  const GAP = 22
+  const CHEV = 7
+  // top — apex below its arms (points down)
+  ctx.moveTo(cx - CHEV, cy - GAP - CHEV)
+  ctx.lineTo(cx, cy - GAP)
+  ctx.lineTo(cx + CHEV, cy - GAP - CHEV)
+  // bottom — apex above its arms (points up)
+  ctx.moveTo(cx - CHEV, cy + GAP + CHEV)
+  ctx.lineTo(cx, cy + GAP)
+  ctx.lineTo(cx + CHEV, cy + GAP + CHEV)
+  // left — apex right of its arms (points right)
+  ctx.moveTo(cx - GAP - CHEV, cy - CHEV)
+  ctx.lineTo(cx - GAP, cy)
+  ctx.lineTo(cx - GAP - CHEV, cy + CHEV)
+  // right — apex left of its arms (points left)
+  ctx.moveTo(cx + GAP + CHEV, cy - CHEV)
+  ctx.lineTo(cx + GAP, cy)
+  ctx.lineTo(cx + GAP + CHEV, cy + CHEV)
   ctx.stroke()
   ctx.shadowBlur = 0
 }
