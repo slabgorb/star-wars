@@ -23,10 +23,11 @@
 // SCOPE / TEA DESIGN DECISIONS (logged as session deviations):
 //   * The fix is a TUNING change, NOT a model change. The TIE geometry is the
 //     authentic Obj_Tie_Fighter from the disassembly — it must NOT be shrunk to
-//     fake distance. The lever is SPAWN_DISTANCE (+ its companions ENEMY_SPEED so
-//     the longer approach stays playable, and the FAR clip plane so a far-spawned
-//     TIE isn't clipped). The GROWTH test below is keyed to the spawn/near depth
-//     RANGE precisely so "shrink the model" cannot satisfy it.
+//     fake distance. The lever is a new TIE-specific TIE_SPAWN_DISTANCE (the old
+//     SPAWN_DISTANCE stays put for turrets/surface), plus companions ENEMY_SPEED so
+//     the longer approach stays playable and the FAR clip plane so a far-spawned
+//     TIE sits inside the frustum. The GROWTH test below is keyed to the spawn/near
+//     depth RANGE precisely so "shrink the model" cannot satisfy it.
 //   * Apparent size is measured via the model's BOUNDING SPHERE (modelBounds),
 //     projected through the real 11-2 `perspective`/`transform` pipeline. A sphere
 //     reads the same from every angle, so the measure is orientation-independent —
@@ -43,14 +44,14 @@ import { perspective, transform } from '../../src/core/math3d'
 import { modelBounds } from '../../src/core/modelView'
 import { TIE_FIGHTER } from '../../src/core/models'
 import { FOV_Y } from '../../src/core/gameRules'
-import { SPAWN_DISTANCE, TIE_NEAR_BOUND, ENEMY_SPEED } from '../../src/core/state'
+import { TIE_SPAWN_DISTANCE, TIE_NEAR_BOUND, ENEMY_SPEED } from '../../src/core/state'
 
 const { center, radius } = modelBounds(TIE_FIGHTER)
 
 // A spawned TIE should read as a distant ship — the cabinet's freshly-spawned
 // fighter subtends ~6-7% of the frame; ≤12% of viewport height under the
 // (conservative) bounding-sphere measure matches that feel and is comfortably
-// below today's ~48%. Picking this threshold forces SPAWN_DISTANCE out to ~5000.
+// below today's ~48%. Picking this threshold forces TIE_SPAWN_DISTANCE out to ~5000.
 const SPAWN_APPARENT_SIZE_MAX = 0.12
 
 // The fighter must grow dramatically as it bears down — the cabinet's speck-to-ship
@@ -78,15 +79,15 @@ function apparentHeightFraction(distance: number): number {
 describe('Story 9-7 — TIE fighters scale with distance', () => {
   it('a freshly spawned TIE reads as a distant ship, not a screen-filling wall', () => {
     // Today this is ~0.48 (half the screen at spawn) — the core "too close to
-    // start with" defect. GREEN pushes SPAWN_DISTANCE out so it drops under 12%.
-    expect(apparentHeightFraction(SPAWN_DISTANCE)).toBeLessThanOrEqual(SPAWN_APPARENT_SIZE_MAX)
+    // start with" defect. GREEN pushes TIE_SPAWN_DISTANCE out so it drops under 12%.
+    expect(apparentHeightFraction(TIE_SPAWN_DISTANCE)).toBeLessThanOrEqual(SPAWN_APPARENT_SIZE_MAX)
   })
 
   it('grows dramatically over its approach — the cabinet swoop-in, not a fixed size', () => {
     // Keyed to the spawn→near depth RANGE, so shrinking the model cannot satisfy
     // it: only widening the approach (spawn farther) does. Today: ~3.4×.
     const growth =
-      apparentHeightFraction(TIE_NEAR_BOUND) / apparentHeightFraction(SPAWN_DISTANCE)
+      apparentHeightFraction(TIE_NEAR_BOUND) / apparentHeightFraction(TIE_SPAWN_DISTANCE)
     expect(growth).toBeGreaterThanOrEqual(MIN_APPROACH_GROWTH)
   })
 
@@ -96,7 +97,7 @@ describe('Story 9-7 — TIE fighters scale with distance', () => {
     const STEPS = 6
     const sizes: number[] = []
     for (let i = 0; i < STEPS; i++) {
-      const d = SPAWN_DISTANCE + ((TIE_NEAR_BOUND - SPAWN_DISTANCE) * i) / (STEPS - 1)
+      const d = TIE_SPAWN_DISTANCE + ((TIE_NEAR_BOUND - TIE_SPAWN_DISTANCE) * i) / (STEPS - 1)
       sizes.push(apparentHeightFraction(d))
     }
     for (let i = 1; i < STEPS; i++) {
@@ -107,7 +108,7 @@ describe('Story 9-7 — TIE fighters scale with distance', () => {
   it('the approach stays playable after pushing spawn out (no slow crawl)', () => {
     // Guards the ENEMY_SPEED companion: a far spawn at the old speed makes TIEs
     // crawl in for ~39s. Base (wave-1) speed is the slowest, so it's the worst case.
-    const approachSeconds = (SPAWN_DISTANCE - TIE_NEAR_BOUND) / ENEMY_SPEED
+    const approachSeconds = (TIE_SPAWN_DISTANCE - TIE_NEAR_BOUND) / ENEMY_SPEED
     expect(approachSeconds).toBeLessThanOrEqual(MAX_APPROACH_SECONDS)
   })
 })
