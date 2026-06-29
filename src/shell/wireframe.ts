@@ -11,8 +11,12 @@ import type { Model3D } from '../core/models'
 import { transform, type Mat4, type Vec3 } from '../core/math3d'
 
 // Camera clip planes — shared by project() and any perspective() the caller builds.
+// FAR encompasses the farthest spawn: TIEs now appear at TIE_SPAWN_DISTANCE (5000,
+// story 9-7), so the far plane sits beyond that + the model's extent. (There is no
+// far-plane cull today — only x/y are painted — but the frustum should still
+// contain the scene for any future depth work.)
 export const NEAR = 1
-export const FAR = 5000
+export const FAR = 6000
 
 // Per-model gameplay glow colour: the single source of truth for both the game
 // renderer and the contact sheet. Keyed by Model3D.name.

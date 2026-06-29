@@ -19,6 +19,7 @@ import {
   FIRE_INTERVAL,
   SPAWN_INTERVAL,
   SPAWN_DISTANCE,
+  TIE_SPAWN_DISTANCE,
   SPAWN_SPREAD,
   ENEMY_SHOT_SPEED,
   ENEMY_SHOT_TTL,
@@ -597,7 +598,7 @@ function moveEnemy(e: Enemy, dt: number): Enemy {
 function spawnTie(rng: Rng, speed: number): Enemy {
   const x = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
   const y = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
-  const pos: Vec3 = [x, y, -SPAWN_DISTANCE]
+  const pos: Vec3 = [x, y, -TIE_SPAWN_DISTANCE]
   const dir = toCockpit(pos)
   const bank = (nextFloat(rng) < 0.5 ? 1 : -1) * TIE_SWOOP_BIAS
   return { pos, vel: scale(dir, speed), kind: 'tie', orient: lookRotation(dir), bank }

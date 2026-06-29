@@ -107,12 +107,23 @@ export const WAVE_SIZE = 3
 
 /** Player bolt speed (units/second), fired down the aim direction. */
 export const PROJECTILE_SPEED = 900
-/** Distance ahead (−Z) at which TIEs appear. */
+/** Distance ahead (−Z) at which surface turrets appear, and the anchor the Death
+ * Star surface is placed against. NOTE: TIEs no longer use this — they spawn at
+ * TIE_SPAWN_DISTANCE (story 9-7). Kept at the original value so the surface phase
+ * is unchanged. */
 export const SPAWN_DISTANCE = 1200
+/** Distance ahead (−Z) at which TIEs appear. Far enough that a freshly spawned
+ * fighter subtends only a small fraction of the viewport and then grows
+ * dramatically as it bears down — the cabinet "speck swoops into a ship" feel
+ * (story 9-7). The authentic TIE model is large (bounding radius ~334), so this
+ * sits well beyond the old shared 1200, which read as a half-screen wall at spawn. */
+export const TIE_SPAWN_DISTANCE = 5000
 /** Half-width of the lateral box TIEs spawn within. */
 export const SPAWN_SPREAD = 350
-/** TIE approach speed (units/second). */
-export const ENEMY_SPEED = 120
+/** TIE approach speed (units/second). Scaled up alongside TIE_SPAWN_DISTANCE
+ * (story 9-7) so the longer approach still resolves in a playable ~10s instead of
+ * a slow crawl; the 8-6 difficulty ramp still rides this as the wave-1 base. */
+export const ENEMY_SPEED = 480
 /** Enemy fireball speed (units/second). */
 export const ENEMY_SHOT_SPEED = 300
 /** Enemy fireball lifetime (seconds). */
@@ -168,9 +179,11 @@ export const TIE_BANK_ANGLE = 0.6
  * (the AC#2 near-bound). Sits well outside the cockpit hit sphere and well inside
  * the spawn distance. */
 export const TIE_NEAR_BOUND = 350
-/** Once a peeling TIE has receded past this range it has left the play volume and
- * its slot is freed. Above the farthest spawn (≈1298 = the corner of the spawn
- * box) so a freshly spawned TIE is never culled on arrival. */
+/** Once a PEELING TIE has receded past this range it has left the play volume and
+ * its slot is freed. Only peeling fighters are culled (the cull is gated on the
+ * peel latch), so this sits well outside the peel trigger (TIE_NEAR_BOUND) — it
+ * bounds the recession, not the spawn. Fresh, still-approaching TIEs spawn far
+ * beyond it (at TIE_SPAWN_DISTANCE) and are never culled on arrival. */
 export const TIE_EXIT_RANGE = 1800
 /** How hard a peeling TIE sweeps sideways as it departs — the tangential blend
  * against the straight-outward radial. 0 = straight back out; 1 ≈ a 45° peel-off
