@@ -152,13 +152,16 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // it is seen from the squad clock `state.enemyFireCooldown` (so a parked clock
   // still suppresses every fighter); the per-wave cadence (waveParams) now paces an
   // individual fighter, not the squad. Fire is a pure function of each fighter's
-  // pass — no shooter is drawn from the RNG — and the 6-slot cap is enforced per
-  // shot so several fighters firing together never overflow it. The fireball still
-  // launches from the firing TIE's own position, aimed at the cockpit at the origin.
+  // pass — no shooter is drawn from the RNG — and the per-wave concurrency cap
+  // (waveParams.maxConcurrentShots, the RE'd §8 fire table, story 9-5) is enforced
+  // per shot: the ROM-faithful wave 1 keeps a single fireball aloft, climbing to the
+  // full 6-slot pool by wave 7, so fighters firing together never overflow the wave's
+  // allowance. The fireball still launches from the firing TIE's own position, aimed
+  // at the cockpit at the origin.
   const enemies = movedEnemies.map((e) => {
     const cooldown = (e.fireCooldown ?? state.enemyFireCooldown) - dt
     const inPassWindow = !e.peeling && length(e.pos) > TIE_NEAR_BOUND
-    if (inPassWindow && cooldown <= 0 && enemyShots.length < MAX_FIREBALL_SLOTS) {
+    if (inPassWindow && cooldown <= 0 && enemyShots.length < params.maxConcurrentShots) {
       enemyShots.push({
         pos: [...e.pos] as Vec3,
         vel: scale(toCockpit(e.pos), ENEMY_SHOT_SPEED),
