@@ -134,27 +134,46 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // A TIE that has completed its pass and receded past the exit range has left
   // the play volume; dropping it here (before the spawn check) frees its slot so a
   // fresh fighter can take its place (story 9-3, AC#1).
-  const enemies = state.enemies
+  const movedEnemies = state.enemies
     .map((e) => moveEnemy(e, dt))
     .filter((e) => !(e.peeling && length(e.pos) > TIE_EXIT_RANGE))
   let spawnTimer = state.spawnTimer - dt
-  if (spawnTimer <= 0 && enemies.length < WAVE_SIZE) {
-    enemies.push(spawnTie(rng, params.enemySpeed))
+  if (spawnTimer <= 0 && movedEnemies.length < WAVE_SIZE) {
+    movedEnemies.push(spawnTie(rng, params.enemySpeed))
     spawnTimer = params.spawnInterval
   }
 
-  // --- Enemy fireballs: a TIE fires at the cockpit -------------------------
-  let enemyFireCooldown = state.enemyFireCooldown - dt
-  if (enemyFireCooldown <= 0 && enemies.length > 0 && enemyShots.length < MAX_FIREBALL_SLOTS) {
-    const shooter = enemies[nextInt(rng, enemies.length)]
-    enemyShots.push({
-      pos: [...shooter.pos] as Vec3,
-      vel: scale(toCockpit(shooter.pos), ENEMY_SHOT_SPEED),
-      ttl: ENEMY_SHOT_TTL,
-    })
-    enemyFireCooldown = params.enemyFireInterval
-    events.push({ type: 'enemy-fire', pos: [...shooter.pos] as Vec3 })
-  }
+  // --- Enemy fireballs: each TIE strafes during its own pass window ----------
+  // The RE'd cabinet does NOT lob one bolt from a single random TIE on a shared
+  // formation timer (docs/tie-flight-ai-model.md §6). Each fighter fires
+  // INDEPENDENTLY while it is making its pass: in the firing arc (still
+  // approaching — not peeled away) AND in range (past the pass-end near edge,
+  // "not too close"). Each TIE carries its own fire cooldown, seeded the first time
+  // it is seen from the squad clock `state.enemyFireCooldown` (so a parked clock
+  // still suppresses every fighter); the per-wave cadence (waveParams) now paces an
+  // individual fighter, not the squad. Fire is a pure function of each fighter's
+  // pass — no shooter is drawn from the RNG — and the 6-slot cap is enforced per
+  // shot so several fighters firing together never overflow it. The fireball still
+  // launches from the firing TIE's own position, aimed at the cockpit at the origin.
+  const enemies = movedEnemies.map((e) => {
+    const cooldown = (e.fireCooldown ?? state.enemyFireCooldown) - dt
+    const inPassWindow = !e.peeling && length(e.pos) > TIE_NEAR_BOUND
+    if (inPassWindow && cooldown <= 0 && enemyShots.length < MAX_FIREBALL_SLOTS) {
+      enemyShots.push({
+        pos: [...e.pos] as Vec3,
+        vel: scale(toCockpit(e.pos), ENEMY_SHOT_SPEED),
+        ttl: ENEMY_SHOT_TTL,
+      })
+      events.push({ type: 'enemy-fire', pos: [...e.pos] as Vec3 })
+      return { ...e, fireCooldown: params.enemyFireInterval }
+    }
+    return { ...e, fireCooldown: cooldown }
+  })
+
+  // The squad clock now only SEEDS a new fighter's first shot; keep it ticking
+  // (floored at 0) so it carries a sane value into the surface phase, whose turret
+  // fire still runs on a formation timer (stepSurface, unchanged).
+  const enemyFireCooldown = Math.max(0, state.enemyFireCooldown - dt)
 
   // --- Player bolts vs TIEs: destroy on contact, score per kill ------------
   let score = state.score
