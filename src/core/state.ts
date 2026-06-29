@@ -57,6 +57,14 @@ export interface Enemy {
    * receding out of the play volume. Latched — an approaching TIE omits it (treated
    * as false), so a fighter already peeling never re-homes on the cockpit. */
   peeling?: boolean
+  /** Per-TIE fire cadence countdown (seconds) for strafe-and-fire (story 9-4): each
+   * fighter fires on its OWN clock while it is in its pass window, not on a single
+   * formation timer. Seeded the first time the TIE is seen from the squad clock
+   * (`GameState.enemyFireCooldown`) — so a parked squad clock still suppresses every
+   * fighter — then reset to the wave's fire interval after each shot. Optional:
+   * freshly spawned TIEs and test fixtures omit it (it inherits the squad clock until
+   * the fighter's first shot). */
+  fireCooldown?: number
 }
 
 /** A laser turret standing on the Death Star surface (Wave 2). World space. */
