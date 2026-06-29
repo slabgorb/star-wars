@@ -13,7 +13,7 @@
 
 import { MODELS } from '../core/models'
 import {
-  perspective, multiply, rotationX, rotationY, translation, IDENTITY, type Mat4, type Vec3,
+  perspective, multiply, rotationX, rotationY, translation, IDENTITY, type Mat4,
 } from '../core/math3d'
 import { drawWireframe, GLOW_FOR, DEFAULT_GLOW, NEAR, FAR } from '../shell/wireframe'
 import { SURFACE_ORIENT } from '../shell/render'
@@ -98,13 +98,15 @@ function frame(now: number): void {
     const proj = perspective(FOV_Y, r.w / r.h, NEAR, FAR)
     const dist = fitToCell ? fitDistance(radius, FOV_Y) : GAMEPLAY_DISTANCE
 
-    // vertex -> recentre -> display-orient -> spin -> fixed view tilt
+    // vertex -> recentre -> display-orient -> spin -> fixed view tilt -> push back
     // (matrices compose right-to-left). The tilt lifts flat y=0-plane models
-    // (TRENCH, EXHAUST_PORT) out of edge-on and gives every model a 3/4 view.
+    // (TRENCH, EXHAUST_PORT) out of edge-on and gives every model a 3/4 view; the
+    // final translation(-dist) is this cell's view matrix (camera at the origin).
     const recentre = translation(-center[0], -center[1], -center[2])
     const spun = multiply(rotationY(spinAngle), multiply(orientFor(m.name), recentre))
     const orient = multiply(rotationX(VIEW_TILT), spun)
-    drawWireframe(ctx, m, [0, 0, -dist] as Vec3, proj, r.w, r.h, color, orient)
+    const modelView = multiply(translation(0, 0, -dist), orient)
+    drawWireframe(ctx, m, modelView, proj, r.w, r.h, color)
 
     // cell labels
     ctx.font = LABEL_FONT

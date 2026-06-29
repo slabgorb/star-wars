@@ -54,6 +54,18 @@ export function translation(x: number, y: number, z: number): Mat4 {
   ]
 }
 
+/** A pure diagonal scale matrix. The `S` of a model matrix `T ∘ R ∘ S`: it gives
+ * every model a canonical world size instead of baking magnitude into the raw
+ * vertices. Unit scale `(1,1,1)` is the identity; the origin is left fixed. */
+export function scaling(sx: number, sy: number, sz: number): Mat4 {
+  return [
+    sx, 0, 0, 0,
+    0, sy, 0, 0,
+    0, 0, sz, 0,
+    0, 0, 0, 1,
+  ]
+}
+
 export function rotationX(theta: number): Mat4 {
   const c = Math.cos(theta)
   const s = Math.sin(theta)
@@ -96,6 +108,34 @@ export function perspective(fovY: number, aspect: number, near: number, far: num
     0, 0, (far + near) / (near - far), (2 * far * near) / (near - far),
     0, 0, -1, 0,
   ]
+}
+
+/** Transpose of a row-major mat4. For a pure rotation (orthonormal) this equals
+ * its inverse — the property `viewMatrix` relies on to invert the camera. */
+function transpose(m: Mat4): Mat4 {
+  return [
+    m[0], m[4], m[8], m[12],
+    m[1], m[5], m[9], m[13],
+    m[2], m[6], m[10], m[14],
+    m[3], m[7], m[11], m[15],
+  ]
+}
+
+/**
+ * The camera's **view matrix** — the inverse of the camera's world placement
+ * `translation(camPos) ∘ orientation`. It carries world-space points into eye
+ * space, where the camera sits at the origin looking down −Z (the convention
+ * `perspective` expects). Compose `MVP = projection × view × model`.
+ *
+ * `orientation` is the camera's rotation (orthonormal — e.g. from `rotationX/Y/Z`
+ * or `lookRotation`); its inverse is its transpose, so for a rigid camera the
+ * view is `orientationᵀ ∘ translation(−camPos)`. The camera derives from sim
+ * state (the cockpit IS the camera); this stays pure. IDENTITY orientation at
+ * the origin yields IDENTITY — a camera that doesn't move is a no-op view.
+ */
+export function viewMatrix(camPos: Vec3, orientation: Mat4): Mat4 {
+  const rInv = transpose(orientation) // orthonormal rotation ⇒ inverse = transpose
+  return multiply(rInv, translation(-camPos[0], -camPos[1], -camPos[2]))
 }
 
 // --- Vec3 helpers (used by model transforms, culling, hit-tests later) ---
