@@ -143,8 +143,11 @@ describe('Wave 1 — enemy spawning & movement', () => {
     }
     expect(s.enemies.length).toBeGreaterThan(0)
     const frontBefore = Math.max(...s.enemies.map((e) => e.pos[2]))
-    const s2 = stepGame(s, NO_INPUT, SPAWN_INTERVAL / 8)
-    const frontAfter = Math.max(...s2.enemies.map((e) => e.pos[2]))
+    // Net approach over a short window. Story 9-2 gives TIEs curved/weaving paths,
+    // so a single sub-step can arc laterally; the cabinet invariant is that they
+    // CLOSE IN over time — asserted here across ~1s rather than a single tick.
+    for (let i = 0; i < 8; i++) s = stepGame(s, NO_INPUT, SPAWN_INTERVAL / 8)
+    const frontAfter = Math.max(...s.enemies.map((e) => e.pos[2]))
     expect(frontAfter).toBeGreaterThan(frontBefore)
   })
 

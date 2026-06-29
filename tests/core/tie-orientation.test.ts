@@ -1,37 +1,23 @@
 // tests/core/tie-orientation.test.ts
 //
-// Story 8-13 — TIE fighters bank/rotate toward the player like the cabinet
-// (Wave 1), RED phase.
+// Story 8-13 — a TIE carries a PER-ENEMY facing orientation in the pure core
+// (Wave 1). render only consumes it (guarded in tests/shell/render.tie-orient).
 //
-// THE BUG: every TIE renders at one fixed orientation regardless of where it
-// flies (render.ts draws TIE_FIGHTER with the default IDENTITY orient — the raw
-// model vertices, unrotated, for every enemy). The cabinet banks each TIE to
-// face the cockpit. These tests are EXPECTED TO FAIL until the GREEN phase
-// implements per-enemy facing.
+// HISTORY / SCOPE: 8-13 originally pinned `orient` to a STATIC "look toward the
+// cockpit" rotation, recomputed each step. Story 9-2 (epic-9, the RE'd TIE flight
+// model) SUPERSEDES that meaning: the orientation now banks (rolls) and steers
+// along the curved flight path, not a frozen cockpit look-at. The cockpit-facing
+// assertions that encoded the old static contract have moved to — and been
+// replaced by the banking contract in — tests/core/tie-flight.test.ts.
 //
-// CONTRACT this suite asks DEV to implement, honouring the epic guardrail
-// ("per-enemy facing is sim state and stays in core" — context-epic-8.md, the
-// "Display orientation" note): the orientation is computed in the PURE CORE and
-// carried on the enemy; render only consumes it (guarded separately in
-// tests/shell/render.tie-orient.test.ts).
+// What REMAINS true and is guarded here are the durable invariants 9-2 must keep:
+//   * every live TIE carries a well-formed PURE-ROTATION orientation (no scale,
+//     shear, or translation that would distort the model), and
+//   * the orientation is DETERMINISTIC — identical input yields identical
+//     orientations (no hidden time or randomness; the sacred core boundary).
 //
-//   interface Enemy { pos: Vec3; vel: Vec3; kind: 'tie'; orient: Mat4 }
-//
-//   `orient` is a "look toward the cockpit" rotation, recomputed each step from
-//   the TIE's CURRENT position.
-//
-// FORWARD-AXIS CONVENTION (TEA design decision — see session deviations): the
-// story leaves the model's facing axis undefined. This suite adopts the
-// codebase's own "looking down -Z" convention (the camera looks down -Z, bolts
-// fire down -Z, TIEs approach from -Z), so a TIE's NOSE — pointing back at the
-// cockpit — is model-space +Z. `orient` therefore maps the forward axis [0,0,1]
-// onto the unit direction from the TIE to the cockpit at the origin. A TIE dead
-// ahead on the view axis needs no turn; off-axis TIEs bank toward the player.
-// The fixed display correction that stands the solar panels up (the model stacks
-// them on Y) is a SEPARATE render concern, eyeballed in the dev server — this
-// suite does not assert it. Like the Wave 1/2 RED suites, this file references a
-// state field the GREEN phase will add, so `tsc` is red until then while vitest
-// runs and reports the contract as failing.
+// FORWARD-AXIS CONVENTION (still in force): the codebase looks down -Z, so a
+// TIE's nose is model-space +Z. interface Enemy { pos; vel; kind:'tie'; orient }.
 
 import { describe, it, expect } from 'vitest'
 import {
@@ -42,11 +28,7 @@ import {
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
-import { IDENTITY, normalize, sub, type Vec3, type Mat4 } from '../../src/core/math3d'
-
-const COCKPIT: Vec3 = [0, 0, 0]
-/** Model-space forward — the TIE's nose (see FORWARD-AXIS CONVENTION above). */
-const FORWARD: Vec3 = [0, 0, 1]
+import { IDENTITY, type Vec3, type Mat4 } from '../../src/core/math3d'
 
 /** A complete TIE fixture at a chosen position. `orient` is a placeholder the
  *  sim must overwrite each step; it is seeded to IDENTITY so an unimplemented
@@ -64,17 +46,6 @@ const waveWith = (enemies: Enemy[], seed = 1983): GameState => ({
   ...initialState(seed),
   enemies,
 })
-
-/** Unit direction from a world position toward the cockpit at the origin. */
-const toCockpit = (pos: Vec3): Vec3 => normalize(sub(COCKPIT, pos))
-
-/** Apply only the rotation (linear) part of a row-major Mat4 to a direction,
- *  isolating it from any translation so the assertion tests facing alone. */
-const applyDir = (m: Mat4, v: Vec3): Vec3 => [
-  m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
-  m[4] * v[0] + m[5] * v[1] + m[6] * v[2],
-  m[8] * v[0] + m[9] * v[1] + m[10] * v[2],
-]
 
 const isMat4 = (m: unknown): m is Mat4 =>
   Array.isArray(m) && m.length === 16 && m.every((n) => Number.isFinite(n))
@@ -146,52 +117,9 @@ describe('Story 8-13 — a TIE carries a facing orientation in core', () => {
   })
 })
 
-describe('Story 8-13 — the orientation faces the player (cockpit)', () => {
-  it('points the model forward axis at the cockpit from an off-axis position', () => {
-    const pos: Vec3 = [300, -150, -1000]
-    const s = stepGame(waveWith([tieAt(pos)]), NO_INPUT, 0.016)
-    const e = s.enemies[0]
-    const facing = applyDir(e.orient, FORWARD)
-    const want = toCockpit(pos)
-    expect(facing[0]).toBeCloseTo(want[0], 4)
-    expect(facing[1]).toBeCloseTo(want[1], 4)
-    expect(facing[2]).toBeCloseTo(want[2], 4)
-  })
-
-  it('banks mirror TIEs in opposite directions — orientation is per-enemy, not one fixed transform', () => {
-    // The headline regression for this story: two TIEs at mirrored lateral
-    // positions must NOT share an orientation (the bug drew both identically).
-    const right: Vec3 = [300, 0, -1000]
-    const left: Vec3 = [-300, 0, -1000]
-    const s = stepGame(waveWith([tieAt(right), tieAt(left)]), NO_INPUT, 0.016)
-    const [er, el] = s.enemies
-    expect(er.orient).not.toEqual(el.orient)
-
-    const fr = applyDir(er.orient, FORWARD)
-    const fl = applyDir(el.orient, FORWARD)
-    // The right-side TIE faces back toward -X; the left-side TIE toward +X.
-    expect(fr[0]).toBeLessThan(0)
-    expect(fl[0]).toBeGreaterThan(0)
-    expect(fr[0]).toBeCloseTo(-fl[0], 4)
-  })
-
-  it('recomputes orientation from the TIE current position each frame (not frozen)', () => {
-    // A TIE drifting sideways (velocity NOT aimed at the cockpit) must re-face
-    // the player as it moves — proving the facing tracks live position, not a
-    // value baked once at spawn.
-    const start: Vec3 = [0, 0, -1000]
-    const s = stepGame(waveWith([tieAt(start, [600, 0, 0])]), NO_INPUT, 0.5)
-    const e = s.enemies[0]
-    expect(e.pos[0]).toBeCloseTo(300, 4) // moved +X by vel*dt
-    const facing = applyDir(e.orient, FORWARD)
-    const want = toCockpit(e.pos)
-    expect(facing[0]).toBeCloseTo(want[0], 4)
-    expect(facing[1]).toBeCloseTo(want[1], 4)
-    expect(facing[2]).toBeCloseTo(want[2], 4)
-    // And it is no longer the straight-ahead facing it had at spawn.
-    expect(facing[0]).toBeLessThan(-0.01)
-  })
-})
+// NOTE: the cockpit-facing assertions that 8-13 placed here asserted a STATIC
+// look-at. Story 9-2 replaced that contract with a banking, path-following
+// orientation — see tests/core/tie-flight.test.ts for the live AC3 contract.
 
 describe('Story 8-13 — facing is deterministic (boundary guardrail)', () => {
   it('identical input produces identical orientations (no hidden randomness/time)', () => {
