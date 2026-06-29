@@ -46,6 +46,9 @@ import {
   PORT_HIT_RADIUS,
   TIE_SWOOP_BIAS,
   TIE_BANK_ANGLE,
+  TIE_NEAR_BOUND,
+  TIE_EXIT_RANGE,
+  TIE_PEEL_SWEEP,
 } from './state'
 import type { Input } from './input'
 import type { GameEvent } from './events'
@@ -127,8 +130,13 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // untouched — this only scales how hard the space phase plays.
   const params = waveParams(state.wave)
 
-  // --- TIEs: advance, then spawn into a free slot --------------------------
-  const enemies = state.enemies.map((e) => moveEnemy(e, dt))
+  // --- TIEs: advance, drop any that have peeled away, then spawn -----------
+  // A TIE that has completed its pass and receded past the exit range has left
+  // the play volume; dropping it here (before the spawn check) frees its slot so a
+  // fresh fighter can take its place (story 9-3, AC#1).
+  const enemies = state.enemies
+    .map((e) => moveEnemy(e, dt))
+    .filter((e) => !(e.peeling && length(e.pos) > TIE_EXIT_RANGE))
   let spawnTimer = state.spawnTimer - dt
   if (spawnTimer <= 0 && enemies.length < WAVE_SIZE) {
     enemies.push(spawnTie(rng, params.enemySpeed))
@@ -503,20 +511,53 @@ function advance(bolts: readonly Projectile[], dt: number): Projectile[] {
 }
 
 /**
- * Advance a TIE one step along the RE'd flight model (story 9-2,
- * docs/tie-flight-ai-model.md §5). Instead of a dead-straight `pos += vel` at the
- * cockpit, the TIE thrusts along a HEADING that blends homing-toward-the-player
- * with its own lateral swoop bias, so it traces a banking arc rather than a
- * beeline. Its SPEED is preserved as the heading turns — the difficulty ramp
- * rides |vel| (story 8-6), and a stationary stand-in (|vel| = 0, the
- * combat-kill-loop fixtures) stays put. The orientation banks (rolls) into the
- * swoop, not a level look-at (extends 8-13). Pure: heading and roll derive only
- * from the TIE's position and its seeded bias — no time, no randomness here.
+ * Advance a TIE one step. Two phases (story 9-3 adds the second):
+ *
+ *  - APPROACH (story 9-2, docs/tie-flight-ai-model.md §5): the TIE thrusts along a
+ *    HEADING that blends homing-toward-the-player with its own lateral swoop bias,
+ *    tracing a banking arc rather than a beeline at the cockpit.
+ *  - PEEL-AWAY (story 9-3, §7): once an un-killed fighter closes to TIE_NEAR_BOUND
+ *    with room to veer, it completes its pass and thrusts OUTWARD instead — flying
+ *    past the cockpit and receding out of the play volume rather than ramming and
+ *    ballooning to a full-frame wall (the Image-1 defect). A near-dead-center TIE
+ *    (lateral offset inside the cockpit hit sphere) has nothing to veer around and
+ *    keeps homing, so a genuine collision still costs a shield (AC#3).
+ *
+ * Its SPEED is preserved as the heading turns — the difficulty ramp rides |vel|
+ * (story 8-6), and a stationary stand-in (|vel| = 0, the combat-kill-loop
+ * fixtures) stays put. Pure: every heading and roll derives only from the TIE's
+ * position and its seeded bias/peel latch — no time, no randomness here.
  */
 function moveEnemy(e: Enemy, dt: number): Enemy {
   const speed = length(e.vel ?? ZERO)
   // A motionless stand-in holds station, still facing the cockpit.
   if (speed === 0) return { ...e, orient: lookRotation(toCockpit(e.pos)) }
+
+  // Distance from the cockpit, and how far off its forward centerline (the −Z view
+  // axis) the TIE sits — its room to veer past. Latch the peel once begun (`??`,
+  // not `||`: an approaching TIE omits the flag, so the falsy default is correct);
+  // otherwise begin it when an un-killed TIE reaches the near-bound off-centerline.
+  const dist = length(e.pos)
+  const lateralOffset = Math.hypot(e.pos[0], e.pos[1])
+  const peeling = e.peeling ?? (dist <= TIE_NEAR_BOUND && lateralOffset >= COCKPIT_HIT_RADIUS)
+
+  if (peeling) {
+    // Thrust OUTWARD (away from the cockpit) with a tangential sweep, so the TIE
+    // banks off to the side as it leaves rather than reversing straight back. The
+    // outward component keeps |pos| growing every frame, so a peeling fighter never
+    // re-enters the near-bound (it stays bounded away — AC#2) and eventually
+    // crosses TIE_EXIT_RANGE, where stepGame frees its slot (AC#1).
+    const outward = normalize(e.pos)
+    const sweepAxis = normalize(cross(outward, UP)) // a level "side" axis to peel along
+    const side = Math.sign(e.bank ?? 0) || 1 // continue the established bank; default +1
+    const heading = normalize(add(outward, scale(sweepAxis, side * TIE_PEEL_SWEEP)))
+    const vel = scale(heading, speed)
+    const pos = add(e.pos, scale(vel, dt))
+    const orient = multiply(lookRotation(heading), rotationZ(TIE_BANK_ANGLE * side))
+    return { ...e, pos, vel, orient, peeling: true }
+  }
+
+  // Approach: home toward the cockpit along the banking swoop arc.
   const toCk = toCockpit(e.pos)
   const lateral = normalize(cross(toCk, UP)) // a level "right" axis at the cockpit
   const bias = e.bank ?? 0
