@@ -44,15 +44,30 @@ import {
   TRENCH_SCROLL_SPEED,
   TRENCH_BONUS,
   PORT_HIT_RADIUS,
+  TIE_SWOOP_BIAS,
+  TIE_BANK_ANGLE,
 } from './state'
 import type { Input } from './input'
 import type { GameEvent } from './events'
-import { add, scale, sub, normalize, lookRotation, type Vec3 } from './math3d'
+import {
+  add,
+  scale,
+  sub,
+  normalize,
+  length,
+  cross,
+  multiply,
+  rotationZ,
+  lookRotation,
+  type Vec3,
+} from './math3d'
 import { aimDirection, collides, waveParams } from './gameRules'
 import { nextFloat, nextInt, type Rng } from './rng'
 
 const COCKPIT: Vec3 = [0, 0, 0]
 const ZERO: Vec3 = [0, 0, 0]
+/** World up — the reference the level "right" axis a TIE banks around is built from. */
+const UP: Vec3 = [0, 1, 0]
 
 export function stepGame(state: GameState, input: Input, dt: number): GameState {
   const t = state.t + dt
@@ -487,21 +502,42 @@ function advance(bolts: readonly Projectile[], dt: number): Projectile[] {
   return out
 }
 
-/** Advance a TIE along its velocity, then re-face it at the cockpit from its new
- * position so it banks toward the player as it flies (story 8-13). New object. */
+/**
+ * Advance a TIE one step along the RE'd flight model (story 9-2,
+ * docs/tie-flight-ai-model.md §5). Instead of a dead-straight `pos += vel` at the
+ * cockpit, the TIE thrusts along a HEADING that blends homing-toward-the-player
+ * with its own lateral swoop bias, so it traces a banking arc rather than a
+ * beeline. Its SPEED is preserved as the heading turns — the difficulty ramp
+ * rides |vel| (story 8-6), and a stationary stand-in (|vel| = 0, the
+ * combat-kill-loop fixtures) stays put. The orientation banks (rolls) into the
+ * swoop, not a level look-at (extends 8-13). Pure: heading and roll derive only
+ * from the TIE's position and its seeded bias — no time, no randomness here.
+ */
 function moveEnemy(e: Enemy, dt: number): Enemy {
-  const pos = add(e.pos, scale(e.vel ?? ZERO, dt))
-  return { ...e, pos, orient: lookRotation(toCockpit(pos)) }
+  const speed = length(e.vel ?? ZERO)
+  // A motionless stand-in holds station, still facing the cockpit.
+  if (speed === 0) return { ...e, orient: lookRotation(toCockpit(e.pos)) }
+  const toCk = toCockpit(e.pos)
+  const lateral = normalize(cross(toCk, UP)) // a level "right" axis at the cockpit
+  const bias = e.bank ?? 0
+  const heading = normalize(add(toCk, scale(lateral, bias))) // homing + swoop
+  const vel = scale(heading, speed) // direction turns; magnitude is preserved
+  const pos = add(e.pos, scale(vel, dt))
+  // Bank into the turn: roll the look-along-heading frame about its own nose (+Z).
+  const orient = multiply(lookRotation(heading), rotationZ(TIE_BANK_ANGLE * Math.sign(bias)))
+  return { ...e, pos, vel, orient }
 }
 
 /** A fresh TIE: lateral-spread spawn far down −Z, aimed at the cockpit at the
- * wave's approach speed (gameRules.waveParams), already banked to face it. */
+ * wave's approach speed (gameRules.waveParams), with a seeded swoop direction so
+ * each fighter banks into its own arc on the way in (story 9-2). */
 function spawnTie(rng: Rng, speed: number): Enemy {
   const x = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
   const y = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
   const pos: Vec3 = [x, y, -SPAWN_DISTANCE]
   const dir = toCockpit(pos)
-  return { pos, vel: scale(dir, speed), kind: 'tie', orient: lookRotation(dir) }
+  const bank = (nextFloat(rng) < 0.5 ? 1 : -1) * TIE_SWOOP_BIAS
+  return { pos, vel: scale(dir, speed), kind: 'tie', orient: lookRotation(dir), bank }
 }
 
 /** Unit vector from a world position back toward the cockpit at the origin. */
