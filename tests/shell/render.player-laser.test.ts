@@ -70,6 +70,7 @@ function makeCtx() {
     save() {},
     restore() {},
     fillText() {},
+    arc() {}, // story 8-14: render() strokes the green lock-on ring via ctx.arc
   }
   return { ctx: ctx as unknown as CanvasRenderingContext2D, segments }
 }
