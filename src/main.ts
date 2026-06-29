@@ -87,6 +87,18 @@ const loop = createLoop(
         case 'terrain-crash':
           audio.play('terrainCrash')
           break
+        case 'fireball-destroyed':
+          // Shooting down a fireball reuses the explosion cue (story 8-18): an
+          // existing sample, immediate feedback, no new asset. The dedicated
+          // event lets a bespoke sound swap in later without touching the core.
+          audio.play('enemyDeath')
+          break
+        default: {
+          // Exhaustiveness guard: a new GameEvent variant added without an arm
+          // above fails to type-check here instead of being silently dropped.
+          const _exhaustive: never = event
+          void _exhaustive
+        }
       }
     }
     // Wave-5 speech (story 8-7): Obi-Wan's "Use the Force, Luke" cues the trench

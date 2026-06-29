@@ -43,12 +43,15 @@ import {
   ENEMY_SHOT_TTL,
   ENEMY_SHOT_HIT_RADIUS,
   FIREBALL_SCORE,
+  TIE_SCORE,
   type GameState,
   type Projectile,
+  type Enemy,
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
-import type { Vec3 } from '../../src/core/math3d'
+import type { FireballDestroyedEvent } from '../../src/core/events'
+import { IDENTITY, type Vec3 } from '../../src/core/math3d'
 
 // A point well downrange of the cockpit: far outside COCKPIT_HIT_RADIUS (80),
 // so anything destroyed here is destroyed "before it reaches the cockpit" and
@@ -61,6 +64,13 @@ const DOWNRANGE: Vec3 = [0, 0, -400]
 // to leave the hit sphere it starts in.
 const playerBolt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, -1], ttl: PROJECTILE_TTL })
 const fireball = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, 1], ttl: ENEMY_SHOT_TTL })
+// A fully-typed TIE fixture (stepGame reads `.pos` for the hit-test; vel/orient
+// keep it a real Enemy, no type-escape cast).
+const tie = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
+
+// The cockpit origin — where a fireball lands (and costs a shield) if it is not
+// intercepted first.
+const COCKPIT: Vec3 = [0, 0, 0]
 
 /** A fresh wave: initialState already starts in the 'space' phase. */
 const wave = (seed = 1983): GameState => initialState(seed)
@@ -103,16 +113,45 @@ describe('Wave 1 — intercepting a fireball (story 8-18)', () => {
     const base = wave()
     const s0: GameState = { ...base, enemyShots: [fireball(DOWNRANGE)], projectiles: [playerBolt(DOWNRANGE)] }
     const s1 = stepGame(s0, NO_INPUT, TICK)
-    const cue = s1.events.find((e) => e.type === 'fireball-destroyed')
+    const cue = s1.events.find((e): e is FireballDestroyedEvent => e.type === 'fireball-destroyed')
     expect(cue).toBeDefined()
-    // Carries a world-space position for Wave-5 particle/SFX placement.
-    expect((cue as { pos: Vec3 }).pos).toHaveLength(3)
+    // Carries the fireball's OWN world-space position (≈ DOWNRANGE, not the
+    // cockpit origin) for Wave-5 particle/SFX placement.
+    expect(cue?.pos[2]).toBeCloseTo(-400, 0)
   })
 
   it('exposes a positive named hit radius for fireballs', () => {
     // Joins TIE_HIT_RADIUS / TURRET_HIT_RADIUS / PORT_HIT_RADIUS — one named
     // place for the magic number, not a literal buried in the step.
     expect(ENEMY_SHOT_HIT_RADIUS).toBeGreaterThan(0)
+  })
+
+  it('awards a positive score for a fireball kill', () => {
+    // Pairs with the named-radius guard above: keeps the scoring tests
+    // meaningful rather than passing vacuously if FIREBALL_SCORE were 0.
+    expect(FIREBALL_SCORE).toBeGreaterThan(0)
+  })
+
+  it('intercepts a fireball at the cockpit without losing a shield', () => {
+    // The standingShots-before-cockpit ordering: a bolt and a fireball BOTH at
+    // the cockpit on the same step — the bolt wins, no shield is lost. A
+    // regression that fed the raw enemyShots to the cockpit-damage pass would
+    // fail here (the fireball would be both shot down AND cost a shield).
+    const base = wave()
+    const s0: GameState = { ...base, enemyShots: [fireball(COCKPIT)], projectiles: [playerBolt(COCKPIT)] }
+    const s1 = stepGame(s0, NO_INPUT, TICK)
+    expect(s1.enemyShots).toHaveLength(0)
+    expect(s1.lives).toBe(STARTING_LIVES)
+    expect(s1.score).toBe(base.score + FIREBALL_SCORE)
+  })
+
+  it('does not advance the space-phase kill quota when a fireball is shot', () => {
+    // Only TIE kills feed phaseKills; intercepting a fireball must not advance
+    // the wave toward its clear quota.
+    const base = wave()
+    const s0: GameState = { ...base, enemyShots: [fireball(DOWNRANGE)], projectiles: [playerBolt(DOWNRANGE)] }
+    const s1 = stepGame(s0, NO_INPUT, TICK)
+    expect(s1.phaseKills).toBe(s0.phaseKills)
   })
 })
 
@@ -172,6 +211,24 @@ describe('Wave 1 — multiple bolts and fireballs (story 8-18)', () => {
     expect(s1.enemyShots).toHaveLength(0)
     expect(s1.projectiles).toHaveLength(0)
     expect(s1.score).toBe(base.score + 2 * FIREBALL_SCORE)
+  })
+
+  it('a single bolt overlapping a TIE and a fireball spends on only one', () => {
+    // Shared spentBolt across the two kill loops: one bolt cannot down both.
+    // The TIE loop runs first, so the bolt is spent on the TIE and the fireball
+    // survives — only the TIE scores.
+    const base = wave()
+    const at: Vec3 = [0, 0, -100]
+    const s0: GameState = {
+      ...base,
+      enemies: [tie(at)],
+      enemyShots: [fireball(at)],
+      projectiles: [playerBolt(at)],
+    }
+    const s1 = stepGame(s0, NO_INPUT, TICK)
+    expect(s1.enemies).toHaveLength(0) // TIE killed
+    expect(s1.enemyShots).toHaveLength(1) // fireball survives — the bolt was already spent
+    expect(s1.score).toBe(base.score + TIE_SCORE) // only the TIE scored, not the fireball
   })
 })
 
