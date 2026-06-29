@@ -9,6 +9,7 @@
 import {
   EXHAUST_PORT_DISTANCE,
   PROJECTILE_TTL,
+  ENEMY_SHOT_TTL,
   SPAWN_DISTANCE,
   STARTING_LIVES,
   type GameState,
@@ -47,6 +48,11 @@ const FIRE_GLOW = '#ffd60a' // enemy fireball amber
 // How long after a bolt is fired its cannon-tip laser beams stay lit — a brief
 // muzzle flash ("pew"), not a line trailing the bolt for its whole flight.
 const LASER_FLASH_SECONDS = 0.12
+
+// How long a TIE's muzzle starburst stays lit after it looses a fireball — the
+// enemy-fire "tell". Mirrors LASER_FLASH_SECONDS: a brief flash at the firing
+// point, then gone, not a glow trailing the bolt down its whole 6s flight.
+const ENEMY_MUZZLE_FLASH_SECONDS = 0.1
 
 // Display orientation per surface model (story 8-4). The authentic object-space
 // axes do not match the in-game view, so each model is rotated into place before
@@ -207,6 +213,16 @@ export function render(
     for (const p of state.projectiles)
       if (PROJECTILE_TTL - p.ttl <= LASER_FLASH_SECONDS)
         drawPlayerLaser(ctx, transform(view, p.pos), proj, w, h)
+    // A TIE's muzzle starburst at the instant of firing — the enemy-fire tell.
+    // Like the player laser it is derived purely from elapsed flight vs TTL (no
+    // shell-side effect state) and gated to a live run, so a fireball frozen by
+    // the sim on the framing screens can't keep flashing. `life` fades 1 → 0
+    // across the brief window so the burst shrinks out instead of popping off.
+    for (const s of state.enemyShots) {
+      const elapsed = ENEMY_SHOT_TTL - s.ttl
+      if (elapsed <= ENEMY_MUZZLE_FLASH_SECONDS)
+        drawMuzzleFlash(ctx, transform(view, s.pos), 1 - elapsed / ENEMY_MUZZLE_FLASH_SECONDS, proj, w, h)
+    }
   }
   // Bolts and fireballs ride the same camera as the models (transform through the
   // view), so they stay seated in the scene when the eye is lifted (surface/trench).
@@ -290,6 +306,45 @@ function drawPlayerLaser(
   for (const [cx, cy] of cannons) {
     ctx.moveTo(cx, cy)
     ctx.lineTo(tip[0], tip[1])
+  }
+  ctx.stroke()
+  ctx.shadowBlur = 0
+}
+
+// Muzzle-flash geometry: a ring of short rays fanning out from the firing point.
+// Eight reads as a clean starburst; MAX_LEN is the full-brightness ray length in
+// screen pixels (faded by `life`). Tuned to sit just outside the 6px fireball
+// spark so the burst frames the bolt rather than hiding inside it.
+const MUZZLE_RAYS = 8
+const MUZZLE_MAX_LEN = 14
+
+/**
+ * A brief starburst at an enemy fireball's muzzle: `MUZZLE_RAYS` amber rays
+ * radiating from the firing point, their length and glow scaled by `life`
+ * (1 at the instant of firing → 0 as the flash fades) so it flares then vanishes.
+ * Anchored to the bolt's projected point like the player laser; an off-screen or
+ * behind-camera shot (no projection) simply draws nothing.
+ */
+function drawMuzzleFlash(
+  ctx: CanvasRenderingContext2D,
+  pos: Vec3,
+  life: number,
+  proj: Mat4,
+  w: number,
+  h: number,
+): void {
+  const p = project(pos, proj, w, h)
+  if (!p) return
+  const len = MUZZLE_MAX_LEN * life
+  ctx.lineWidth = 2
+  ctx.strokeStyle = FIRE_GLOW
+  ctx.shadowColor = FIRE_GLOW
+  ctx.shadowBlur = 12 * life
+  ctx.beginPath()
+  for (let i = 0; i < MUZZLE_RAYS; i++) {
+    const a = (i / MUZZLE_RAYS) * Math.PI * 2
+    ctx.moveTo(p[0], p[1])
+    ctx.lineTo(p[0] + Math.cos(a) * len, p[1] + Math.sin(a) * len)
   }
   ctx.stroke()
   ctx.shadowBlur = 0
