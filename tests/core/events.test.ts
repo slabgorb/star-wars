@@ -5,7 +5,7 @@
 // the shell's SFX engine. These tests pin the contract the downstream audio
 // module (shell/audio.ts) and the event->sound pump (main.ts) compile against:
 //
-//   - the `GameEvent` discriminated union exists with the SEVEN documented
+//   - the `GameEvent` discriminated union exists with the EIGHT documented
 //     variants and EXACTLY the documented payload fields (compile-time);
 //   - a fresh `GameState` carries an empty `events: []` channel, and `stepGame`
 //     emits a FRESH list every frame (no carry-over between frames);
@@ -26,6 +26,7 @@
 //   interface LevelClearEvent  { type: 'level-clear'; next: Phase }
 //   interface PlayerSpawnEvent { type: 'player-spawn' }
 //   interface TerrainCrashEvent{ type: 'terrain-crash' }
+//   interface FireballDestroyedEvent { type: 'fireball-destroyed'; pos: Vec3 } // story 8-18
 //
 // NOTE (deviation, see session): the story context lists player-death cause
 // 'terrain'. A surface scrape is its own audio cue, so it is modelled as the
@@ -65,6 +66,7 @@ const ALL_EVENTS: GameEvent[] = [
   { type: 'level-clear', next: 'surface' },
   { type: 'player-spawn' },
   { type: 'terrain-crash' },
+  { type: 'fireball-destroyed', pos: [0, 0, -400] },
 ]
 
 // Exhaustive narrowing over the union: the `never` default fails to compile if a
@@ -80,6 +82,7 @@ function discriminant(e: GameEvent): string {
     case 'level-clear':   return e.next
     case 'player-spawn':  return 'spawn'
     case 'terrain-crash': return 'crash'
+    case 'fireball-destroyed': return `fb@${e.pos.join(',')}`
     default: {
       const _exhaustive: never = e
       return _exhaustive
@@ -88,13 +91,13 @@ function discriminant(e: GameEvent): string {
 }
 
 describe('GameEvent — discriminated union (AC1)', () => {
-  it('covers seven distinct, documented event types', () => {
+  it('covers eight distinct, documented event types', () => {
     const kinds = ALL_EVENTS.map((e) => e.type)
-    expect(new Set(kinds).size).toBe(7)
+    expect(new Set(kinds).size).toBe(8)
     expect(new Set(kinds)).toEqual(
       new Set([
         'fire', 'enemy-fire', 'enemy-death', 'player-death',
-        'level-clear', 'player-spawn', 'terrain-crash',
+        'level-clear', 'player-spawn', 'terrain-crash', 'fireball-destroyed',
       ]),
     )
   })

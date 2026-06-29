@@ -70,6 +70,11 @@ export interface Turret {
 export const STARTING_LIVES = 6
 /** Points awarded for destroying a TIE fighter. */
 export const TIE_SCORE = 100
+/** Points awarded for shooting an enemy fireball out of the air (story 8-18).
+ * Worth less than a TIE — fireballs are plentiful (6 slots) defensive ordnance,
+ * not fighters. Authentic-FEEL like the other Wave-1 scores (StarWars.asm has no
+ * symbolic score table); single-sourced here for easy correction. */
+export const FIREBALL_SCORE = 50
 /** Player bolt lifetime (seconds) before it fizzles out. */
 export const PROJECTILE_TTL = 2
 /** Minimum seconds between player shots (trigger fire rate). */
@@ -98,6 +103,11 @@ export const ENEMY_SHOT_TTL = 6
 export const ENEMY_FIRE_INTERVAL = 1
 /** Maximum enemy fireballs on screen at once — authentic "6 fireball slots". */
 export const MAX_FIREBALL_SLOTS = 6
+/** Hit sphere around an enemy fireball for player bolts (story 8-18). Smaller
+ * than a TIE — a fireball is a small target — but forgiving enough that
+ * intercepting incoming fire is an achievable skill, not pixel-perfect aim.
+ * Authentic-FEEL, single-sourced like the other Wave-1 radii. */
+export const ENEMY_SHOT_HIT_RADIUS = 90
 /** Hit sphere around a TIE for player bolts (covers the model extent). */
 export const TIE_HIT_RADIUS = 250
 /** Hit sphere around the cockpit for enemy contact and fire. */
