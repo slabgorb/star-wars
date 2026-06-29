@@ -1,10 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import { drawWireframe, project, GLOW_FOR, NEAR } from '../../src/shell/wireframe'
-import { perspective, transform, IDENTITY, type Mat4, type Vec3 } from '../../src/core/math3d'
+import { perspective, transform, translation, type Mat4, type Vec3 } from '../../src/core/math3d'
 import { CUBE, type Model3D } from '../../src/core/models'
 
 // One projection shared by every case: 60° vertical FOV, square viewport, near=NEAR.
 const proj: Mat4 = perspective(Math.PI / 3, 1, 1, 5000)
+
+// A model-view matrix that seats the model at `pos` with no rotation and the camera
+// at the origin — the modelView equivalent of the old drawWireframe(pos, IDENTITY)
+// call form. drawWireframe now takes one composed view×model matrix per the MVP
+// pipeline (story 11-2); the near-plane clip it exercises is unchanged.
+const at = (pos: Vec3): Mat4 => translation(pos[0], pos[1], pos[2])
 
 // Minimal canvas-context stub recording the segments drawn, so we can assert the
 // routine projects + strokes without a real DOM canvas (vitest runs in node).
@@ -62,7 +68,7 @@ describe('project', () => {
 describe('drawWireframe', () => {
   it('strokes one segment per edge when the whole model is in front', () => {
     const { ctx, segments } = makeCtx()
-    drawWireframe(ctx, CUBE, [0, 0, -5], proj, 100, 100, '#fff', IDENTITY)
+    drawWireframe(ctx, CUBE, at([0, 0, -5]), proj, 100, 100, '#fff')
     expect(segments.length).toBe(CUBE.edges.length)
   })
 
@@ -73,7 +79,7 @@ describe('drawWireframe', () => {
     // is fully behind z=-NEAR (4 edges draw nothing); the 4 connecting struts
     // straddle the plane and are now CLIPPED, not dropped. 4 + 4 = 8 segments.
     // The old drop-the-whole-edge behaviour drew only the 4 front-face edges.
-    drawWireframe(ctx, CUBE, [0, 0, -1.2], proj, 100, 100, '#fff', IDENTITY)
+    drawWireframe(ctx, CUBE, at([0, 0, -1.2]), proj, 100, 100, '#fff')
     expect(segments.length).toBe(8)
   })
 })
@@ -83,7 +89,7 @@ describe('drawWireframe near-plane clipping', () => {
     const { ctx, segments } = makeCtx()
     const a: Vec3 = [2, 0, -3] // in front of z=-NEAR
     const b: Vec3 = [2, 0, 1]  // behind the camera
-    drawWireframe(ctx, edgeModel(a, b), [0, 0, 0], proj, 100, 100, '#fff', IDENTITY)
+    drawWireframe(ctx, edgeModel(a, b), at([0, 0, 0]), proj, 100, 100, '#fff')
     // t = (-NEAR - za)/(zb - za) = (-1 - -3)/(1 - -3) = 0.5 ⇒ cut at z=-NEAR.
     const cut: Vec3 = [2, 0, -NEAR]
     expect(segments.length).toBe(1)
@@ -94,7 +100,7 @@ describe('drawWireframe near-plane clipping', () => {
     const { ctx, segments } = makeCtx()
     const a: Vec3 = [2, 0, 1]  // behind (first vertex)
     const b: Vec3 = [2, 0, -3] // in front
-    drawWireframe(ctx, edgeModel(a, b), [0, 0, 0], proj, 100, 100, '#fff', IDENTITY)
+    drawWireframe(ctx, edgeModel(a, b), at([0, 0, 0]), proj, 100, 100, '#fff')
     const cut: Vec3 = [2, 0, -NEAR]
     expect(segments.length).toBe(1)
     expect(connects(segments[0], screenOf(cut), screenOf(b))).toBe(true)
@@ -104,14 +110,14 @@ describe('drawWireframe near-plane clipping', () => {
     const { ctx, segments } = makeCtx()
     const a: Vec3 = [1, 0, -3]
     const b: Vec3 = [-1, 0, -3]
-    drawWireframe(ctx, edgeModel(a, b), [0, 0, 0], proj, 100, 100, '#fff', IDENTITY)
+    drawWireframe(ctx, edgeModel(a, b), at([0, 0, 0]), proj, 100, 100, '#fff')
     expect(segments.length).toBe(1)
     expect(connects(segments[0], screenOf(a), screenOf(b))).toBe(true)
   })
 
   it('draws nothing for an edge fully behind the near plane', () => {
     const { ctx, segments } = makeCtx()
-    drawWireframe(ctx, edgeModel([1, 0, 2], [-1, 0, 3]), [0, 0, 0], proj, 100, 100, '#fff', IDENTITY)
+    drawWireframe(ctx, edgeModel([1, 0, 2], [-1, 0, 3]), at([0, 0, 0]), proj, 100, 100, '#fff')
     expect(segments.length).toBe(0)
   })
 
@@ -119,7 +125,7 @@ describe('drawWireframe near-plane clipping', () => {
     const { ctx, segments } = makeCtx()
     const a: Vec3 = [2, 0, -3]    // in front
     const b: Vec3 = [2, 0, -NEAR] // exactly on z=-NEAR — project() returns null here
-    drawWireframe(ctx, edgeModel(a, b), [0, 0, 0], proj, 100, 100, '#fff', IDENTITY)
+    drawWireframe(ctx, edgeModel(a, b), at([0, 0, 0]), proj, 100, 100, '#fff')
     // t = (-NEAR - za)/(zb - za) = 1 ⇒ cut point is b itself; the whole edge draws.
     expect(segments.length).toBe(1)
     expect(connects(segments[0], screenOf(a), screenOf(b))).toBe(true)
@@ -129,8 +135,8 @@ describe('drawWireframe near-plane clipping', () => {
     const first = makeCtx()
     const second = makeCtx()
     const m = edgeModel([2, 0, -3], [2, 0, 1]) // a straddling edge that must be clipped
-    drawWireframe(first.ctx, m, [0, 0, 0], proj, 100, 100, '#fff', IDENTITY)
-    drawWireframe(second.ctx, m, [0, 0, 0], proj, 100, 100, '#fff', IDENTITY)
+    drawWireframe(first.ctx, m, at([0, 0, 0]), proj, 100, 100, '#fff')
+    drawWireframe(second.ctx, m, at([0, 0, 0]), proj, 100, 100, '#fff')
     expect(first.segments.length).toBe(1)
     expect(second.segments).toEqual(first.segments)
   })

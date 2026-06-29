@@ -23,7 +23,18 @@ import {
   EXHAUST_PORT,
 } from '../core/models'
 import { crosshairNdc, lockedEnemy, LOCK_RADIUS_NDC, FOV_Y } from '../core/gameRules'
-import { perspective, add, multiply, rotationZ, IDENTITY, type Mat4, type Vec3 } from '../core/math3d'
+import {
+  perspective,
+  multiply,
+  rotationZ,
+  translation,
+  scaling,
+  viewMatrix,
+  transform,
+  IDENTITY,
+  type Mat4,
+  type Vec3,
+} from '../core/math3d'
 import { project, drawWireframe, GLOW_FOR, NEAR, FAR } from './wireframe'
 
 const GLOW = '#00e5ff' // cockpit cyan
@@ -68,11 +79,11 @@ export const TRENCH_ORIENT: Mat4 = IDENTITY
 // faces the cockpit before sign-off.
 export const TIE_ORIENT: Mat4 = rotationZ(Math.PI / 2)
 
-// The camera skims just above the trench floor; both the floor and the exhaust
-// port are positioned from SIM STATE (see `trenchPlacement`), not static
-// constants, so the port scrolls up the channel and always sits inside it.
+// The cockpit skims just above the trench floor. This is now the CAMERA's height
+// (see `cameraView`) — the eye rides above the y=0 floor — not a world-shift
+// constant. The floor and port keep their true sim-state world positions; the
+// camera lifts the view, so the port still scrolls up the channel inside it.
 const TRENCH_SKIM = 60
-const SKIM_OFFSET: Vec3 = [0, -TRENCH_SKIM, 0] // lower the world so the camera rides above the floor
 const PORT_GLOW = GLOW_FOR['Exhaust Port'] // exhaust-port target amber (shared)
 
 // Where the shell seats the Death Star surface in Z (story 8-11). The relief is
@@ -87,14 +98,40 @@ const SURFACE_NEAR_EXTENT = Math.max(...DEATH_STAR_SURFACE.vertices.map((v) => v
 const Z_SURFACE_PLACEMENT = SURFACE_NEAR_EXTENT + SPAWN_DISTANCE / 2
 
 /**
- * Where the shell draws the Death Star surface floor — derived PURELY from sim
- * state, mirroring `trenchPlacement` and honouring the core/shell boundary. The
- * floor tracks the ship's altitude in Y (it drops away as the ship climbs) and
- * sits a fixed distance ahead in Z so the relief reads as a skimmable floor in
- * front of the cockpit instead of straddling it at the origin (the 8-11 bug).
+ * Where the shell seats the Death Star surface floor: the static forward seat in
+ * Z so the relief reads as a skimmable floor ahead of the cockpit instead of
+ * straddling it at the origin (the 8-11 bug). The altitude-skim framing — the
+ * floor dropping away as the ship climbs — is no longer baked here; it lives in
+ * the CAMERA (`cameraView`), which lifts the eye to the ship's altitude. The floor
+ * keeps its true world Y = 0 (the surface plane), so it and the turrets (also at
+ * y ≈ 0) share one frame and the camera lifts them together.
  */
-export function surfacePlacement(state: GameState): { floor: Vec3 } {
-  return { floor: [0, -state.altitude, -Z_SURFACE_PLACEMENT] }
+export function surfacePlacement(): { floor: Vec3 } {
+  return { floor: [0, 0, -Z_SURFACE_PLACEMENT] }
+}
+
+/**
+ * The camera (view matrix) derived PURELY from sim state — the cockpit IS the
+ * camera. Space looks from the origin down −Z; the surface and trench lift the eye
+ * to the cockpit's skim height (the ship's altitude over the surface, a fixed skim
+ * over the trench floor) so the floor reads below it. This replaces the retired
+ * world-shift constants (`SKIM_OFFSET` and the per-entity altitude drops): instead
+ * of shoving the world down, we raise the camera. Pure core math; the boundary holds.
+ */
+export function cameraView(state: GameState): Mat4 {
+  if (state.phase === 'surface') return viewMatrix([0, state.altitude, 0], IDENTITY)
+  if (state.phase === 'trench') return viewMatrix([0, TRENCH_SKIM, 0], IDENTITY)
+  return IDENTITY // space: the camera sits at the origin looking down −Z
+}
+
+/**
+ * A per-entity model matrix `translation ∘ rotation ∘ scale` — object space to
+ * world. `orient` is the display rotation (it may be a composed matrix); `s` is a
+ * uniform world scale (default 1). Compose with the camera as `view × model` and
+ * hand the result to `drawWireframe`.
+ */
+function modelMatrix(pos: Vec3, orient: Mat4 = IDENTITY, s = 1): Mat4 {
+  return multiply(translation(pos[0], pos[1], pos[2]), multiply(orient, scaling(s, s, s)))
 }
 
 /**
@@ -129,35 +166,37 @@ export function render(
   ctx.fillRect(0, 0, w, h)
 
   const proj = perspective(FOV_Y, w / h, NEAR, FAR)
+  // The cockpit IS the camera (story 11-2): one view matrix from sim state places
+  // every model via MVP = projection × view × model, retiring the per-entity
+  // world-shift glue. Space → origin; surface/trench → eye lifted to skim height.
+  const view = cameraView(state)
 
   if (state.phase === 'surface') {
-    // The floor drops away as the ship climbs (Y) and sits ahead of the cockpit
-    // (Z) so the relief actually reads — both come from surfacePlacement (8-11).
-    const { floor } = surfacePlacement(state)
-    drawWireframe(ctx, DEATH_STAR_SURFACE, floor, proj, w, h, SURFACE_GLOW, SURFACE_ORIENT)
+    // The surface sits at its static forward seat; the camera (lifted to the ship's
+    // altitude) makes it drop away as the ship climbs — the 8-11 framing, now in view.
+    const { floor } = surfacePlacement()
+    drawWireframe(ctx, DEATH_STAR_SURFACE, multiply(view, modelMatrix(floor, SURFACE_ORIENT)), proj, w, h, SURFACE_GLOW)
     for (const tu of state.turrets) {
-      // Turrets STAND on the surface, so they live in the floor's altitude frame:
-      // drop them by the skim height exactly as the floor is. Drawing them at the
-      // sim's world y=0 (the surface plane in core space) left them floating above
-      // the floor as the ship climbed — the 8-4 placement this story reconciles.
-      const base: Vec3 = [tu.pos[0], tu.pos[1] - state.altitude, tu.pos[2]]
-      drawWireframe(ctx, SURFACE_TOWER, base, proj, w, h, TURRET_GLOW, TOWER_ORIENT)
+      // Turrets stand on the surface at their TRUE world Y (≈ 0). The camera lifts
+      // floor and turrets together, so they sit ON the floor as the ship climbs —
+      // the per-turret altitude drop (the 8-4 reconcile) is gone, the camera owns it.
+      drawWireframe(ctx, SURFACE_TOWER, multiply(view, modelMatrix(tu.pos, TOWER_ORIENT)), proj, w, h, TURRET_GLOW)
     }
   } else if (state.phase === 'trench') {
-    // Wave 3 — the trench run. Floor channel and the exhaust port both come from
-    // sim state, so the port scrolls up the channel and stays seated in it; the
-    // camera skims just above the floor (SKIM_OFFSET).
+    // Wave 3 — the trench run. Floor channel and the exhaust port come from sim
+    // state at their true world positions; the camera skims just above the floor
+    // (no SKIM_OFFSET), so the port scrolls up the channel and stays seated in it.
     const { floor, port } = trenchPlacement(state)
-    drawWireframe(ctx, TRENCH, add(floor, SKIM_OFFSET), proj, w, h, SURFACE_GLOW, TRENCH_ORIENT)
+    drawWireframe(ctx, TRENCH, multiply(view, modelMatrix(floor, TRENCH_ORIENT)), proj, w, h, SURFACE_GLOW)
     if (state.exhaustPort) {
-      drawWireframe(ctx, EXHAUST_PORT, add(port, SKIM_OFFSET), proj, w, h, PORT_GLOW, TRENCH_ORIENT)
+      drawWireframe(ctx, EXHAUST_PORT, multiply(view, modelMatrix(port, TRENCH_ORIENT)), proj, w, h, PORT_GLOW)
     }
   } else {
     // Each TIE banks at the player: its per-enemy look-at `orient` (core) turned
-    // upright by the fixed TIE_ORIENT display correction (display first, then
-    // look => multiply(orient, TIE_ORIENT)).
+    // upright by the fixed TIE_ORIENT display correction (display first, then look
+    // => multiply(orient, TIE_ORIENT)), placed in the world by its model matrix.
     for (const e of state.enemies)
-      drawWireframe(ctx, TIE_FIGHTER, e.pos, proj, w, h, TIE_GLOW, multiply(e.orient, TIE_ORIENT))
+      drawWireframe(ctx, TIE_FIGHTER, multiply(view, modelMatrix(e.pos, multiply(e.orient, TIE_ORIENT))), proj, w, h, TIE_GLOW)
   }
   // The player laser is a brief "pew" flash from the cannon tips at the moment of
   // firing — NOT a line that trails the bolt for its whole 2s flight (that builds
@@ -166,9 +205,12 @@ export function render(
   // (the sim freezes in-flight bolts there).
   if (state.mode === 'playing') {
     for (const p of state.projectiles)
-      if (PROJECTILE_TTL - p.ttl <= LASER_FLASH_SECONDS) drawPlayerLaser(ctx, p.pos, proj, w, h)
+      if (PROJECTILE_TTL - p.ttl <= LASER_FLASH_SECONDS)
+        drawPlayerLaser(ctx, transform(view, p.pos), proj, w, h)
   }
-  for (const s of state.enemyShots) drawSpark(ctx, s.pos, proj, w, h, FIRE_GLOW, 6)
+  // Bolts and fireballs ride the same camera as the models (transform through the
+  // view), so they stay seated in the scene when the eye is lifted (surface/trench).
+  for (const s of state.enemyShots) drawSpark(ctx, transform(view, s.pos), proj, w, h, FIRE_GLOW, 6)
 
   // The framing layer (story 8-6): the playing HUD during a run, the attract/title
   // screen at idle, the game-over board after. The 3D scene above renders behind

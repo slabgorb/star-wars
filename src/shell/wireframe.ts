@@ -8,7 +8,7 @@
 // Render/shell-only (touches a canvas context). The pure core never imports it.
 
 import type { Model3D } from '../core/models'
-import { transform, add, IDENTITY, type Mat4, type Vec3 } from '../core/math3d'
+import { transform, type Mat4, type Vec3 } from '../core/math3d'
 
 // Camera clip planes — shared by project() and any perspective() the caller builds.
 export const NEAR = 1
@@ -54,19 +54,21 @@ export function project(p: Vec3, proj: Mat4, w: number, h: number): [number, num
 }
 
 /**
- * Orient a model, place it at `pos`, project its edges, and stroke them with the
- * vector-CRT glow. `orient` is applied to each vertex BEFORE translation, so the
- * caller may pass a composed matrix (e.g. spin ∘ display-orient ∘ recentre).
+ * Carry a model's edges through `modelView` into eye space, near-plane-clip them,
+ * project, and stroke them with the vector-CRT glow. `modelView` is the composed
+ * `view × model` matrix (the V·M of `MVP = projection × view × model`): it places
+ * the model in the world via its model matrix `translation ∘ rotation ∘ scale`
+ * and then into eye space via the camera's view matrix, so each vertex lands in
+ * the camera frame the near-plane clip and `proj` expect.
  */
 export function drawWireframe(
   ctx: CanvasRenderingContext2D,
   m: Model3D,
-  pos: Vec3,
+  modelView: Mat4,
   proj: Mat4,
   w: number,
   h: number,
   color: string,
-  orient: Mat4 = IDENTITY,
 ): void {
   ctx.lineWidth = 1.5
   ctx.strokeStyle = color
@@ -74,16 +76,16 @@ export function drawWireframe(
   ctx.shadowBlur = 10
   ctx.beginPath()
   for (const [a, b] of m.edges) {
-    const wa = add(transform(orient, m.vertices[a]), pos)
-    const wb = add(transform(orient, m.vertices[b]), pos)
-    // A vertex is in front of (or on) the near plane when its world Z <= -NEAR;
-    // a larger Z is too close / behind the cockpit and must be clipped away.
-    const aFront = wa[2] <= NEAR_Z
-    const bFront = wb[2] <= NEAR_Z
+    const ea = transform(modelView, m.vertices[a])
+    const eb = transform(modelView, m.vertices[b])
+    // In EYE space (post-view) a vertex is in front of (or on) the near plane when
+    // its Z <= -NEAR; a larger Z is too close / behind the cockpit and is clipped.
+    const aFront = ea[2] <= NEAR_Z
+    const bFront = eb[2] <= NEAR_Z
     if (!aFront && !bFront) continue // whole edge is behind the near plane — drop it
     // Clip each behind-plane endpoint to the crossing instead of dropping the edge.
-    const sa = toScreen(aFront ? wa : clipToNear(wa, wb), proj, w, h)
-    const sb = toScreen(bFront ? wb : clipToNear(wb, wa), proj, w, h)
+    const sa = toScreen(aFront ? ea : clipToNear(ea, eb), proj, w, h)
+    const sb = toScreen(bFront ? eb : clipToNear(eb, ea), proj, w, h)
     ctx.moveTo(sa[0], sa[1])
     ctx.lineTo(sb[0], sb[1])
   }
