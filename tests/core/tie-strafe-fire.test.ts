@@ -73,9 +73,12 @@ const peelingTie = (pos: Vec3, speed = ENEMY_SPEED): Enemy => ({
 
 /** A playing state with the given TIEs, the enemy-fire clock READY (cooldown 0 —
  * so the OLD formation timer fires immediately, making the contrast tests RED),
- * and the spawner parked so the only fire that can appear comes from these TIEs. */
-const fireReady = (enemies: Enemy[], seed = 1983): GameState => ({
+ * and the spawner parked so the only fire that can appear comes from these TIEs.
+ * `wave` defaults to 1; pass a deeper wave where the story 9-5 per-wave fireball
+ * concurrency cap must permit several fighters to fill the sky at once. */
+const fireReady = (enemies: Enemy[], seed = 1983, wave = 1): GameState => ({
   ...initialState(seed),
+  wave,
   enemies,
   projectiles: [],
   enemyShots: [],
@@ -99,13 +102,19 @@ describe('Story 9-4 — fire is per-TIE, not a whole-formation timer (AC1)', () 
     // TIE_NEAR_BOUND, in front of the camera). The whole-formation timer caps the
     // sky at ONE fireball per fire-interval — exactly TWO across this 2-interval
     // window. Per-TIE strafe fire lets all three contribute, so the sky holds MORE
-    // than the formation clock alone could. RED today (exactly 2).
+    // than the formation clock alone could.
+    //
+    // Asserted at WAVE 7 (story 9-5): the new per-wave fireball-concurrency cap is
+    // the RE'd fire table, and the ROM-faithful wave 1 permits only ONE fireball
+    // aloft (index 0). The "several at once" contract therefore needs a wave whose
+    // table cap (7 → 6) lets the sky fill; the per-TIE-vs-formation intent is
+    // unchanged. Wave-1's faithful single-fireball cap is pinned in tie-wave-ramp.test.ts.
     const s = stepN(
-      fireReady([
-        tieToward([250, 0, -900]),
-        tieToward([-200, 150, -850]),
-        tieToward([0, -220, -880]),
-      ]),
+      fireReady(
+        [tieToward([250, 0, -900]), tieToward([-200, 150, -850]), tieToward([0, -220, -880])],
+        1983,
+        7,
+      ),
       TWO_INTERVALS,
     )
     expect(s.enemyShots.length).toBeGreaterThanOrEqual(3)

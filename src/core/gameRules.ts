@@ -134,6 +134,11 @@ export interface WaveParams {
   enemySpeed: number
   /** Seconds between enemy fireballs (tightens with the wave). */
   enemyFireInterval: number
+  /** How many TIE fireballs may share the sky at once — the RE'd per-wave
+   * concurrency cap (story 9-5). Climbs 1 → 6 with the wave and saturates at the
+   * authentic 6-slot fireball pool; the space step gates per-TIE fire on it, so the
+   * ROM-faithful wave 1 keeps a single fireball aloft while late waves fill it. */
+  maxConcurrentShots: number
 }
 
 /** Each wave past the first stiffens the ramp by this fraction. */
@@ -143,11 +148,33 @@ const SPAWN_INTERVAL_FLOOR = 0.3
 /** Enemy fire cadence never drops below this (seconds). */
 const ENEMY_FIRE_INTERVAL_FLOOR = 0.25
 
+// --- TIE fire aggression: the RE'd per-wave concurrency cap (story 9-5) --------
+//
+// The 1983 cabinet escalates TIE aggression with a fire-parameter table
+// (docs/tie-flight-ai-model.md §8, ROM:8D71) indexed by min(mission + DIP, 15).
+// The one column ported here 1:1 — a pure slot COUNT with no dependence on the
+// (unrecovered) cabinet tick rate — is the SIMULTANEOUS-FIREBALL cap: how many TIE
+// fireballs may share the sky at once. It climbs 1 → 6 and saturates at the
+// authentic 6-slot fireball pool. The cadence-mask / PRNG-threshold columns are
+// deliberately NOT ported (a frame-mask → seconds cadence would be invented, not
+// faithful — model §5.3); fire RATE keeps riding the scalar enemyFireInterval above.
+//
+// Clone `wave` is 1-based and the cabinet's first space wave is mission 0, so the
+// fire index is min((wave - 1) + DIP, 15). The clone has no DIP switches → DIP = 0.
+
+/** Per-index simultaneous-fireball cap, transcribed from the §8 table (ROM:8D71).
+ * Length 16 (the index saturates at 15); the value tops out at the 6-slot pool
+ * from index 6 on. */
+const FIRE_CONCURRENCY: readonly number[] = [1, 1, 2, 3, 4, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+
 export function waveParams(wave: number): WaveParams {
   const ramp = 1 + (wave - 1) * RAMP_PER_WAVE
+  // Fire-aggression index into the §8 table: min((wave - 1) + DIP, 15), DIP = 0.
+  const fireIndex = Math.max(0, Math.min(wave - 1, FIRE_CONCURRENCY.length - 1))
   return {
     spawnInterval: Math.max(SPAWN_INTERVAL_FLOOR, SPAWN_INTERVAL / ramp),
     enemySpeed: ENEMY_SPEED * ramp,
     enemyFireInterval: Math.max(ENEMY_FIRE_INTERVAL_FLOOR, ENEMY_FIRE_INTERVAL / ramp),
+    maxConcurrentShots: FIRE_CONCURRENCY[fireIndex],
   }
 }
