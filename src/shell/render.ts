@@ -20,7 +20,7 @@ import { perspective, add, multiply, rotationZ, IDENTITY, type Mat4, type Vec3 }
 import { project, drawWireframe, GLOW_FOR, NEAR, FAR } from './wireframe'
 
 const GLOW = '#00e5ff' // cockpit cyan
-const TIE_GLOW = GLOW_FOR['TIE Fighter'] // enemy red (shared)
+const TIE_GLOW = GLOW_FOR['TIE Fighter'] // enemy green (shared)
 const TURRET_GLOW = GLOW_FOR['Surface Tower'] // surface turret red (shared)
 const SURFACE_GLOW = GLOW_FOR['Death Star Surface'] // death star steel (shared)
 const BOLT_GLOW = '#9dff00' // player laser green
