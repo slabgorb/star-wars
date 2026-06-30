@@ -136,7 +136,7 @@ export function cameraView(state: GameState): Mat4 {
  * uniform world scale (default 1). Compose with the camera as `view × model` and
  * hand the result to `drawWireframe`.
  */
-function modelMatrix(pos: Vec3, orient: Mat4 = IDENTITY, s = 1): Mat4 {
+export function modelMatrix(pos: Vec3, orient: Mat4 = IDENTITY, s = 1): Mat4 {
   return multiply(translation(pos[0], pos[1], pos[2]), multiply(orient, scaling(s, s, s)))
 }
 
