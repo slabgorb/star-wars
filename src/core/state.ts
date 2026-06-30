@@ -267,6 +267,11 @@ export interface GameState {
   lives: number
   /** Player height above the y=0 surface (Wave 2 terrain skim). */
   altitude: number
+  /** How far the Death Star surface ground grid has scrolled toward the cockpit
+   * (Wave 2, story 11-5). Advanced by TURRET_SCROLL_SPEED — the SAME flow that
+   * scrolls the turrets — so the grid and turrets rush past together; read `mod
+   * GRID_Z` by the surfaceGrid generator and reset to 0 on every phase entry. */
+  surfaceScrollZ: number
   /** Enemies destroyed in the CURRENT phase; clears the phase at its quota,
    * then resets to 0 on the transition into the next phase. */
   phaseKills: number
@@ -307,6 +312,7 @@ export function initialState(seed = 1983): GameState {
     score: 0,
     lives: STARTING_LIVES,
     altitude: SKIM_ALTITUDE,
+    surfaceScrollZ: 0,
     phaseKills: 0,
     projectiles: [],
     enemies: [],

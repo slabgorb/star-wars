@@ -369,6 +369,9 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     score,
     lives,
     altitude,
+    // The ground grid rides the SAME flow as the turrets (story 11-5) — both
+    // advance by TURRET_SCROLL_SPEED·dt — so they rush past the cockpit together.
+    surfaceScrollZ: state.surfaceScrollZ + TURRET_SCROLL_SPEED * dt,
     gameOver: lives <= 0,
     mode: lives <= 0 ? 'gameover' : state.mode,
     phaseKills: state.phaseKills + killed.size,
@@ -498,6 +501,9 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     exhaustPort: phase === 'trench' ? spawnPort() : null,
     enemyShots: [],
     altitude: phase === 'surface' ? SKIM_ALTITUDE : s.altitude,
+    // Reset the surface scroll on every phase entry so a fresh (or jumped) surface
+    // always opens with the ground grid anchored at the cockpit (story 11-5).
+    surfaceScrollZ: 0,
     spawnTimer: phase === 'surface' ? TURRET_SPAWN_INTERVAL : SPAWN_INTERVAL,
     enemyFireCooldown: ENEMY_FIRE_INTERVAL,
   }
