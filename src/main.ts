@@ -4,8 +4,8 @@
 // core (initialState + stepGame). Wave 0 skeleton — a glowing wireframe spins
 // in the dark, proving the math box → projection → glow pipeline end to end.
 
-import { initialState, type GameState } from './core/state'
-import { stepGame } from './core/sim'
+import { initialState, type GameState, type Phase } from './core/state'
+import { stepGame, enterPhase } from './core/sim'
 import { qualifiesForHighScore, insertHighScore } from './core/highscore'
 import { createInputController } from './shell/input'
 import { createLoop } from './shell/loop'
@@ -54,6 +54,34 @@ window.addEventListener('keydown', unlockAudio)
 let state: GameState = { ...initialState(), mode: 'attract' }
 // Local high scores, loaded once and kept in the shell (IO, not simulation).
 let highScores = loadHighScores()
+
+// Dev-only phase-jump (story 11-4): jump the run straight to a phase to eyeball
+// its scene — the surface grid (11-5) / the trench channel (11-6) — without
+// grinding through the kill quotas that gate them in normal play. The verification
+// gap this closes is what let the triangle/sliver render bug ship through 11-1/11-2
+// (see docs/adr/0002-scene-geometry-surface-and-trench.md). Gated to the dev
+// server: `import.meta.env.DEV` is statically false in a production build, so Vite
+// tree-shakes this whole block out — the keys do not exist in a real cabinet. It
+// calls the pure `enterPhase` DIRECTLY (not through stepGame), so the deterministic
+// step contract is untouched; forcing mode:'playing' lets a jump from the
+// attract/game-over screen drop straight into the scene. Keys 7/8/9 (top row or
+// numpad) → space / surface / trench.
+if (import.meta.env.DEV) {
+  const DEV_JUMP: Record<string, Phase> = {
+    Digit7: 'space',
+    Numpad7: 'space',
+    Digit8: 'surface',
+    Numpad8: 'surface',
+    Digit9: 'trench',
+    Numpad9: 'trench',
+  }
+  window.addEventListener('keydown', (e) => {
+    const target = DEV_JUMP[e.code]
+    if (!target) return
+    state = { ...enterPhase(state, target), mode: 'playing' }
+    console.log(`[dev] phase-jump → ${target}`)
+  })
+}
 
 const loop = createLoop(
   (dt) => {

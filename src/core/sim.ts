@@ -482,8 +482,12 @@ function progress(s: GameState): GameState {
  * left behind — no TIEs on the surface, no turrets in the trench, no stray
  * ordnance chasing the ship between phases. Score and lives are preserved; the
  * surface opens at the nominal skim height so the run never arrives mid-crash.
+ *
+ * Exported so the dev phase-jump (story 11-4) reuses the EXACT same transition
+ * rather than hand-mutating `state.phase` — keeping a jumped scene consistent
+ * with one reached through normal progression.
  */
-function enterPhase(s: GameState, phase: Phase): GameState {
+export function enterPhase(s: GameState, phase: Phase): GameState {
   return {
     ...s,
     phase,
