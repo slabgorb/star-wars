@@ -22,10 +22,10 @@ import {
   DEATH_STAR_SURFACE,
   DEATH_STAR,
   SURFACE_TOWER,
-  TRENCH,
   EXHAUST_PORT,
 } from '../core/models'
 import { surfaceGrid } from '../core/surface-grid'
+import { trenchChannel } from '../core/trench-channel'
 import { crosshairNdc, lockedEnemy, LOCK_RADIUS_NDC, FOV_Y } from '../core/gameRules'
 import {
   perspective,
@@ -219,11 +219,15 @@ export function render(
       drawWireframe(ctx, SURFACE_TOWER, multiply(view, modelMatrix(tu.pos, TOWER_ORIENT)), proj, w, h, TURRET_GLOW)
     }
   } else if (state.phase === 'trench') {
-    // Wave 3 — the trench run. Floor channel and the exhaust port come from sim
-    // state at their true world positions; the camera skims just above the floor
-    // (no SKIM_OFFSET), so the port scrolls up the channel and stays seated in it.
-    const { floor, port } = trenchPlacement(state)
-    drawWireframe(ctx, TRENCH, multiply(view, modelMatrix(floor, TRENCH_ORIENT)), proj, w, h, SURFACE_GLOW)
+    // Story 11-6 — the trench is a procedural WALLED channel (ADR 0002 part B):
+    // floor rails, lateral floor ribs, two vertical ribbed side walls, and top
+    // rails, authored in world space on the y=0 floor and scrolled toward the
+    // cockpit via trenchScrollZ. The flat TRENCH tile (a ~224×4px sliver) is
+    // retired from this scene (kept in the registry, re-classified). The camera
+    // (skimming just above the floor) is the only transform — like the surface grid.
+    drawWireframe(ctx, trenchChannel(state.trenchScrollZ), view, proj, w, h, SURFACE_GLOW)
+    // The exhaust port still rides up the channel at its true sim world position.
+    const { port } = trenchPlacement(state)
     if (state.exhaustPort) {
       drawWireframe(ctx, EXHAUST_PORT, multiply(view, modelMatrix(port, TRENCH_ORIENT)), proj, w, h, PORT_GLOW)
     }
