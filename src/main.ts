@@ -11,6 +11,7 @@ import { createInputController } from './shell/input'
 import { createLoop } from './shell/loop'
 import { createAudioEngine } from './shell/audio'
 import { render } from './shell/render'
+import { drawDebugOverlay } from './shell/debug-overlay'
 import { loadHighScores, saveHighScores } from './shell/storage'
 import { loadVectorFont } from './shell/font'
 
@@ -66,6 +67,11 @@ let highScores = loadHighScores()
 // step contract is untouched; forcing mode:'playing' lets a jump from the
 // attract/game-over screen drop straight into the scene. Keys 7/8/9 (top row or
 // numpad) → space / surface / trench.
+// Dev-only debug overlay (story 11-3): off by default; the backtick key (`) toggles
+// it. Shell-only state — the overlay reads the sim but never touches it, so toggling
+// never affects gameplay or determinism. Gated to the dev server like the phase-jump
+// above, so Vite strips it (and the drawDebugOverlay import) from a production build.
+let debugOverlay = false
 if (import.meta.env.DEV) {
   const DEV_JUMP: Record<string, Phase> = {
     Digit7: 'space',
@@ -80,6 +86,11 @@ if (import.meta.env.DEV) {
     if (!target) return
     state = { ...enterPhase(state, target), mode: 'playing' }
     console.log(`[dev] phase-jump → ${target}`)
+  })
+  window.addEventListener('keydown', (e) => {
+    if (e.code !== 'Backquote') return
+    debugOverlay = !debugOverlay
+    console.log(`[dev] debug overlay ${debugOverlay ? 'on' : 'off'}`)
   })
 }
 
@@ -153,6 +164,10 @@ const loop = createLoop(
     ctx.save()
     ctx.scale(dpr, dpr)
     render(ctx, state, W, H, highScores)
+    // Dev debug overlay (story 11-3): a separate additive pass on top of the scene,
+    // drawn only when toggled on. The `import.meta.env.DEV &&` guard lets Vite
+    // tree-shake it (and drawDebugOverlay) out of a production build entirely.
+    if (import.meta.env.DEV && debugOverlay) drawDebugOverlay(ctx, state, W, H)
     ctx.restore()
   },
 )
