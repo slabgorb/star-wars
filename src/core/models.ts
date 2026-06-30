@@ -387,6 +387,98 @@ export const EXHAUST_PORT: Model3D = {
 }
 
 /**
+ * The Death Star BODY — the thing the space phase is attacking (story 11-7, ADR
+ * 0002 part C). Unlike the disassembly-ported models, no authentic vertex table
+ * exists for it, so it is generated procedurally in the pure core (the same
+ * approach Tempest uses for its tube): a deterministic UV wireframe sphere —
+ * latitude rings (one EXACTLY on the equator, since STACKS is even — that ring is
+ * the iconic equatorial trench line) joined by longitude meridians and capped at
+ * the poles — plus a recessed SUPERLASER DISH (an inset rim ring + a focus point,
+ * stitched into the shell) seated on the +X axis, i.e. on the y=0 and z=0 planes,
+ * so the body keeps its bilateral symmetry. Origin-centred in object space; the
+ * shell seats and scales it (render.ts `deathStarPlacement`). PURE: trig only, no
+ * DOM/time/random — deterministic.
+ *
+ * Display orientation and the exact dish placement are RENDER concerns to be
+ * eyeballed in the dev server (repo convention — see render.ts SURFACE_ORIENT
+ * note and the 11-7 session findings); this builder pins the structure only.
+ */
+export function buildDeathStar(): Model3D {
+  const R = 520
+  const STACKS = 8 // even ⇒ an exact equatorial ring (the trench line)
+  const SLICES = 12
+  const vertices: Vec3[] = []
+  const edges: [number, number][] = []
+
+  // Poles on the Y axis.
+  const south = vertices.push([0, -R, 0]) - 1
+  const north = vertices.push([0, R, 0]) - 1
+  // Non-pole latitude rings j = 1..STACKS-1, each SLICES vertices.
+  const ringStart: number[] = []
+  for (let j = 1; j < STACKS; j++) {
+    ringStart[j] = vertices.length
+    const phi = -Math.PI / 2 + (Math.PI * j) / STACKS
+    const y = R * Math.sin(phi)
+    const rho = R * Math.cos(phi)
+    for (let k = 0; k < SLICES; k++) {
+      const theta = (2 * Math.PI * k) / SLICES
+      vertices.push([rho * Math.cos(theta), y, rho * Math.sin(theta)])
+    }
+  }
+  // Latitude ring loops.
+  for (let j = 1; j < STACKS; j++) {
+    for (let k = 0; k < SLICES; k++) edges.push([ringStart[j] + k, ringStart[j] + ((k + 1) % SLICES)])
+  }
+  // Longitude meridians between adjacent rings.
+  for (let j = 1; j < STACKS - 1; j++) {
+    for (let k = 0; k < SLICES; k++) edges.push([ringStart[j] + k, ringStart[j + 1] + k])
+  }
+  // Pole spokes.
+  for (let k = 0; k < SLICES; k++) {
+    edges.push([south, ringStart[1] + k])
+    edges.push([north, ringStart[STACKS - 1] + k])
+  }
+
+  // Superlaser dish, centred on +X. The rim ring sits ON the shell; the focus is
+  // recessed toward the centre, giving the concave dish. Stitched to the nearest
+  // shell vertices so the dish is part of one connected wireframe, not a floater.
+  const sphereCount = vertices.length
+  const DISH = 8
+  const rd = R * 0.42
+  const xRim = Math.sqrt(R * R - rd * rd)
+  const dishStart = vertices.length
+  for (let m = 0; m < DISH; m++) {
+    const psi = (2 * Math.PI * m) / DISH
+    vertices.push([xRim, rd * Math.cos(psi), rd * Math.sin(psi)])
+  }
+  const focus = vertices.push([R * 0.6, 0, 0]) - 1
+  for (let m = 0; m < DISH; m++) {
+    const rim = dishStart + m
+    edges.push([rim, dishStart + ((m + 1) % DISH)]) // rim loop
+    edges.push([rim, focus]) // spoke to the recessed focus
+    // Stitch the rim into the shell at its nearest sphere vertex.
+    let best = 0
+    let bestD = Infinity
+    for (let si = 0; si < sphereCount; si++) {
+      const dx = vertices[si][0] - vertices[rim][0]
+      const dy = vertices[si][1] - vertices[rim][1]
+      const dz = vertices[si][2] - vertices[rim][2]
+      const d = dx * dx + dy * dy + dz * dz
+      if (d < bestD) {
+        bestD = d
+        best = si
+      }
+    }
+    edges.push([rim, best])
+  }
+
+  return { name: 'Death Star', vertices, edges }
+}
+
+/** The procedural Death Star body (story 11-7). See `buildDeathStar`. */
+export const DEATH_STAR: Model3D = buildDeathStar()
+
+/**
  * The authentic model registry — the single source consumed by Wave 1+
  * (space combat, Death Star surface, trench run). The Wave 0 placeholder
  * CUBE is intentionally excluded; this registry is authentic geometry only.
@@ -398,4 +490,5 @@ export const MODELS: readonly Model3D[] = [
   SURFACE_TOWER,
   TRENCH,
   EXHAUST_PORT,
+  DEATH_STAR,
 ]

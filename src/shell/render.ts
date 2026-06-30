@@ -11,6 +11,7 @@ import {
   PROJECTILE_TTL,
   ENEMY_SHOT_TTL,
   SPAWN_DISTANCE,
+  SPACE_WAVE_QUOTA,
   STARTING_LIVES,
   type GameState,
 } from '../core/state'
@@ -19,6 +20,7 @@ import { formatScore, formatLives, formatWave, formatLevel, formatShield } from 
 import {
   TIE_FIGHTER,
   DEATH_STAR_SURFACE,
+  DEATH_STAR,
   SURFACE_TOWER,
   TRENCH,
   EXHAUST_PORT,
@@ -43,6 +45,7 @@ const GLOW = '#00e5ff' // cockpit cyan
 const TIE_GLOW = GLOW_FOR['TIE Fighter'] // enemy green (shared)
 const TURRET_GLOW = GLOW_FOR['Surface Tower'] // surface turret red (shared)
 const SURFACE_GLOW = GLOW_FOR['Death Star Surface'] // death star steel (shared)
+const DEATH_STAR_GLOW = GLOW_FOR['Death Star'] // death star body hull (shared)
 const BOLT_GLOW = '#9dff00' // player laser green
 const FIRE_GLOW = '#ffd60a' // enemy fireball amber
 
@@ -115,6 +118,30 @@ const Z_SURFACE_PLACEMENT = SURFACE_NEAR_EXTENT + SPAWN_DISTANCE / 2
  */
 export function surfacePlacement(): { floor: Vec3 } {
   return { floor: [0, 0, -Z_SURFACE_PLACEMENT] }
+}
+
+// Where the shell seats the Death Star BODY during the space phase (story 11-7).
+// FAR sits behind the TIE spawn band (TIE_SPAWN_DISTANCE 8000) yet inside the FAR
+// clip plane (wireframe.ts FAR 9000); NEAR is the closest it looms by the dive.
+const DEATH_STAR_Z_FAR = -8500
+const DEATH_STAR_Z_NEAR = -3500
+const DEATH_STAR_SCALE_FAR = 1
+const DEATH_STAR_SCALE_NEAR = 2.4
+
+/**
+ * Where the shell seats the Death Star body — derived PURELY from sim state,
+ * honouring the core/shell boundary like `surfacePlacement`/`trenchPlacement`:
+ * the core owns the geometry, the shell derives the seat from `state.phaseKills`.
+ * As the player racks up TIE kills toward the space quota they CLOSE on the body,
+ * so it slides nearer (|z| ↓) AND scales up — its apparent size grows monotonically
+ * across the phase. Pure: reads state, mutates nothing; the body never enters the
+ * sim, so it cannot touch determinism or TIE hit-tests.
+ */
+export function deathStarPlacement(state: GameState): { pos: Vec3; scale: number } {
+  const p = SPACE_WAVE_QUOTA > 0 ? Math.min(1, Math.max(0, state.phaseKills / SPACE_WAVE_QUOTA)) : 0
+  const z = DEATH_STAR_Z_FAR + (DEATH_STAR_Z_NEAR - DEATH_STAR_Z_FAR) * p
+  const scale = DEATH_STAR_SCALE_FAR + (DEATH_STAR_SCALE_NEAR - DEATH_STAR_SCALE_FAR) * p
+  return { pos: [0, 0, z], scale }
 }
 
 /**
@@ -201,6 +228,11 @@ export function render(
       drawWireframe(ctx, EXHAUST_PORT, multiply(view, modelMatrix(port, TRENCH_ORIENT)), proj, w, h, PORT_GLOW)
     }
   } else {
+    // Wave 1 — the space phase. The Death Star body looms far down −Z and grows as
+    // the player closes on it (deathStarPlacement). Draw it FIRST so it sits BEHIND
+    // the TIEs (painter's order) and never intrudes on a fighter's hit-test.
+    const body = deathStarPlacement(state)
+    drawWireframe(ctx, DEATH_STAR, multiply(view, modelMatrix(body.pos, IDENTITY, body.scale)), proj, w, h, DEATH_STAR_GLOW)
     // Each TIE banks at the player: its per-enemy look-at `orient` (core) turned
     // upright by the fixed TIE_ORIENT display correction (display first, then look
     // => multiply(orient, TIE_ORIENT)), placed in the world by its model matrix.
