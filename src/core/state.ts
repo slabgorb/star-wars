@@ -116,14 +116,16 @@ export const SPAWN_DISTANCE = 1200
  * fighter subtends only a small fraction of the viewport and then grows
  * dramatically as it bears down — the cabinet "speck swoops into a ship" feel
  * (story 9-7). The authentic TIE model is large (bounding radius ~334), so this
- * sits well beyond the old shared 1200, which read as a half-screen wall at spawn. */
-export const TIE_SPAWN_DISTANCE = 5000
+ * sits well beyond the old shared 1200, which read as a half-screen wall at spawn.
+ * Tuned out further (5000→8000) so a fresh TIE reads as a small distant speck. */
+export const TIE_SPAWN_DISTANCE = 8000
 /** Half-width of the lateral box TIEs spawn within. */
 export const SPAWN_SPREAD = 350
 /** TIE approach speed (units/second). Scaled up alongside TIE_SPAWN_DISTANCE
- * (story 9-7) so the longer approach still resolves in a playable ~10s instead of
- * a slow crawl; the 8-6 difficulty ramp still rides this as the wave-1 base. */
-export const ENEMY_SPEED = 480
+ * (story 9-7) so the longer approach resolves snappily (~5.9s from the 8000-unit
+ * spawn, not a slow crawl); the 8-6 difficulty ramp still rides this as the
+ * wave-1 base. */
+export const ENEMY_SPEED = 1300
 /** Enemy fireball speed (units/second). */
 export const ENEMY_SHOT_SPEED = 300
 /** Enemy fireball lifetime (seconds). */
