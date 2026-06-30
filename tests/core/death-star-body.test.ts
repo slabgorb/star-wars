@@ -34,6 +34,7 @@
 
 import { describe, it, expect } from 'vitest'
 import * as ModelsModule from '../../src/core/models'
+import { buildDeathStar } from '../../src/core/models'
 import type { Model3D } from '../../src/core/models'
 import * as RenderModule from '../../src/shell/render'
 import { initialState, SPACE_WAVE_QUOTA, type GameState } from '../../src/core/state'
@@ -64,6 +65,7 @@ function isBodyName(name: unknown): boolean {
  *   3. an entry in the `MODELS` registry whose name reads as the body.
  */
 function bodyModel(): Model3D | undefined {
+  // safe: dynamic probe — exported names are intentionally not statically known here.
   const mod = ModelsModule as unknown as Record<string, unknown>
 
   for (const key of Object.keys(mod)) {
@@ -84,11 +86,6 @@ function bodyModel(): Model3D | undefined {
   return all.find((m) => m && isBodyName(m.name))
 }
 
-/** A second independent build (for determinism). Returns the same form found above. */
-function bodyModelAgain(): Model3D | undefined {
-  return bodyModel()
-}
-
 interface Placement {
   pos: readonly [number, number, number]
   scale?: number
@@ -96,6 +93,7 @@ interface Placement {
 
 /** Locate the shell's pure placement function under any of the conventional names. */
 function placementFn(): ((s: GameState) => Placement) | undefined {
+  // safe: dynamic probe — the placement export name is intentionally not pinned here.
   const mod = RenderModule as unknown as Record<string, unknown>
   for (const key of ['deathStarPlacement', 'deathStarSeat', 'deathStarBodyPlacement']) {
     if (typeof mod[key] === 'function') return mod[key] as (s: GameState) => Placement
@@ -129,7 +127,7 @@ function centroid(m: Model3D): [number, number, number] {
     c[1] += v[1]
     c[2] += v[2]
   }
-  const n = m.vertices.length || 1
+  const n = m.vertices.length === 0 ? 1 : m.vertices.length // guard /0 (0 is valid, so not `|| 1`)
   return [c[0] / n, c[1] / n, c[2] / n]
 }
 
@@ -308,7 +306,10 @@ describe('11-7 — Death Star body geometry (pure core)', () => {
     if (!m) return
     const R = medianRadius(m)
     const onShell = radii(m).filter((r) => Math.abs(r - R) <= 0.08 * R).length
-    expect(onShell / m.vertices.length).toBeGreaterThanOrEqual(0.6)
+    // A real UV sphere puts the overwhelming majority of verts on the shell;
+    // only a small dish/feature minority may deviate. 0.9 is a meaningful bar
+    // (a blob/cylinder would fail), not the trivially-true 0.6.
+    expect(onShell / m.vertices.length).toBeGreaterThanOrEqual(0.9)
   })
 
   it('is bilaterally symmetric across at least one principal plane', () => {
@@ -346,15 +347,15 @@ describe('11-7 — Death Star body geometry (pure core)', () => {
     expect(isSingleComponent(m)).toBe(true)
   })
 
-  it('is deterministic — building it twice yields identical geometry', () => {
-    // PURE core: no time/random, so a second build (or re-read of the constant)
-    // is byte-for-byte identical. This is the determinism half of AC2 at the
-    // geometry layer.
-    const a = bodyModel()
-    const b = bodyModelAgain()
-    expect(a).toBeDefined()
-    expect(b).toBeDefined()
-    if (!a || !b) return
+  it('is deterministic — two independent builds yield identical geometry', () => {
+    // PURE core: no time/random, so calling the builder TWICE must produce
+    // byte-for-byte identical output. We call buildDeathStar() directly (not the
+    // cached DEATH_STAR singleton) so this test would actually FAIL if the
+    // builder ever became nondeterministic — the singleton-vs-itself version was
+    // tautological.
+    const a = buildDeathStar()
+    const b = buildDeathStar()
+    expect(b).not.toBe(a) // genuinely separate objects, not one shared singleton
     expect(b.vertices).toEqual(a.vertices)
     expect(b.edges).toEqual(a.edges)
   })
@@ -410,10 +411,34 @@ describe('11-7 — Death Star body placement grows on approach (pure, from sim s
     for (let k = 0; k <= SPACE_WAVE_QUOTA; k++) {
       expect(fn(spaceState(k)).pos[2]).toBeLessThan(0)
     }
-    if (placementFn()) {
-      const f = placementFn()!
-      expect(f(spaceState(2)).scale ?? 1).toBeGreaterThan(0)
-    }
+  })
+
+  it('returns a concrete, grown scale at full approach (not a silent default)', () => {
+    // Pins the scale contribution explicitly: at the quota the body must report a
+    // real scale > 1 (it has grown). `?? 1` defaults elsewhere would mask a
+    // missing scale; here we require the field to be present and > 1.
+    const fn = placementFn()
+    expect(fn).toBeDefined()
+    if (!fn) return
+    const atQuota = fn(spaceState(SPACE_WAVE_QUOTA))
+    const atStart = fn(spaceState(0))
+    expect(atQuota.scale).toBeDefined()
+    expect(atStart.scale).toBeDefined()
+    // `?? 0` defaults to a value that FAILS these checks if scale is ever absent,
+    // so it cannot mask a missing field (unlike `?? 1`).
+    expect(atQuota.scale ?? 0).toBeGreaterThan(1)
+    expect(atQuota.scale ?? 0).toBeGreaterThan(atStart.scale ?? 0) // scale itself grows
+  })
+
+  it('clamps growth at the quota — no overshoot past full approach', () => {
+    // phaseKills can momentarily sit at/over the quota; the seat must saturate at
+    // the full-approach value, never flying nearer or larger than at the quota.
+    const fn = placementFn()
+    expect(fn).toBeDefined()
+    if (!fn) return
+    const atQuota = fn(spaceState(SPACE_WAVE_QUOTA))
+    const beyond = fn(spaceState(SPACE_WAVE_QUOTA + 5))
+    expect(beyond).toEqual(atQuota) // identical seat (pos + scale) once clamped
   })
 
   it('is pure — placement does not mutate the game state', () => {

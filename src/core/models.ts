@@ -403,7 +403,7 @@ export const EXHAUST_PORT: Model3D = {
  * eyeballed in the dev server (repo convention — see render.ts SURFACE_ORIENT
  * note and the 11-7 session findings); this builder pins the structure only.
  */
-function buildDeathStar(): Model3D {
+export function buildDeathStar(): Model3D {
   const R = 520
   const STACKS = 8 // even ⇒ an exact equatorial ring (the trench line)
   const SLICES = 12

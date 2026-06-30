@@ -29,6 +29,7 @@ vi.mock('../../src/shell/wireframe', () => ({
     'TIE Fighter': '#30d158',
     'Darth Vader TIE': '#30d158',
     'Death Star Surface': '#5a6b8c',
+    'Death Star': '#8a93a8', // body hull — must match the real wireframe.ts shape
     'Surface Tower': '#ff3b30',
     Trench: '#5a6b8c',
     'Exhaust Port': '#ff9f0a',
@@ -71,13 +72,14 @@ function makeCtx(): CanvasRenderingContext2D {
     fillText() {},
     arc() {},
   }
+  // safe: minimal canvas stub for node — render() only calls the methods stubbed above.
   return ctx as unknown as CanvasRenderingContext2D
 }
 
 /** Names of the models stroked this render, in draw order. */
 function drawnModelNames(): string[] {
-  const calls = (drawWireframe as unknown as { mock: { calls: unknown[][] } }).mock.calls
-  return calls.map((c) => {
+  // vi.mocked gives a typed view of the spy — no `as unknown as` cast needed.
+  return vi.mocked(drawWireframe).mock.calls.map((c) => {
     const m = c[1] as { name?: unknown }
     return typeof m?.name === 'string' ? m.name : ''
   })
