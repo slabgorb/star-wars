@@ -398,9 +398,23 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   // `events` carries the prologue's `fire` cue (story 8-7) and accumulates the
   // trench's own moments below; it rides every return path so the channel stays
   // a fresh per-frame list.
-  const base: GameState = { ...state, rng, t, aimX, aimY, projectiles, enemyShots, fireCooldown, events }
+  // The walled channel scrolls toward the cockpit at the SAME rate the port does
+  // (story 11-6), so the corridor and the target rush past together — advanced on
+  // `base` so it rides every return path (reset to 0 on the next phase entry).
+  const base: GameState = {
+    ...state,
+    rng,
+    t,
+    aimX,
+    aimY,
+    projectiles,
+    enemyShots,
+    fireCooldown,
+    events,
+    trenchScrollZ: state.trenchScrollZ + TRENCH_SCROLL_SPEED * dt,
+  }
 
-  // No active port → safe hold (no scroll, no score, no damage).
+  // No active port → safe hold (no score, no damage; the empty channel still scrolls).
   if (state.exhaustPort === null) return base
 
   // Scroll the port up the channel toward the cockpit (+Z, toward z=0). A fresh
@@ -504,6 +518,9 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     // Reset the surface scroll on every phase entry so a fresh (or jumped) surface
     // always opens with the ground grid anchored at the cockpit (story 11-5).
     surfaceScrollZ: 0,
+    // Likewise the trench channel scroll, so a fresh (or jumped) trench always
+    // opens with the corridor anchored at the cockpit (story 11-6).
+    trenchScrollZ: 0,
     spawnTimer: phase === 'surface' ? TURRET_SPAWN_INTERVAL : SPAWN_INTERVAL,
     enemyFireCooldown: ENEMY_FIRE_INTERVAL,
   }

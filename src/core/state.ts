@@ -272,6 +272,12 @@ export interface GameState {
    * scrolls the turrets — so the grid and turrets rush past together; read `mod
    * GRID_Z` by the surfaceGrid generator and reset to 0 on every phase entry. */
   surfaceScrollZ: number
+  /** How far the walled trench channel has scrolled toward the cockpit (Wave 3,
+   * story 11-6). Advanced by TRENCH_SCROLL_SPEED — the SAME rate that scrolls the
+   * exhaust port up the channel — so the corridor and the port rush past together;
+   * read `mod RIB_Z` by the trenchChannel generator and reset to 0 on every phase
+   * entry. */
+  trenchScrollZ: number
   /** Enemies destroyed in the CURRENT phase; clears the phase at its quota,
    * then resets to 0 on the transition into the next phase. */
   phaseKills: number
@@ -313,6 +319,7 @@ export function initialState(seed = 1983): GameState {
     lives: STARTING_LIVES,
     altitude: SKIM_ALTITUDE,
     surfaceScrollZ: 0,
+    trenchScrollZ: 0,
     phaseKills: 0,
     projectiles: [],
     enemies: [],
