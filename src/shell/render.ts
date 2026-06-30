@@ -23,6 +23,7 @@ import {
   TRENCH,
   EXHAUST_PORT,
 } from '../core/models'
+import { surfaceGrid } from '../core/surface-grid'
 import { crosshairNdc, lockedEnemy, LOCK_RADIUS_NDC, FOV_Y } from '../core/gameRules'
 import {
   perspective,
@@ -178,10 +179,12 @@ export function render(
   const view = cameraView(state)
 
   if (state.phase === 'surface') {
-    // The surface sits at its static forward seat; the camera (lifted to the ship's
-    // altitude) makes it drop away as the ship climbs — the 8-11 framing, now in view.
-    const { floor } = surfacePlacement()
-    drawWireframe(ctx, DEATH_STAR_SURFACE, multiply(view, modelMatrix(floor, SURFACE_ORIENT)), proj, w, h, SURFACE_GLOW)
+    // Story 11-5: the surface is a procedural receding ground grid (ADR 0002 part
+    // A) — the DEATH_STAR_SURFACE spike was never a ground and is retired from this
+    // scene (kept in the registry, re-classified). The grid is authored in world
+    // space on the y=0 floor and scrolls toward the cockpit via surfaceScrollZ; the
+    // camera (lifted to the ship's altitude) is the only transform.
+    drawWireframe(ctx, surfaceGrid(state.surfaceScrollZ), view, proj, w, h, SURFACE_GLOW)
     for (const tu of state.turrets) {
       // Turrets stand on the surface at their TRUE world Y (≈ 0). The camera lifts
       // floor and turrets together, so they sit ON the floor as the ship climbs —
