@@ -574,14 +574,28 @@ against the current clone:
    (53 verts), Darth TIE (57), and `Obj_Trench_Squares` (8, listed above). Edges
    are *not* in `Object_3D_Data.asm` — derive connectivity from draw order /
    `sub_6819` (already tracked in `docs/HANDOFF-authentic-vector-edges.md`).
-2. **`core/trench-channel.ts`** — the channel is currently procedural
-   (`TRENCH_HALF_W=256`, `TRENCH_WALL_H=320`, `RIB_Z=400`, `TRENCH_FAR=6000`).
-   The authentic geometry is the `off_7CC0` → `off_7Bxx` per-section shape script
-   (11 section styles, `(type,dx,dy)` triples, sentinel `5`) plus the
-   `Obj_Trench_Squares` nested-rectangle cross-section and the `word_8696`/`word_8725`
-   floor-line point tables. The **viewpoint clamp** should mirror `sub_703B`:
-   lateral ±511, vertical −257…−3583 (downward-biased). *(feeds "trench wall
-   detail" + "trench obstacles" tasks.)*
+2. **`core/trench-channel.ts`** — **partially trued up (epic 14 task 2).**
+   `RIB_Z` (400→512) and `TRENCH_FAR` (6000→7168) now scale off `sub_87CB` (the
+   side-wall vertical-line recursion): its Z-window clamp `$800` (2048) is 2× the
+   wall half-width `$400` (1024) from `sub_8735`'s left/right wall pass
+   (`MReg3D`), and its cull-past-camera distance `$7000` (28672) is 28× that same
+   half-width; both ratios were applied to our existing `TRENCH_HALF_W` anchor
+   (256), since the ROM has no documented unit↔world-unit conversion to
+   transplant raw magnitudes directly. `TRENCH_HALF_W` and `TRENCH_WALL_H` stay
+   **provisional**: the half-width has two conflicting ROM candidates
+   (`Obj_Trench_Squares` outer ring ±$100=256 vs `sub_8735`'s ±$400=1024, and
+   nothing to arbitrate which is the true wall position without that
+   conversion), and no source gives a static wall *height* (`sub_703B`'s
+   vertical viewpoint clamp is the camera's travel range inside the trench, not
+   wall geometry). `core/trench-detail.ts`'s new `PANEL_Z`/`PANEL_W`/`PANEL_H`/
+   `PANEL_INSET_Y` (recessed wall panels, epic 14 task 2) are likewise
+   provisional — the ROM has no fixed panel/window grid, only the PRNG-picked
+   `off_7CC0` → `off_7Bxx` per-section shape script (procedural catwalk/turret
+   blobs of varying size, not uniform rectangles). That script plus
+   `Obj_Trench_Squares` and the `word_8696`/`word_8725` floor-line point tables
+   remain the authentic source for a future full geometry pass. The
+   **viewpoint clamp** should still mirror `sub_703B`: lateral ±511, vertical
+   −257…−3583 (downward-biased). *(feeds "trench obstacles" task.)*
 3. **`core/trench-channel.ts` / obstacles** — catwalks (green squares) and
    turrets share one hit-test differentiated by bitmask; both cost a shield on
    collision (like a tower). Turrets come in 3 rows (`sub_B3E9`, params `$B/$E/$C`);
