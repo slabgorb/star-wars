@@ -91,7 +91,7 @@ git commit -m "docs: 1983 source findings — whole-game extraction from ROM dis
 
 ---
 
-- [ ] **Story 14-1 complete** — run `pf sprint story complete 14-1`
+- [x] **Story 14-1 complete** — run `pf sprint story complete 14-1`
 
 ### Task 2: Trench wall detail — panels/windows generator + envelope true-up
 
@@ -248,7 +248,7 @@ git commit -m "feat: trench wall panel detail per 1983 findings (pure core gener
 
 ---
 
-- [ ] **Story 14-2 complete** — run `pf sprint story complete 14-2`
+- [x] **Story 14-2 complete** — run `pf sprint story complete 14-2`
 
 ### Task 3: Trench turrets, wall squares & catwalks — targetable scored entities
 
@@ -609,7 +609,7 @@ git commit -m "feat: trench turrets, wall squares & catwalks — targetable scor
 
 ---
 
-- [ ] **Story 14-3 complete** — run `pf sprint story complete 14-3`
+- [x] **Story 14-3 complete** — run `pf sprint story complete 14-3`
 
 ### Task 4: Exhaust-port fidelity + the force bonus + trench banners
 
@@ -800,7 +800,7 @@ git commit -m "feat: exhaust-port fidelity — force bonus, trench banners, auth
 
 ---
 
-- [ ] **Story 14-4 complete** — run `pf sprint story complete 14-4`
+- [x] **Story 14-4 complete** — run `pf sprint story complete 14-4`
 
 ### Task 5: HUD/framing fidelity — wireframe shield gauge + arcade palette
 
@@ -922,7 +922,7 @@ git commit -m "feat: arcade-faithful trench HUD — segmented wireframe shield g
 
 ---
 
-- [ ] **Story 14-5 complete** — run `pf sprint story complete 14-5`
+- [x] **Story 14-5 complete** — run `pf sprint story complete 14-5`
 
 ### Task 6: Live playtest capstone (absorbs canceled story 13-3's ACs)
 
@@ -933,7 +933,7 @@ git commit -m "feat: arcade-faithful trench HUD — segmented wireframe shield g
 - Consumes: everything Tasks 2–5 shipped; the dev phase-jump (key `9` jumps to the trench — `src/shell/input.ts` / story 11-4).
 - Produces: a signed-off fidelity epic, or follow-up bug stories.
 
-- [ ] **Step 1: Serve and reach the trench in a live run**
+- [x] **Step 1: Serve and reach the trench in a live run**
 
 ```bash
 npm run dev   # http://localhost:5274/star-wars/
@@ -941,27 +941,45 @@ npm run dev   # http://localhost:5274/star-wars/
 
 Start a run, press `9` to jump to the trench phase. Play at least two full trench passes (one clean/no-fire, one shooting obstacles).
 
-- [ ] **Step 2: Corridor integrity across real frames (13-3 AC1)**
+**PASS.** Reused the already-running dev server on `:5274` (this checkout's tunnelled instance). Drove the live page with Playwright MCP (`browser_navigate`/`browser_evaluate`/`browser_take_screenshot`/`browser_console_messages`), reading `src/shell/input.ts` and `src/main.ts` first to confirm controls: `Enter`/`Digit1` starts a run (edge-triggered `pendingStart`), `Digit9` dev-jumps straight to the trench (`import.meta.env.DEV`-gated, works from any mode), `Space`/pointerdown fires, and the mouse position maps to `aimX`/`aimY` (default `(0,0)` — dead centre — until a `pointermove` fires). Played well over two full trench passes: a clean pass (zero shots until a single centred kill-shot), a combative pass (four precision-timed shots at two turrets, one square, and the port), and two dedicated isolation passes (one to isolate the port-crash shield cost, one to isolate the catwalk hazard). All 10 trench entries logged `[dev] phase-jump → trench` with no console errors.
+
+Operational note for future live playtests of this game: the automated tab only advances its `requestAnimationFrame`-driven sim while the tool session is actively dispatching to it. Passive waiting (a bare `sleep` between calls, or a `browser_evaluate` that only `setTimeout`s with no dispatched events) left the corridor frozen at its entry frame indefinitely, while a `browser_evaluate` that opens with a couple of real `keydown`/`keyup` dispatches (e.g. the `Enter`,`Enter` warm-up before `Digit9`) reliably kept the sim ticking in real time for the rest of that call, including multi-second internal waits. All timed action sequences below route through that pattern — one `browser_evaluate` call performing the whole timed sequence (dispatch → wait → dispatch → screenshot immediately after), never a bare cross-call sleep — after an early test relying on cross-call sleeps left the run idling in the space phase and drained all 6 lives to a real `GAME OVER` before the next screenshot even fired.
+
+- [x] **Step 2: Corridor integrity across real frames (13-3 AC1)**
 
 Confirm the corridor + wall detail render identically to `/scenes.html`'s static presets across continuously-advancing frames — no popping, tearing, or visible seam at the scroll-recycle boundaries (`RIB_Z` for the channel, `PANEL_Z` for the detail). Record: PASS/FAIL + notes.
 
-- [ ] **Step 3: Combat + scoring in the live loop (13-3 AC2 + fidelity)**
+**PASS.** Captured the live corridor at multiple distinct scroll depths within a single continuous trench entry (`t≈0s`, `t≈0.6s`, `t≈2s` — screenshots `02-trench-entry-clean-t0.png`, `17-corridor-t0.6s.png`, `16-corridor-recipe-retry.png`), each showing the obstacle stations (turrets/squares/catwalk) at correspondingly different, monotonically-closer downrange positions with clean, continuous wall-panel/rib geometry — no popping, tearing, z-fighting, or missing/duplicate segments at any sampled frame. Cross-checked against the static `/scenes.html` contact sheet (`19-scenes-html-large.png`, all 5 presets: TRENCH-ENTRY, MID-RUN, TURRET-ALLEY, PORT-IN-SIGHT, FORCE-BONUS) at a larger viewport — the live frames match the static presets' rib density, panel spacing, obstacle wireframe styling, and HUD compositing exactly. No discrepancy between the live continuously-scrolling render and the static single-frame renders.
+
+- [x] **Step 3: Combat + scoring in the live loop (13-3 AC2 + fidelity)**
 
 - A bolt on the exhaust port clears the run and awards `TRENCH_BONUS` (+`FORCE_BONUS` on the clean pass — banner shows).
 - Shooting a turret/square destroys it and scores; a catwalk collision costs one shield; the port reaching the cockpit un-destroyed costs one shield.
 Record: PASS/FAIL + notes.
 
-- [ ] **Step 4: HUD/banner compositing in the real loop (13-3 AC3)**
+**PASS on 3 of 4 sub-checks; FAIL on the catwalk.**
+- *Port kill + bonus:* PASS. A single centred shot (default `aimX=aimY=0`, fired before the port's ~4.8s auto-crash) cleared the run; live SCORE read exactly `6,000` = `TRENCH_BONUS`(1000, `src/core/state.ts`) + `FORCE_BONUS`(5000) on a clean pass (0 prior shots), and WAVE advanced 1→2 (screenshot `06-force-banner-attempt2.png`, which also shows the "USE THE FORCE 5,000" banner live).
+- *Turret/square destroy + score:* PASS. Precision-timed shots (computed live in-page from `aimDirection`'s exact geometry — `f=1/tan(FOV_Y/2)`, target-intercept solved per shot) landed on two turrets, one square, and the port in one combative pass; live SCORE delta was exactly `1,250` = `TRENCH_TURRET_SCORE`(100)×2 + `TRENCH_SQUARE_SCORE`(50) + `TRENCH_BONUS`(1000) (screenshot `07-combative-result.png`), confirming all four aimed shots connected and scored correctly (non-clean, so no force bonus, as expected with 4 shots fired).
+- *Port-reaching-cockpit costs a shield:* PASS. Let a fresh 6-shield pass run unaddressed through one full port approach (~4.8s) — shields dropped exactly 6→5, port respawned for "another pass" down the trench, no `gameOver` (screenshot `04-clean-pass-result.png`, taken right after).
+- *Catwalk collision costs a shield:* **FAIL.** Confirmed live and by code: the catwalk station spawns at `(0, 200, -2100)` (`src/core/trench-obstacles.ts`) and only its `z` advances as it scrolls (`src/core/sim.ts` `stepTrench`); its hazard check is `collides(pos, COCKPIT, COCKPIT_HIT_RADIUS)` with `COCKPIT=[0,0,0]` and `COCKPIT_HIT_RADIUS=80` (`src/core/state.ts`). The closest the catwalk can ever get is `z=0`, giving distance `sqrt(200²+0²)=200` — always `>80` — so the crash branch can never fire. Verified live: fresh trench entry, zero shots fired, checkpoint at `t=4.5s` (strictly after the catwalk's own ~4.2s crossing of `z=0`, strictly before the port's ~4.8s crash) — shields read `6/6`, undiminished (screenshot `09-catwalk-isolation-test.png`). Filed as follow-up story **14-7** (below) — this is exactly the kind of collision-over-time bug the static `/scenes.html` single-frame sheet could not have caught.
+
+- [x] **Step 4: HUD/banner compositing in the real loop (13-3 AC3)**
 
 Confirm the arcade HUD header, `EXHAUST PORT AHEAD`, the force banner, crosshair, and lock-on compose correctly over the corridor in live play (not just the single static render() of the sheet). Record: PASS/FAIL + notes.
 
-- [ ] **Step 5: Console + pacing check (13-3 AC4)**
+**PASS.** Across the captured live frames: the arcade HUD header (red SCORE/WAVE labels, green live digits, segmented trapezoid shield gauge) renders correctly on every frame; `EXHAUST PORT AHEAD` composes correctly over the moving corridor once the port is in range (screenshots `02`, `09`, `16`, `17`); the "USE THE FORCE 5,000" force banner composes correctly over the post-clear space-phase scene alongside a live lock-on ring around a TIE fighter and the crosshair (screenshot `06-force-banner-attempt2.png`) — confirming banner, crosshair, and lock-on all compose correctly together, not just individually on a static sheet render.
+
+- [x] **Step 5: Console + pacing check (13-3 AC4)**
 
 DevTools console: zero errors/warnings across a full trench run. Frame pacing looks smooth (informal, not benchmarked). Record: PASS/FAIL + notes.
 
-- [ ] **Step 6: Sign off (13-3 AC5)**
+**PASS.** `browser_console_messages` (debug level, whole session) reported **0 errors, 0 warnings** across the entire live playtest — 10 trench entries, multiple full runs, resets, and two genuine `GAME OVER`s; the only log lines are the two Vite HMR connect messages and 10 `[dev] phase-jump → trench` lines, one per `Digit9` press. (An `all:true` query surfaced *stale* errors — `TRENCH is not defined`, `drawTrenchBanners is not defined`, etc. — from a pre-existing HMR session on this reused tab, timestamped well before this navigation's cache-busted module URLs; scoped to the current navigation only, those are absent.) Frame pacing: informal, but the four precision-timed combative shots (`831ms`, `1618ms`, `2707ms`, `4407ms` after trench entry — see the report) were computed assuming an exact, undrifted 60Hz fixed-timestep and all four landed within their 90–120-unit hit radii; that would not happen if the loop were stuttering or drifting, so pacing reads as smooth.
+
+- [x] **Step 6: Sign off (13-3 AC5)**
 
 Write the pass/fail notes under this step in this plan file. If the live run reveals an issue the static sheet could not catch, file it as a follow-up bug story via `pf sprint story add` before signing off.
+
+**Sign-off:** Steps 1, 2, 4, 5 PASS. Step 3 PASS on 3 of 4 sub-checks (port kill + force bonus, turret/square destroy-and-score, port-crash shield cost); FAIL on the catwalk hazard (never costs a shield — geometrically unreachable collision check, confirmed above). Filed follow-up bug **story 14-7** — "Trench catwalk hazard never costs a shield (COCKPIT_HIT_RADIUS < catwalk y-offset)" (2pts, p2, `sprint/epic-14.yaml`) — with full repro and a fix-direction note, rather than patching game code from this verification task. Per the brief, a FAIL on one check does not block this sign-off commit. Full step-by-step detail, all 19 screenshots, and the console transcript are in `.superpowers/sdd/task-6-report.md`.
 
 ```bash
 git add docs/superpowers/plans/2026-07-02-sw-1983-findings-and-trench-fidelity.md
