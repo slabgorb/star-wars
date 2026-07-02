@@ -13,6 +13,8 @@ import {
   SPAWN_DISTANCE,
   SPACE_WAVE_QUOTA,
   STARTING_LIVES,
+  PORT_AHEAD_RANGE,
+  FORCE_BONUS,
   type GameState,
 } from '../core/state'
 import type { HighScoreTable } from '../core/highscore'
@@ -296,6 +298,7 @@ export function render(
     drawLockOn(ctx, state, proj, w, h)
     drawCrosshair(ctx, state, w, h)
     drawHudHeader(ctx, state, w, h)
+    drawTrenchBanners(ctx, state, w, h)
   }
 }
 
@@ -528,6 +531,41 @@ function drawHudHeader(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
   ctx.textAlign = 'left'
   ctx.letterSpacing = '0px'
   ctx.shadowBlur = 0
+}
+
+// How long the "Use the Force" banner stays lit after the award (fidelity epic,
+// task 4). Not a ROM-recovered dwell time — findings ## HUD & framing has no
+// on-screen timing for it, so this is a tuned UX choice, like LASER_FLASH_SECONDS.
+const FORCE_BANNER_SECONDS = 3
+
+/**
+ * Trench banners (fidelity epic, task 4): "EXHAUST PORT AHEAD" while the port
+ * is within PORT_AHEAD_RANGE, and the "Use the Force" bonus banner for a few
+ * seconds after a clean port kill — both authentic HUD strings (findings
+ * ## HUD & framing / Open follow-ups #7). The force banner reads
+ * `state.forceBonusAwardedAt` (stamped by `stepTrench`'s port-hit path and
+ * re-stamped across the wave transition by `clearRun`), so it keeps showing
+ * into the next wave's space phase, not just while still in the trench.
+ */
+function drawTrenchBanners(ctx: CanvasRenderingContext2D, state: GameState, w: number, h: number): void {
+  ctx.font = BANNER_FONT
+  ctx.textAlign = 'center'
+  if (
+    state.phase === 'trench' &&
+    state.exhaustPort &&
+    -state.exhaustPort.pos[2] <= PORT_AHEAD_RANGE
+  ) {
+    glowText(ctx, 'EXHAUST PORT AHEAD', w / 2, h * 0.22, '#dddddd', 14)
+  }
+  if (state.forceBonusAwardedAt !== null && state.t - state.forceBonusAwardedAt <= FORCE_BANNER_SECONDS) {
+    // "USE THE FORCE" is the confirmed authentic HUD string (findings
+    // ## HUD & framing / Open follow-ups #7); the trailing value follows the
+    // same LABEL-then-VALUE convention the ROM's own score strings use (## Scoring
+    // tables, e.g. `aExhaustPort2500` "EXHAUST PORT … 25,000") — the exact
+    // punctuation/spacing there is not pinned, so this is the closest match.
+    glowText(ctx, `USE THE FORCE ${FORCE_BONUS.toLocaleString('en-US')}`, w / 2, h * 0.16, '#dddddd', 12)
+  }
+  ctx.textAlign = 'left'
 }
 
 /**

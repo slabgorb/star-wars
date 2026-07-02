@@ -36,4 +36,10 @@ describe('SCENE_PRESETS', () => {
     const preset = SCENE_PRESETS.find((p) => p.id === 'turret-alley')!
     expect(preset.state.trenchObstacles.length).toBeGreaterThan(0)
   })
+
+  it('includes the force-bonus preset showing the "Use the Force" banner state (fidelity epic task 4)', () => {
+    expect(SCENE_PRESETS.map((p) => p.id)).toContain('force-bonus')
+    const preset = SCENE_PRESETS.find((p) => p.id === 'force-bonus')!
+    expect(preset.state.forceBonusAwardedAt).not.toBeNull()
+  })
 })

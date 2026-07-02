@@ -144,7 +144,11 @@ describe('Wave 3 — the exhaust port scrolls toward the cockpit', () => {
 
 describe('Wave 3 — destroying the exhaust port', () => {
   it('a player bolt on target destroys the port, is consumed, scores the bonus, and costs no shield', () => {
-    const base = trench(portAt([0, 0, -300]))
+    // trenchShotsFired: 2 — this test is about TRENCH_BONUS alone; a fresh
+    // enterPhase() state starts at 0, which the fidelity epic's task 4 "Use the
+    // Force" clean-run tell (trenchShotsFired <= 1) would also score FORCE_BONUS
+    // on top (see tests/core/force-bonus.test.ts for that case).
+    const base = trench(portAt([0, 0, -300]), { trenchShotsFired: 2 })
     const s0: GameState = { ...base, projectiles: [bolt([0, 0, -300])] }
     const s1 = stepGame(s0, NO_INPUT, 0.001)
     expect(s1.exhaustPort).toBeNull() // the port is destroyed
@@ -154,7 +158,9 @@ describe('Wave 3 — destroying the exhaust port', () => {
   })
 
   it('destroying the port CLEARS the run and advances to the next wave', () => {
-    const base = trench(portAt([0, 0, -300]), { wave: 1, score: 500 })
+    // trenchShotsFired: 2 — see the note above; keeps this test about the wave
+    // transition, not the "Use the Force" bonus.
+    const base = trench(portAt([0, 0, -300]), { wave: 1, score: 500, trenchShotsFired: 2 })
     const s0: GameState = { ...base, projectiles: [bolt([0, 0, -300])] }
     const s1 = stepGame(s0, NO_INPUT, 0.001)
     expect(s1.wave).toBe(2) // run cleared — loop back harder

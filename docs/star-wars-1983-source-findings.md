@@ -651,3 +651,18 @@ against the current clone:
 10. **`core/highscore.ts` / `shell/storage.ts`** — default ladder (`word_CC98`)
     and packed-initials names (`word_CC7A`) are the authentic seeds; persistence
     is NOVRAM in the cabinet → `localStorage` in the clone.
+11. **`core/state.ts` `FORCE_BONUS`/`PORT_AHEAD_RANGE` — trued (epic 14 task 4).**
+    `FORCE_BONUS` now pins the wave-1 base (5,000) of the wave-indexed
+    Use-the-Force table `byte_983B` (## Scoring tables: `0,$50,0/1,0,0/2,$50,0/
+    5,0,0` → 5,000/10,000/25,000/50,000). Our sim is not yet wave-scaled, so
+    waves 2+ still under-award relative to the ROM (10k/25k/50k) — an open gap,
+    not a mis-citation. `PORT_AHEAD_RANGE` (the EXHAUST PORT AHEAD banner's
+    trigger distance) stays PROVISIONAL: `## HUD & framing`/#7 confirm "EXHAUST
+    PORT AHEAD" as an authentic on-screen string, but no ROM-recovered distance
+    pins when it first shows — only the unrelated `$800` hit/miss resolution
+    window (`## Exhaust port & run outcome`), which is a different moment (close
+    enough to score a hit or miss, not "target now visible ahead"). `models.ts`
+    `EXHAUST_PORT` remains an authored octagon — no authentic vertex table names
+    or addresses it (see #1); the nearest candidate, `Object_12`'s three
+    concentric squares, is the extraction's OWN unconfirmed inference
+    ("targeting-reticle / lock-on box"), not safe to claim as the port.

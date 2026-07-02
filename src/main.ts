@@ -138,6 +138,12 @@ const loop = createLoop(
           // the dedicated event still lets a bespoke sound swap in later.
           audio.play('enemyDeath')
           break
+        case 'force-bonus':
+          // A clean port kill's "Use the Force" bonus fires alongside this same
+          // frame's level-clear (fidelity epic task 4) — reuse the fanfare cue,
+          // the same no-new-asset pattern as trench-obstacle-destroyed.
+          audio.play('levelClear')
+          break
         default: {
           // Exhaustiveness guard: a new GameEvent variant added without an arm
           // above fails to type-check here instead of being silently dropped.

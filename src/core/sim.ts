@@ -45,6 +45,7 @@ import {
   TRENCH_SCROLL_SPEED,
   TRENCH_BONUS,
   PORT_HIT_RADIUS,
+  FORCE_BONUS,
   TIE_SWOOP_BIAS,
   TIE_BANK_ANGLE,
   TIE_NEAR_BOUND,
@@ -418,6 +419,10 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     fireCooldown,
     events,
     trenchScrollZ: state.trenchScrollZ + TRENCH_SCROLL_SPEED * dt,
+    // Count this frame's fire (if any) toward the "Use the Force" clean-run
+    // tell — a clean port kill needs trenchShotsFired <= 1 (fidelity epic,
+    // task 4; findings ## Exhaust port & run outcome).
+    trenchShotsFired: state.trenchShotsFired + (events.some((e) => e.type === 'fire') ? 1 : 0),
   }
 
   // --- Trench obstacles: scroll with the channel; shoot turrets/squares; -----
@@ -486,11 +491,22 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   const hitBolt = afterObstacles.projectiles.findIndex((b) => collides(port, b.pos, PORT_HIT_RADIUS))
   if (hitBolt >= 0) {
     const liveBolts = afterObstacles.projectiles.filter((_, i) => i !== hitBolt)
+    // "Use the Force": a clean run — no trench shots before the killing torpedo
+    // itself — awards FORCE_BONUS on top of TRENCH_BONUS (fidelity epic, task 4;
+    // findings ## Exhaust port & run outcome, the type-4 marker's one-shot latch).
+    const clean = afterObstacles.trenchShotsFired <= 1 // only the killing torpedo
+    const bonus = TRENCH_BONUS + (clean ? FORCE_BONUS : 0)
+    if (clean) events.push({ type: 'force-bonus', amount: FORCE_BONUS })
     // The Death Star blows: the whole run clears and loops to the next wave's
     // space phase — emit the warp / wave-clear cue (8-7), as `clearRun` re-opens
     // 'space'. `clearRun` → `enterPhase` spreads `...s`, so this event rides along.
     events.push({ type: 'level-clear', next: 'space' })
-    return clearRun({ ...afterObstacles, projectiles: liveBolts, score: afterObstacles.score + TRENCH_BONUS })
+    return clearRun({
+      ...afterObstacles,
+      projectiles: liveBolts,
+      score: afterObstacles.score + bonus,
+      forceBonusAwardedAt: clean ? t : null,
+    })
   }
 
   // --- The port reaching the cockpit un-destroyed is a crash: costs a shield --
@@ -572,6 +588,12 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     exhaustPort: phase === 'trench' ? spawnPort() : null,
     // ...and its wall obstacles (fidelity epic, task 3); other phases carry none.
     trenchObstacles: phase === 'trench' ? spawnTrenchObstacles() : [],
+    // The "Use the Force" clean-run tell resets on every phase entry, like
+    // phaseKills/trenchScrollZ (fidelity epic, task 4) — `clearRun` below
+    // re-stamps `forceBonusAwardedAt` after this reset so the banner survives
+    // the wave transition.
+    trenchShotsFired: 0,
+    forceBonusAwardedAt: null,
     enemyShots: [],
     altitude: phase === 'surface' ? SKIM_ALTITUDE : s.altitude,
     // Reset the surface scroll on every phase entry so a fresh (or jumped) surface
@@ -598,7 +620,10 @@ function spawnPort(): { pos: Vec3 } {
  * added by the caller.
  */
 function clearRun(s: GameState): GameState {
-  return { ...enterPhase(s, 'space'), wave: s.wave + 1 }
+  // `enterPhase` resets `forceBonusAwardedAt` to null (every phase entry does,
+  // like `trenchScrollZ`) — re-stamp it here so a clean port kill's banner
+  // survives into the next wave's space phase (fidelity epic, task 4).
+  return { ...enterPhase(s, 'space'), wave: s.wave + 1, forceBonusAwardedAt: s.forceBonusAwardedAt }
 }
 
 /** A fresh turret: lateral-spread spawn far down −Z, standing on the floor. */
