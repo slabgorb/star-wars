@@ -23,6 +23,9 @@ import {
   DEATH_STAR,
   SURFACE_TOWER,
   EXHAUST_PORT,
+  TRENCH_TURRET,
+  TRENCH_SQUARE,
+  TRENCH_CATWALK,
 } from '../core/models'
 import { surfaceGrid } from '../core/surface-grid'
 import { trenchChannel } from '../core/trench-channel'
@@ -231,6 +234,14 @@ export function render(
     // trenchChannel (see src/core/trench-detail.ts) so the 11-6 full-height-rung
     // contract stays intact; scrolls in lockstep with the channel.
     drawWireframe(ctx, trenchWallDetail(state.trenchScrollZ), view, proj, w, h, SURFACE_GLOW)
+    // Fidelity epic (task 3) — wall turrets/squares (shootable) and catwalk
+    // hazards, each riding its own sim-state world position (trenchObstacles
+    // scrolls in lockstep with the channel/port in stepTrench).
+    for (const o of state.trenchObstacles) {
+      const model =
+        o.kind === 'turret' ? TRENCH_TURRET : o.kind === 'square' ? TRENCH_SQUARE : TRENCH_CATWALK
+      drawWireframe(ctx, model, multiply(view, modelMatrix(o.pos, TRENCH_ORIENT)), proj, w, h, TURRET_GLOW)
+    }
     // The exhaust port still rides up the channel at its true sim world position.
     const { port } = trenchPlacement(state)
     if (state.exhaustPort) {

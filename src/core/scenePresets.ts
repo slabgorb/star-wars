@@ -8,6 +8,8 @@
 
 import { initialState, EXHAUST_PORT_DISTANCE, type GameState } from './state'
 import { enterPhase } from './sim'
+import { spawnTrenchObstacles } from './trench-obstacles'
+import type { Vec3 } from './math3d'
 
 export interface ScenePreset {
   /** Stable slug, e.g. 'mid-run'. */
@@ -33,6 +35,11 @@ export const SCENE_PRESETS: readonly ScenePreset[] = [
     state: trenchAt(-EXHAUST_PORT_DISTANCE) },
   { id: 'mid-run', label: 'MID-RUN', hint: 'port approaching',
     state: trenchAt(-1400) },
+  // Fidelity epic (task 3) — the obstacle stations shifted +600 so several
+  // turrets/squares/the catwalk sit in range on the walls for the contact sheet,
+  // rather than the far-downrange stations a stock trenchAt(-1400) would show.
+  { id: 'turret-alley', label: 'TURRET-ALLEY', hint: 'obstacles in range',
+    state: { ...trenchAt(-1400), trenchObstacles: spawnTrenchObstacles().map((o) => ({ ...o, pos: [o.pos[0], o.pos[1], o.pos[2] + 600] as Vec3 })) } },
   { id: 'port-in-sight', label: 'PORT-IN-SIGHT', hint: 'in range',
     state: trenchAt(-600) },
 ]

@@ -12,7 +12,7 @@
 // rule helpers — there is no ad-hoc geometry in here.
 
 import { initialState } from './state'
-import type { GameState, Projectile, Enemy, Turret, Phase } from './state'
+import type { GameState, Projectile, Enemy, Turret, Phase, TrenchObstacle } from './state'
 import {
   PROJECTILE_TTL,
   PROJECTILE_SPEED,
@@ -67,6 +67,12 @@ import {
 } from './math3d'
 import { aimDirection, collides, waveParams } from './gameRules'
 import { nextFloat, nextInt, type Rng } from './rng'
+import {
+  spawnTrenchObstacles,
+  TRENCH_TURRET_SCORE,
+  TRENCH_SQUARE_SCORE,
+  OBSTACLE_HIT_RADIUS,
+} from './trench-obstacles'
 
 const COCKPIT: Vec3 = [0, 0, 0]
 const ZERO: Vec3 = [0, 0, 0]
@@ -414,8 +420,56 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     trenchScrollZ: state.trenchScrollZ + TRENCH_SCROLL_SPEED * dt,
   }
 
+  // --- Trench obstacles: scroll with the channel; shoot turrets/squares; -----
+  // --- catwalks crash the cockpit (findings ## Trench catwalks, turrets &
+  // --- wall squares). Runs BEFORE the port logic below (and before the
+  // --- no-port safe hold) so obstacles are live even on a passless trench, and
+  // --- consumes bolts from `base.projectiles` so a bolt spent on an obstacle
+  // --- can't also kill the port this same frame.
+  let bolts = base.projectiles
+  let obstacleScore = 0
+  const survivors: TrenchObstacle[] = []
+  let crashedCatwalk = false
+  for (const o of state.trenchObstacles) {
+    const pos: Vec3 = [o.pos[0], o.pos[1], o.pos[2] + TRENCH_SCROLL_SPEED * dt]
+    if (o.kind === 'catwalk') {
+      // Hazard check FIRST, before the despawn cutoff below: a catwalk starting
+      // right at the cockpit's doorstep can scroll past z=0 in the same step
+      // that carries it through the cockpit's hit sphere, and the crash must
+      // still register rather than being silently despawned.
+      if (collides(pos, COCKPIT, COCKPIT_HIT_RADIUS)) {
+        crashedCatwalk = true
+        events.push({ type: 'terrain-crash' })
+        continue // crashed through it — removed
+      }
+    } else {
+      const hit = bolts.findIndex((b) => collides(pos, b.pos, OBSTACLE_HIT_RADIUS))
+      if (hit >= 0) {
+        bolts = bolts.filter((_, i) => i !== hit)
+        obstacleScore += o.kind === 'turret' ? TRENCH_TURRET_SCORE : TRENCH_SQUARE_SCORE
+        events.push({ type: 'trench-obstacle-destroyed', kind: o.kind })
+        continue
+      }
+    }
+    if (pos[2] > 0) continue // scrolled past the cockpit — despawn
+    survivors.push({ kind: o.kind, pos })
+  }
+  const afterObstacles: GameState = {
+    ...base,
+    projectiles: bolts,
+    score: base.score + obstacleScore,
+    trenchObstacles: survivors,
+    ...(crashedCatwalk
+      ? {
+          lives: Math.max(0, base.lives - 1),
+          gameOver: base.lives - 1 <= 0,
+          mode: base.lives - 1 <= 0 ? ('gameover' as const) : base.mode,
+        }
+      : {}),
+  }
+
   // No active port → safe hold (no score, no damage; the empty channel still scrolls).
-  if (state.exhaustPort === null) return base
+  if (state.exhaustPort === null) return afterObstacles
 
   // Scroll the port up the channel toward the cockpit (+Z, toward z=0). A fresh
   // array keeps the step pure — the input state is never mutated.
@@ -426,33 +480,36 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   ]
 
   // --- Player bolt vs the port: a hit clears the run and scores the bonus -----
-  const hitBolt = projectiles.findIndex((b) => collides(port, b.pos, PORT_HIT_RADIUS))
+  // Reads `afterObstacles.projectiles` (post-obstacle bolts), not the raw
+  // `projectiles` — a bolt already spent destroying a turret/square this frame
+  // cannot also detonate the port.
+  const hitBolt = afterObstacles.projectiles.findIndex((b) => collides(port, b.pos, PORT_HIT_RADIUS))
   if (hitBolt >= 0) {
-    const liveBolts = projectiles.filter((_, i) => i !== hitBolt)
+    const liveBolts = afterObstacles.projectiles.filter((_, i) => i !== hitBolt)
     // The Death Star blows: the whole run clears and loops to the next wave's
     // space phase — emit the warp / wave-clear cue (8-7), as `clearRun` re-opens
     // 'space'. `clearRun` → `enterPhase` spreads `...s`, so this event rides along.
     events.push({ type: 'level-clear', next: 'space' })
-    return clearRun({ ...base, projectiles: liveBolts, score: state.score + TRENCH_BONUS })
+    return clearRun({ ...afterObstacles, projectiles: liveBolts, score: afterObstacles.score + TRENCH_BONUS })
   }
 
   // --- The port reaching the cockpit un-destroyed is a crash: costs a shield --
   if (collides(port, COCKPIT, COCKPIT_HIT_RADIUS)) {
-    const lives = Math.max(0, state.lives - 1)
+    const lives = Math.max(0, afterObstacles.lives - 1)
     // Flying into the trench structure is a crash, not hostile fire — reuse the
     // terrain-crash cue (8-7) rather than widen player-death's cause union.
     events.push({ type: 'terrain-crash' })
     return {
-      ...base,
+      ...afterObstacles,
       lives,
       gameOver: lives <= 0,
-      mode: lives <= 0 ? 'gameover' : state.mode,
+      mode: lives <= 0 ? 'gameover' : afterObstacles.mode,
       exhaustPort: spawnPort(), // another pass down the trench
     }
   }
 
   // Otherwise the port keeps scrolling in toward the cockpit.
-  return { ...base, exhaustPort: { pos: port } }
+  return { ...afterObstacles, exhaustPort: { pos: port } }
 }
 
 // --- Wave/phase progression -------------------------------------------------
@@ -513,6 +570,8 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     turrets: [],
     // The trench opens with its target downrange; other phases carry no port.
     exhaustPort: phase === 'trench' ? spawnPort() : null,
+    // ...and its wall obstacles (fidelity epic, task 3); other phases carry none.
+    trenchObstacles: phase === 'trench' ? spawnTrenchObstacles() : [],
     enemyShots: [],
     altitude: phase === 'surface' ? SKIM_ALTITUDE : s.altitude,
     // Reset the surface scroll on every phase entry so a fresh (or jumped) surface

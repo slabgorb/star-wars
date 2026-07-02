@@ -30,4 +30,10 @@ describe('SCENE_PRESETS', () => {
     // than the last frame's, so the run reads front-to-back across the sheet.
     expect(first).toBeLessThan(last)
   })
+
+  it('includes the turret-alley preset with obstacles in range (fidelity epic task 3)', () => {
+    expect(SCENE_PRESETS.map((p) => p.id)).toContain('turret-alley')
+    const preset = SCENE_PRESETS.find((p) => p.id === 'turret-alley')!
+    expect(preset.state.trenchObstacles.length).toBeGreaterThan(0)
+  })
 })

@@ -132,6 +132,12 @@ const loop = createLoop(
           // event lets a bespoke sound swap in later without touching the core.
           audio.play('enemyDeath')
           break
+        case 'trench-obstacle-destroyed':
+          // A trench turret/square shot down — same reuse-the-explosion-cue
+          // pattern as fireball-destroyed (fidelity epic task 3): no new asset,
+          // the dedicated event still lets a bespoke sound swap in later.
+          audio.play('enemyDeath')
+          break
         default: {
           // Exhaustiveness guard: a new GameEvent variant added without an arm
           // above fails to type-check here instead of being silently dropped.

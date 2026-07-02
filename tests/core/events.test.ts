@@ -67,6 +67,7 @@ const ALL_EVENTS: GameEvent[] = [
   { type: 'player-spawn' },
   { type: 'terrain-crash' },
   { type: 'fireball-destroyed', pos: [0, 0, -400] },
+  { type: 'trench-obstacle-destroyed', kind: 'turret' },
 ]
 
 // Exhaustive narrowing over the union: the `never` default fails to compile if a
@@ -83,6 +84,7 @@ function discriminant(e: GameEvent): string {
     case 'player-spawn':  return 'spawn'
     case 'terrain-crash': return 'crash'
     case 'fireball-destroyed': return `fb@${e.pos.join(',')}`
+    case 'trench-obstacle-destroyed': return `obs-${e.kind}`
     default: {
       const _exhaustive: never = e
       return _exhaustive
@@ -91,13 +93,16 @@ function discriminant(e: GameEvent): string {
 }
 
 describe('GameEvent — discriminated union (AC1)', () => {
-  it('covers eight distinct, documented event types', () => {
+  it('covers nine distinct, documented event types', () => {
+    // Nine: the original eight (story 8-7/8-18) plus 'trench-obstacle-destroyed'
+    // (fidelity epic task 3 — findings ## Trench catwalks, turrets & wall squares).
     const kinds = ALL_EVENTS.map((e) => e.type)
-    expect(new Set(kinds).size).toBe(8)
+    expect(new Set(kinds).size).toBe(9)
     expect(new Set(kinds)).toEqual(
       new Set([
         'fire', 'enemy-fire', 'enemy-death', 'player-death',
         'level-clear', 'player-spawn', 'terrain-crash', 'fireball-destroyed',
+        'trench-obstacle-destroyed',
       ]),
     )
   })

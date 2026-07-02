@@ -596,17 +596,39 @@ against the current clone:
    remain the authentic source for a future full geometry pass. The
    **viewpoint clamp** should still mirror `sub_703B`: lateral ±511, vertical
    −257…−3583 (downward-biased). *(feeds "trench obstacles" task.)*
-3. **`core/trench-channel.ts` / obstacles** — catwalks (green squares) and
-   turrets share one hit-test differentiated by bitmask; both cost a shield on
-   collision (like a tower). Turrets come in 3 rows (`sub_B3E9`, params `$B/$E/$C`);
-   only the middle row runs the firing-cone hit-box. `byte_49C1` wall-recede
-   effect (`$88`→`$40`, −8 per column cleared) is a cosmetic detail to consider.
-4. **`core/gameRules.ts`** — bake the **resolved** point values: TIE 1,000; Darth
-   2,000; laser tower/bunker 200; trench turret 100; green square/catwalk 50;
-   fireball 33; exhaust-port hit 25,000; all-towers 50,000; Use-the-Force
-   100,000 (or wave table 5k/10k/25k/50k); shield bonus 5,000 × shields; extra
-   life at 400,000/800,000. **Do not ×10 these** (see the ⚠︎ conflict note).
-   TIE fire aggression from `byte_8D71` is already modelled.
+3. **`core/trench-channel.ts` / obstacles — RESOLVED (epic 14 task 3,
+   `core/trench-obstacles.ts`).** Turrets and wall squares are now targetable
+   entities: shootable for score (`byte_9853`=100 turrets, `byte_9850`=50
+   squares — see ## Scoring tables). Catwalks are a separate, non-shootable
+   hazard — cockpit contact costs a shield, per the flight-instructions text's
+   unambiguous rule #2 ("...OR WHEN YOU STRIKE A LASER TOWER OR TRENCH
+   CATWALK"). ⚠︎ Note this narrows the ambiguous "green squares (catwalks) and
+   turrets share one hit-test" phrasing directly above (`sub_B095`'s
+   collision-type branch) — that branch's two arms are named "Trench turrets
+   score" / "Trench green squares score", i.e. both SCORE (bolt hits), which
+   does not on its face match "share a hit-test with catwalks" (a shield-cost
+   hazard, per the flight-instructions text); the doc's own hedge on
+   `byte_9850`'s on-screen text ("no line; catwalk hit value") shows the
+   annotator wasn't certain either. Trusted the flight-instructions text as the
+   tie-breaker. Turret spawn/aim (`sub_B3E9`) still confirmed 3 ROM rows
+   (params `$B`/`$E`/`$C` — left / right / both walls; only the `$E` row runs a
+   firing-cone hit-box, a DIFFERENT check from the bolt-vs-obstacle one) —
+   `TRENCH_OBSTACLE_STATIONS` now places its turret stations along that
+   left/right/both structure. Exact station Z-spacing, `OBSTACLE_HIT_RADIUS`,
+   and the three wireframe shapes (`TRENCH_TURRET`/`TRENCH_SQUARE`/
+   `TRENCH_CATWALK`) remain PROVISIONAL: no ROM↔world-unit conversion exists to
+   turn the `off_7CC0`→`off_7Bxx` (type-byte,dx,dy) shape-script triples into
+   exact coordinates, and the extraction notes flag it uncertain whether those
+   triples encode placement or silhouette geometry. `byte_49C1` wall-recede
+   effect (`$88`→`$40`, −8 per column cleared) is still an un-ported cosmetic
+   detail.
+4. **`core/gameRules.ts` / `core/trench-obstacles.ts`** — bake the **resolved**
+   point values: TIE 1,000; Darth 2,000; laser tower/bunker 200; trench turret
+   100 (landed in `trench-obstacles.ts`, not `gameRules.ts` — see #3); green
+   square 50 (ditto); fireball 33; exhaust-port hit 25,000; all-towers 50,000;
+   Use-the-Force 100,000 (or wave table 5k/10k/25k/50k); shield bonus 5,000 ×
+   shields; extra life at 400,000/800,000. **Do not ×10 these** (see the ⚠︎
+   conflict note). TIE fire aggression from `byte_8D71` is already modelled.
 5. **`core/state.ts` / `core/sim.ts`** — the 61-state `Jump_Table_1` is the
    authentic phase machine; our sim need not replicate all 61, but the trench↔
    exhaust↔explosion↔next-wave flow (states 47/48 → 17/49 → 52 → 29) and the

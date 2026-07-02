@@ -75,6 +75,17 @@ export interface FireballDestroyedEvent {
   pos: Vec3
 }
 
+// A trench wall obstacle (turret or wall square) was shot down. Distinct from
+// `enemy-death` because these are wall fixtures, not `Enemy`/`Turret` entities —
+// the same reason `fireball-destroyed` and `terrain-crash` stay separate
+// (fidelity epic, findings ## Trench catwalks, turrets & wall squares). Catwalks
+// never appear here — they are hazards, not shootable, and reuse `terrain-crash`
+// on cockpit contact.
+export interface TrenchObstacleDestroyedEvent {
+  type: 'trench-obstacle-destroyed'
+  kind: 'turret' | 'square'
+}
+
 export type GameEvent =
   | FireEvent
   | EnemyFireEvent
@@ -84,3 +95,4 @@ export type GameEvent =
   | PlayerSpawnEvent
   | TerrainCrashEvent
   | FireballDestroyedEvent
+  | TrenchObstacleDestroyedEvent
