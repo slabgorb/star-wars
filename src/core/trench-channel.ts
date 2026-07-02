@@ -27,13 +27,13 @@ import type { Model3D } from './models'
  *  `sub_8735`'s left/right wall pass MReg3D=±$400=1024) — kept as our existing
  *  world-scale anchor; RIB_Z/TRENCH_FAR below are scaled off it using the ROM's
  *  OWN ratios. See ## Open follow-ups. */
-export const TRENCH_HALF_W = 256
+export const TRENCH_HALF_W = 256 // PROVISIONAL(findings ## Trench geometry & limits) — not pinned, see Open follow-ups
 /** Height the side walls rise from the y=0 floor to the top rails — taller than
  *  the cockpit skim (render TRENCH_SKIM) so the walls tower into a trench.
  *  findings: not pinned — `sub_703B`'s vertical viewpoint clamp (−257…−3583) is
  *  the camera's travel range inside the trench, not the walls' static height.
  *  Kept provisional; see ## Open follow-ups. */
-export const TRENCH_WALL_H = 320
+export const TRENCH_WALL_H = 320 // PROVISIONAL(findings ## Trench geometry & limits) — not pinned, see Open follow-ups
 /** Spacing between the lateral ribs (floor + wall rungs) — also the scroll period.
  *  findings: `sub_87CB` (the side-wall vertical-line recursion) clamps its Z
  *  window to $800 (2048) — 2× the wall half-width $400 (1024) from `sub_8735`'s
