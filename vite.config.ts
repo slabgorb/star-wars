@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         main: 'index.html',
         models: 'models.html',
+        scenes: 'scenes.html',
       },
     },
   },
