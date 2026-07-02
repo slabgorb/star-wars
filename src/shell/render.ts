@@ -615,12 +615,13 @@ function drawTrenchBanners(ctx: CanvasRenderingContext2D, state: GameState, w: n
     glowText(ctx, 'EXHAUST PORT AHEAD', w / 2, h * 0.22, '#dddddd', 14)
   }
   if (state.forceBonusAwardedAt !== null && state.t - state.forceBonusAwardedAt <= FORCE_BANNER_SECONDS) {
-    // "USE THE FORCE" is the confirmed authentic HUD string (findings
-    // ## HUD & framing / Open follow-ups #7); the trailing value follows the
-    // same LABEL-then-VALUE convention the ROM's own score strings use (## Scoring
-    // tables, e.g. `aExhaustPort2500` "EXHAUST PORT … 25,000") — the exact
-    // punctuation/spacing there is not pinned, so this is the closest match.
-    glowText(ctx, `USE THE FORCE ${FORCE_BONUS.toLocaleString('en-US')}`, w / 2, h * 0.16, '#dddddd', 12)
+    // "<amount> FOR USING THE FORCE" is the confirmed authentic cabinet banner
+    // wording — findings ## HUD & framing / Open follow-ups #7 cites a real
+    // cabinet screenshot reading "5,000 FOR USING THE FORCE"
+    // (docs/star-wars-1983-source-findings.md:655); the plain "USE THE FORCE"
+    // string listed earlier in the same item is a shorter ROM string-table
+    // fragment, not the full banner text.
+    glowText(ctx, `${FORCE_BONUS.toLocaleString('en-US')} FOR USING THE FORCE`, w / 2, h * 0.16, '#dddddd', 12)
   }
   ctx.textAlign = 'left'
 }
