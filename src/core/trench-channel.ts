@@ -20,17 +20,32 @@ import type { Vec3 } from './math3d'
 import type { Model3D } from './models'
 
 /** Half the channel width: the floor rails and the two side walls sit at
- *  x = ±this. Narrow — a corridor you fly down, not the open surface. */
+ *  x = ±this. Narrow — a corridor you fly down, not the open surface.
+ *  findings (docs/star-wars-1983-source-findings.md ## Trench geometry &
+ *  limits): two conflicting ROM candidates and no documented ROM-unit↔our-unit
+ *  conversion to arbitrate them (`Obj_Trench_Squares` outer ring ±$100=256 vs
+ *  `sub_8735`'s left/right wall pass MReg3D=±$400=1024) — kept as our existing
+ *  world-scale anchor; RIB_Z/TRENCH_FAR below are scaled off it using the ROM's
+ *  OWN ratios. See ## Open follow-ups. */
 export const TRENCH_HALF_W = 256
 /** Height the side walls rise from the y=0 floor to the top rails — taller than
- *  the cockpit skim (render TRENCH_SKIM) so the walls tower into a trench. */
+ *  the cockpit skim (render TRENCH_SKIM) so the walls tower into a trench.
+ *  findings: not pinned — `sub_703B`'s vertical viewpoint clamp (−257…−3583) is
+ *  the camera's travel range inside the trench, not the walls' static height.
+ *  Kept provisional; see ## Open follow-ups. */
 export const TRENCH_WALL_H = 320
-/** Spacing between the lateral ribs (floor + wall rungs) — also the scroll period. */
-export const RIB_Z = 400
+/** Spacing between the lateral ribs (floor + wall rungs) — also the scroll period.
+ *  findings: `sub_87CB` (the side-wall vertical-line recursion) clamps its Z
+ *  window to $800 (2048) — 2× the wall half-width $400 (1024) from `sub_8735`'s
+ *  left/right wall pass. Applying that 2:1 ratio to our TRENCH_HALF_W anchor. */
+export const RIB_Z = 512
 /** Far cutoff: the channel recedes from the cockpit out to z ≈ −TRENCH_FAR (the
  *  vanishing point), well beyond the exhaust port's spawn (EXHAUST_PORT_DISTANCE)
- *  and inside the render far-clip plane. */
-export const TRENCH_FAR = 6000
+ *  and inside the render far-clip plane.
+ *  findings: `sub_87CB` culls the side-wall vertical-line recursion past
+ *  camera + $7000 (28672) — 28× the wall half-width $400 (1024) from
+ *  `sub_8735`. Applying that 28:1 ratio to our TRENCH_HALF_W anchor. */
+export const TRENCH_FAR = 7168
 
 /**
  * A long walled trench channel on the y=0 floor, scrolled toward the cockpit by

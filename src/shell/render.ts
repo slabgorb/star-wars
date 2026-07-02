@@ -26,6 +26,7 @@ import {
 } from '../core/models'
 import { surfaceGrid } from '../core/surface-grid'
 import { trenchChannel } from '../core/trench-channel'
+import { trenchWallDetail } from '../core/trench-detail'
 import { crosshairNdc, lockedEnemy, LOCK_RADIUS_NDC, FOV_Y } from '../core/gameRules'
 import {
   perspective,
@@ -226,6 +227,10 @@ export function render(
     // retired from this scene (kept in the registry, re-classified). The camera
     // (skimming just above the floor) is the only transform — like the surface grid.
     drawWireframe(ctx, trenchChannel(state.trenchScrollZ), view, proj, w, h, SURFACE_GLOW)
+    // Fidelity epic (task 2) — recessed wall panels/windows, a SEPARATE model from
+    // trenchChannel (see src/core/trench-detail.ts) so the 11-6 full-height-rung
+    // contract stays intact; scrolls in lockstep with the channel.
+    drawWireframe(ctx, trenchWallDetail(state.trenchScrollZ), view, proj, w, h, SURFACE_GLOW)
     // The exhaust port still rides up the channel at its true sim world position.
     const { port } = trenchPlacement(state)
     if (state.exhaustPort) {
