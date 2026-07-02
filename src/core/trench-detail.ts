@@ -19,12 +19,12 @@ import { TRENCH_HALF_W, TRENCH_WALL_H, TRENCH_FAR } from './trench-channel'
 // provisional; logged in ## Open follow-ups for a future full geometry pass.
 
 /** Panel spacing down −Z — also the detail's scroll-recycle period. */
-export const PANEL_Z = 800 // provisional — see true-up note above
+export const PANEL_Z = 800 // PROVISIONAL(findings ## Trench geometry & limits) — not pinned, see Open follow-ups
 /** Panel width along Z and height along Y — the recessed window rectangle. */
-export const PANEL_W = 240 // provisional — see true-up note above
-export const PANEL_H = 120 // provisional — see true-up note above
+export const PANEL_W = 240 // PROVISIONAL(findings ## Trench geometry & limits) — not pinned, see Open follow-ups
+export const PANEL_H = 120 // PROVISIONAL(findings ## Trench geometry & limits) — not pinned, see Open follow-ups
 /** Panel bottom edge's height above the floor. */
-export const PANEL_INSET_Y = 80 // provisional — see true-up note above
+export const PANEL_INSET_Y = 80 // PROVISIONAL(findings ## Trench geometry & limits) — not pinned, see Open follow-ups
 
 /** Rectangular wall panels at each PANEL_Z station on BOTH walls, scrolled
  *  toward the cockpit by `scroll` (same modulo idiom as trenchChannel). */
