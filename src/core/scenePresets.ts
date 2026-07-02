@@ -42,4 +42,9 @@ export const SCENE_PRESETS: readonly ScenePreset[] = [
     state: { ...trenchAt(-1400), trenchObstacles: spawnTrenchObstacles().map((o) => ({ ...o, pos: [o.pos[0], o.pos[1], o.pos[2] + 600] as Vec3 })) } },
   { id: 'port-in-sight', label: 'PORT-IN-SIGHT', hint: 'in range',
     state: trenchAt(-600) },
+  // Fidelity epic (task 4) — a clean port kill's "Use the Force" banner
+  // (findings ## Exhaust port & run outcome), shown across the wave transition
+  // exactly like `clearRun` re-stamps it (t=0 keeps FORCE_BANNER_SECONDS lit).
+  { id: 'force-bonus', label: 'FORCE-BONUS', hint: 'clean run banner',
+    state: { ...trenchAt(-600), forceBonusAwardedAt: 0 } },
 ]

@@ -86,6 +86,15 @@ export interface TrenchObstacleDestroyedEvent {
   kind: 'turret' | 'square'
 }
 
+// A clean port kill — no trench shots before the killing torpedo — awarded the
+// "Use the Force" bonus on top of TRENCH_BONUS (fidelity epic, findings
+// ## Exhaust port & run outcome). `amount` carries FORCE_BONUS for the SFX/HUD
+// layer, mirroring how the other scoring events carry their own payload.
+export interface ForceBonusEvent {
+  type: 'force-bonus'
+  amount: number
+}
+
 export type GameEvent =
   | FireEvent
   | EnemyFireEvent
@@ -96,3 +105,4 @@ export type GameEvent =
   | TerrainCrashEvent
   | FireballDestroyedEvent
   | TrenchObstacleDestroyedEvent
+  | ForceBonusEvent

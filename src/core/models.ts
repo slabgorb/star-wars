@@ -360,14 +360,25 @@ export const TRENCH: Model3D = {
 }
 
 /**
- * The trench exhaust port — the run's target. No authentic vertex table exists
- * for it in `Object_3D_Data.asm`, so the geometry is authored here: a small
- * octagonal opening lying flat in the y=0 floor plane, ring-based from the start
- * (a single closed loop), per the epic's geometry-connectivity contract. The
- * symmetric (±64,±27)/(±27,±64) octagon keeps every vertex at one exact integer
- * radius, so it reads as a single ring and avoids floating-point drift. Display
- * orientation (recessing it into the trench floor / facing the run) is a render
- * concern applied in the shell, not baked into this object-space data.
+ * The trench exhaust port — the run's target. Trued against the fidelity epic's
+ * findings dump (fidelity epic task 4; findings ## Exhaust port & run outcome /
+ * ## Trench geometry & limits / Open follow-ups #1): the port is a scripted
+ * hit-test PLANE (the type-3 segment latches `DPbyte_92/93`, a Z-boundary, not a
+ * drawn shape) — `Object_3D_Data.asm` has no vertex table named or addressed for
+ * it. The nearest candidate in the vertex dump, `Object_12` @ `$6545` (12 verts,
+ * Z=0, three concentric squares at corner magnitudes `$60/$A0/$100` = 96/160/256),
+ * sits right after the trench's other fixtures (`Object_10` catwalk brace,
+ * `Object_11` posts) — but the findings doc itself flags that identity an AGENT
+ * INFERENCE ("targeting-reticle / lock-on box"), not a confirmed source name, so
+ * it is not safe to claim as the port. The geometry therefore stays AUTHORED: a
+ * small octagonal opening lying flat in the y=0 floor plane, ring-based from the
+ * start (a single closed loop), per the epic's geometry-connectivity contract.
+ * The symmetric (±64,±27)/(±27,±64) octagon keeps every vertex at one exact
+ * integer radius, so it reads as a single ring and avoids floating-point drift.
+ * Display orientation (recessing it into the trench floor / facing the run) is a
+ * render concern applied in the shell, not baked into this object-space data.
+ * PROVISIONAL(findings ## Trench geometry & limits) — no authentic vertex table
+ * to port; see Open follow-ups #1.
  */
 export const EXHAUST_PORT: Model3D = {
   name: 'Exhaust Port',

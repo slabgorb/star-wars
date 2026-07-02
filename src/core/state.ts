@@ -245,6 +245,21 @@ export const TRENCH_BONUS = 1000
 export const TRENCH_SCROLL_SPEED = 500
 /** Hit sphere around the exhaust port for player bolts (the octagon spans ~64). */
 export const PORT_HIT_RADIUS = 120
+/** Awarded on top of TRENCH_BONUS for a port kill with no prior trench shots —
+ *  the arcade's "USE THE FORCE" bonus (findings ## Exhaust port & run outcome:
+ *  the type-4 segment's one-shot `byte_4B36` latch fires `sub_97E3`, the
+ *  Use-the-Force scoring trigger). findings ## Scoring tables: `byte_983B` is
+ *  wave-indexed (5,000 / 10,000 / 25,000 / 50,000 for waves 1-4); we are not yet
+ *  wave-scaled, so this pins the wave-1 base (`0,$50,0` → 5,000) — see docs
+ *  Open follow-ups #11. */
+export const FORCE_BONUS = 5000
+/** Port distance (world units, −Z) at which the EXHAUST PORT AHEAD banner shows.
+ *  findings ## HUD & framing / Open follow-ups #7 confirm "EXHAUST PORT AHEAD"
+ *  as an authentic HUD string, but no ROM-recovered distance pins WHEN it first
+ *  shows (only the hit/miss test's $800 approach window, findings ## Exhaust
+ *  port & run outcome, which is the "close enough to resolve hit or miss"
+ *  moment, not confirmed as the banner trigger). Kept as a tuned guess. */
+export const PORT_AHEAD_RANGE = 1800 // PROVISIONAL(findings ## HUD & framing)
 
 // --- Wave/phase progression constants ---------------------------------------
 //
@@ -304,6 +319,17 @@ export interface GameState {
    * toward the cockpit alongside the port; empty in the other phases (fidelity
    * epic, findings ## Trench catwalks, turrets & wall squares). */
   trenchObstacles: TrenchObstacle[]
+  /** Player bolts fired so far in the CURRENT trench run — the "Use the Force"
+   * clean-run tell (fidelity epic, findings ## Exhaust port & run outcome).
+   * Counts every `fire` this phase, including the killing torpedo; reset to 0
+   * on every phase entry (like `phaseKills`). */
+  trenchShotsFired: number
+  /** Sim time (`t`) the FORCE_BONUS was last awarded, or `null` if it hasn't
+   * been this run. Stamped by a clean port kill so the shell can show the
+   * banner for a few seconds — including across the `clearRun` wave
+   * transition, which re-stamps it after `enterPhase`'s reset (see `clearRun`
+   * in sim.ts). Reset to `null` on every phase entry. */
+  forceBonusAwardedAt: number | null
   /** Enemy fireballs currently in flight. */
   enemyShots: Projectile[]
   /** True once the last shield is lost — the wave is over. */
@@ -340,6 +366,8 @@ export function initialState(seed = 1983): GameState {
     turrets: [],
     exhaustPort: null,
     trenchObstacles: [],
+    trenchShotsFired: 0,
+    forceBonusAwardedAt: null,
     enemyShots: [],
     gameOver: false,
     fireCooldown: 0,
