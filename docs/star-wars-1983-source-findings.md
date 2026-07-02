@@ -640,7 +640,22 @@ against the current clone:
 7. **`core/hud.ts` / `shell/font.ts`** — score panel colour `$6280`, 6-digit
    BCD, corner-dot frame, shield ring/colour table `word_96B6`, and the "EXHAUST
    PORT AHEAD/MISSED", "DEATH STAR DESTROYED", "AVOID CATWALKS", "USE THE FORCE"
-   HUD strings all have authentic sources here.
+   HUD strings all have authentic sources here. ⚠︎ **Trued against a real cabinet
+   screenshot (epic 14 task 5, not this doc's ROM extraction — see the task-5
+   report for source URLs + pixel sampling):** the SCORE/WAVE panel is actually
+   TWO colours, not the one `$6280` this doc's text implies — the "SCORE"/"WAVE"
+   words render RED, the live digits (score value, wave number) render GREEN
+   (the same green as the shield gauge and trench walls); the score readout is
+   comma-grouped ("12,066", "60,681"), not zero-padded, resolving the "6-digit
+   BCD" ambiguity toward "6 BCD *storage* digits," not "6 rendered glyphs." The
+   same screenshots also reveal a THIRD, previously undocumented HUD row: a
+   flashing YELLOW/amber bonus or extra-life counter directly under the score
+   value (`byte_4B2C`, "score changed, redraw HUD" / the flashing bonus counter
+   named in this section's "Score readout" above) — e.g. "60,681" over "33", or
+   "12,066" over "5,000" beside a "5,000 FOR USING THE FORCE" banner. This row
+   is NOT modelled in `core/state.ts` (no bonus/extra-life field) and was left
+   unimplemented in task 5 (shell/render.ts + core/hud.ts formatters only, no
+   state changes authorized) — a genuine gap for a future HUD task.
 8. **`shell/render.ts` / `shell/wireframe.ts`** — palette is 7 colour registers
    (`word_D604`/`D612`) at normal `$80` / full `$FF` intensity, plus the laser
    blue/cyan cycle and per-object embedded colour opcodes.

@@ -18,7 +18,7 @@ import {
   type GameState,
 } from '../core/state'
 import type { HighScoreTable } from '../core/highscore'
-import { formatScore, formatLives, formatWave, formatLevel, formatShield } from '../core/hud'
+import { formatScore, formatLives, formatWave } from '../core/hud'
 import {
   TIE_FIGHTER,
   DEATH_STAR_SURFACE,
@@ -54,6 +54,21 @@ const SURFACE_GLOW = GLOW_FOR['Death Star Surface'] // death star steel (shared)
 const DEATH_STAR_GLOW = GLOW_FOR['Death Star'] // death star body hull (shared)
 const BOLT_GLOW = '#9dff00' // player laser green
 const FIRE_GLOW = '#ffd60a' // enemy fireball amber
+
+/**
+ * Trench wireframe glow (fidelity epic, task 5) — findings ## Colors &
+ * intensities: every trench-pass opcode (`$6270` floor side A, `$6250` floor
+ * side B, `$6260` wall walk, `$6280` exhaust-port-adjacent pass) shares STAT
+ * colour register 2 at varying intensity — "the trench reads green in the
+ * cabinet." Replaces `SURFACE_GLOW` (death star steel) on the trench channel
+ * + wall-detail strokes ONLY; the surface phase keeps SURFACE_GLOW. The
+ * register is pinned by the opcodes above; a real cabinet screenshot (task-5
+ * report) confirms the hue directly (a saturated, no-blue green, sampled
+ * ~#00e600/#1cdd00 off the HUD's own green text and the shield gauge) — the
+ * value below is picked to match that sample, not literally quoted from the
+ * ROM (no colour LUT survives there, only the register index).
+ */
+const TRENCH_GLOW = '#22e600' // PROVISIONAL(findings ## Colors & intensities) — register pinned, hex matched to a cabinet screenshot
 
 // How long after a bolt is fired its cannon-tip laser beams stay lit — a brief
 // muzzle flash ("pew"), not a line trailing the bolt for its whole flight.
@@ -231,11 +246,11 @@ export function render(
     // cockpit via trenchScrollZ. The flat TRENCH tile (a ~224×4px sliver) is
     // retired from this scene (kept in the registry, re-classified). The camera
     // (skimming just above the floor) is the only transform — like the surface grid.
-    drawWireframe(ctx, trenchChannel(state.trenchScrollZ), view, proj, w, h, SURFACE_GLOW)
+    drawWireframe(ctx, trenchChannel(state.trenchScrollZ), view, proj, w, h, TRENCH_GLOW)
     // Fidelity epic (task 2) — recessed wall panels/windows, a SEPARATE model from
     // trenchChannel (see src/core/trench-detail.ts) so the 11-6 full-height-rung
     // contract stays intact; scrolls in lockstep with the channel.
-    drawWireframe(ctx, trenchWallDetail(state.trenchScrollZ), view, proj, w, h, SURFACE_GLOW)
+    drawWireframe(ctx, trenchWallDetail(state.trenchScrollZ), view, proj, w, h, TRENCH_GLOW)
     // Fidelity epic (task 3) — wall turrets/squares (shootable) and catwalk
     // hazards, each riding its own sim-state world position (trenchObstacles
     // scrolls in lockstep with the channel/port in stepTrench).
@@ -485,24 +500,59 @@ function drawCrosshair(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
   ctx.shadowBlur = 0
 }
 
-// HUD header geometry (story 8-17). Side inset and the meter width scale with
-// the viewport width so the header reflows instead of clipping; the vertical
-// offsets are small top-anchored constants, the cabinet's top status strip.
+// HUD header geometry (story 8-17; reworked fidelity epic task 5). Side inset
+// and the gauge width scale with the viewport width so the header reflows
+// instead of clipping; the vertical offsets are small top-anchored constants,
+// the cabinet's top status strip. HUD_FRAME_BOTTOM_Y sits below the shield
+// gauge's numeral + SHIELD label stack (the tallest column) so the frame
+// brackets never collide with it — see the geometry note on `drawShieldMeter`.
 const HUD_MARGIN_FRAC = 0.025 // side inset as a fraction of width
-const HUD_METER_FRAC = 0.16 // shield-meter width as a fraction of width
-const HUD_ROW1_Y = 34 // SCORE / WAVE / LEVEL baseline (top row)
-const HUD_ROW2_Y = 58 // SHIELDS baseline (second left-column row)
-const HUD_METER_Y = 42 // shield-meter top — sits just under the LEVEL label
-const HUD_METER_H = 10 // shield-meter height
+const HUD_ROW1_Y = 34 // SCORE label / WAVE row baseline (top row)
+const HUD_ROW2_Y = 58 // SCORE value baseline (second left-column row)
+const HUD_METER_Y = 42 // shield-gauge top
+const HUD_METER_H = 24 // shield-gauge frame height
 const HUD_FRAME_TOP_Y = 10 // top bracket line, clear above the text row
-const HUD_FRAME_BOTTOM_Y = 68 // bottom bracket line, clear below the meter/shields
+const HUD_FRAME_BOTTOM_Y = 112 // bottom bracket line, clear below the shield gauge's numeral/label
 
 /**
- * In-run HUD header (story 8-17): SCORE over shields (left), the shield METER
- * graphic with the level number (centre), and the WAVE number (right), bracketed
- * by two glowing frame lines. All text is the shared Vector Battle face via
- * glowText; every value is formatted by the pure core (`core/hud.ts`) so the
- * shell only lays out what the core computed — the boundary holds.
+ * Palette (fidelity epic, task 5) — findings ## HUD & framing / ## Colors &
+ * intensities identify a single colour ($6280, STAT register 2) for the
+ * SCORE panel, but that undersells it: a real cabinet screenshot (task-5
+ * report has the source URLs + pixel sampling) shows the panel uses TWO
+ * colours — the static "SCORE"/"WAVE" words are RED, the live digits (score,
+ * wave number) are GREEN, matching the same green the shield gauge and
+ * trench walls use. HUD_LABEL_COLOR/HUD_VALUE_COLOR split what the findings
+ * doc described as one opcode; the register-2 green is pinned by the doc,
+ * the exact hexes are matched to the screenshot sample (~#e60001 red,
+ * ~#1cdd00/#00e600 green — no colour LUT survives in the ROM itself).
+ */
+const HUD_LABEL_COLOR = '#ff2222' // PROVISIONAL — hex matched to a cabinet screenshot; register not identified in findings
+const HUD_VALUE_COLOR = '#22e600' // PROVISIONAL(findings ## HUD & framing, ## Colors & intensities) — register pinned, hex matched to a cabinet screenshot
+
+/**
+ * Shield-gauge colour — findings ## HUD & framing: `word_96B6` "Shield colour
+ * table" draws a HEALTHY gauge (≥5 shields remaining — the common case at
+ * STARTING_LIVES=6) in `$6280`, the same register-2 green as the score panel
+ * and the trench walls (confirmed green, not red, by the same cabinet
+ * screenshot — the whole gauge INCLUDING its "SHIELD" label is green, unlike
+ * SCORE/WAVE's red label). The table's low-shield ramp ($6480/$6680
+ * amber-ish, $6080 at empty) is real ROM behaviour this single-colour gauge
+ * does not reproduce — an unimplemented nuance already tracked in Open
+ * follow-ups #7.
+ */
+const HUD_SHIELD_COLOR = '#22e600' // PROVISIONAL(findings ## HUD & framing, ## Colors & intensities) — register pinned (healthy tier only), hex matched to a cabinet screenshot
+
+/**
+ * In-run HUD header (story 8-17; reworked fidelity epic task 5 to the arcade
+ * layout): SCORE label-over-value (left), the wireframe SHIELD gauge
+ * (centre), and WAVE value-then-label on one line (right) — matching a real
+ * cabinet screenshot's asymmetric layout (task-5 report) — bracketed by two
+ * glowing frame lines, the closest approximation this renderer has of the
+ * ROM's 4-corner-dot HUD frame (findings ## HUD & framing, `sub_6112`; a true
+ * corner-dot frame is tracked in Open follow-ups #7). All text is the shared
+ * Vector Battle face via glowText; every value is formatted by the pure core
+ * (`core/hud.ts`) so the shell only lays out what the core computed — the
+ * boundary holds.
  */
 function drawHudHeader(ctx: CanvasRenderingContext2D, state: GameState, w: number, _h: number): void {
   const margin = Math.round(w * HUD_MARGIN_FRAC)
@@ -510,17 +560,24 @@ function drawHudHeader(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
   ctx.textBaseline = 'alphabetic'
   ctx.font = HUD_FONT
 
-  // Left: score over remaining shields (lives). Two short lines keep the block
-  // tight against the left bracket.
+  // Left: SCORE label (red) over the value (green) — two short lines.
   ctx.textAlign = 'left'
-  glowText(ctx, `SCORE ${formatScore(state.score)}`, margin, HUD_ROW1_Y, GLOW, 10)
-  glowText(ctx, `SHIELDS ${formatLives(state.lives)}`, margin, HUD_ROW2_Y, GLOW, 10)
+  glowText(ctx, 'SCORE', margin, HUD_ROW1_Y, HUD_LABEL_COLOR, 10)
+  glowText(ctx, formatScore(state.score), margin, HUD_ROW2_Y, HUD_VALUE_COLOR, 10)
 
-  // Right: the enemy wave.
+  // Right: WAVE — one line, value then label, each its own colour (a real
+  // cabinet screenshot shows this asymmetric layout: SCORE stacks label over
+  // value, WAVE runs value-then-label on a single row). No `ctx.measureText`
+  // here — render() is exercised by many shell tests against a minimal stub
+  // context (see render.trench-channel.test.ts's `makeCtx`) that doesn't
+  // implement it, so the label sits a fixed, eyeball-tuned gap to the right
+  // of the numeral rather than one measured off the label's rendered width.
   ctx.textAlign = 'right'
-  glowText(ctx, `WAVE ${formatWave(state.wave)}`, w - margin, HUD_ROW1_Y, GLOW, 10)
+  const waveLabelGap = 56 // ~width of "WAVE" at HUD_FONT + tracking, tuned by eyeball
+  glowText(ctx, 'WAVE', w - margin, HUD_ROW1_Y, HUD_LABEL_COLOR, 10)
+  glowText(ctx, formatWave(state.wave), w - margin - waveLabelGap, HUD_ROW1_Y, HUD_VALUE_COLOR, 10)
 
-  // Centre: the shield meter graphic with the level number above it.
+  // Centre: the wireframe shield gauge with its numeral + label.
   drawShieldMeter(ctx, state, w)
 
   // Frame: top and bottom glowing brackets spanning the inset width.
@@ -568,38 +625,76 @@ function drawTrenchBanners(ctx: CanvasRenderingContext2D, state: GameState, w: n
   ctx.textAlign = 'left'
 }
 
+// Shield-gauge width as a fraction of the viewport — findings ## HUD & framing
+// names the ROM's `word_96CA` "Shield vector table" ring graphic but gives no
+// screen extent; measured directly off a real cabinet screenshot instead
+// (task-5 report), where the gauge spans ~36% of the 640-wide frame, centred.
+const HUD_GAUGE_FRAC = 0.36
+
 /**
- * The centre shield meter: a glowing horizontal bar whose fill tracks remaining
- * shields. Shields are the player's lives in this cabinet (a hit costs one), so
- * the percentage is `lives / STARTING_LIVES` routed through the pure
- * `formatShield`. The OUTLINE always spans full capacity (the player reads the
- * max); the inner FILL shrinks one segment per lost shield. The level number
- * sits just above, per the cabinet's centre grouping.
+ * The centre shield gauge (fidelity epic, task 5): a wireframe trapezoid — a
+ * top edge and two vertical side edges with NO bottom edge, closed instead by
+ * a centre-peaked chevron running bottom-left → top-centre apex → bottom-right
+ * — echoing the ROM's `word_96CA` "Shield vector table" ring graphic (findings
+ * ## HUD & framing). This shape (not a row of segmented boxes) is traced
+ * directly off a real cabinet screenshot (task-5 report has the source +
+ * pixel measurements); findings gives the concept and colour register, the
+ * screenshot gives the silhouette. `STARTING_LIVES - 1` tick marks gradate
+ * the top edge like a ruler, one per shield above the first; a tick stays lit
+ * only while its shield is still held, so the scale reads down as shields are
+ * lost (the ROM's `sub_9558` depletion animation is real but unrecovered in
+ * detail — this is our best-effort mapping of "remaining shields" onto the
+ * gauge, not a traced animation). The live count and the SHIELD label sit
+ * beneath, both through the pure `formatLives` (no raw shell formatting) —
+ * the screenshot shows the whole gauge, numeral included, in the one green.
+ *
+ * Geometry note: HUD_FRAME_BOTTOM_Y is sized to clear this stack's label
+ * baseline (`yBot + 34`) — grow the gauge's vertical footprint and the
+ * frame's bottom bracket must move down with it.
  */
 function drawShieldMeter(ctx: CanvasRenderingContext2D, state: GameState, w: number): void {
-  const barW = Math.round(w * HUD_METER_FRAC)
-  const x = Math.round(w / 2 - barW / 2)
-  const y = HUD_METER_Y
-  const fill = formatShield((state.lives / STARTING_LIVES) * 100)
-
-  ctx.font = HUD_FONT
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'alphabetic'
-  glowText(ctx, `LEVEL ${formatLevel(state.wave)}`, w / 2, y - 8, GLOW, 8)
+  const gaugeW = Math.round(w * HUD_GAUGE_FRAC)
+  const x0 = Math.round(w / 2 - gaugeW / 2)
+  const x1 = x0 + gaugeW
+  const apexX = w / 2
+  const yTop = HUD_METER_Y
+  const yBot = yTop + HUD_METER_H
+  const tickLen = 8
 
   ctx.save()
   ctx.globalCompositeOperation = 'lighter'
-  // Outline: full shield capacity, cockpit cyan.
-  ctx.lineWidth = 2
-  ctx.strokeStyle = GLOW
-  ctx.shadowColor = GLOW
+  ctx.strokeStyle = HUD_SHIELD_COLOR
+  ctx.shadowColor = HUD_SHIELD_COLOR
   ctx.shadowBlur = 8
-  ctx.strokeRect(x, y, barW, HUD_METER_H)
-  // Fill: remaining shields, player-laser green so it reads against the outline.
-  ctx.fillStyle = BOLT_GLOW
-  ctx.shadowColor = BOLT_GLOW
-  ctx.fillRect(x + 1, y + 1, (barW - 2) * fill, HUD_METER_H - 2)
+  ctx.lineWidth = 1.5
+  ctx.beginPath()
+  // Top edge + the two vertical sides (no bottom edge).
+  ctx.moveTo(x0, yTop)
+  ctx.lineTo(x1, yTop)
+  ctx.moveTo(x0, yTop)
+  ctx.lineTo(x0, yBot)
+  ctx.moveTo(x1, yTop)
+  ctx.lineTo(x1, yBot)
+  // The centre chevron: bottom-left corner up to the apex (on the top edge,
+  // dead centre) and back down to the bottom-right corner.
+  ctx.moveTo(x0, yBot)
+  ctx.lineTo(apexX, yTop)
+  ctx.lineTo(x1, yBot)
+  // Tick marks: one gradation per shield above the first, lit only while that
+  // shield is still held.
+  for (let i = 1; i < STARTING_LIVES; i++) {
+    if (i >= state.lives) continue
+    const tx = x0 + (gaugeW / STARTING_LIVES) * i
+    ctx.moveTo(tx, yTop)
+    ctx.lineTo(tx, yTop + tickLen)
+  }
+  ctx.stroke()
   ctx.restore()
+
+  ctx.font = HUD_FONT
+  ctx.textAlign = 'center'
+  glowText(ctx, formatLives(state.lives), w / 2, yBot + 16, HUD_SHIELD_COLOR, 8)
+  glowText(ctx, 'SHIELD', w / 2, yBot + 34, HUD_SHIELD_COLOR, 8)
   ctx.shadowBlur = 0
 }
 
