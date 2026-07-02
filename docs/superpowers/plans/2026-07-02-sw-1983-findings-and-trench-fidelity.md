@@ -988,7 +988,7 @@ git commit -m "docs: trench fidelity live-playtest sign-off (absorbs 13-3 ACs)"
 
 ---
 
-- [ ] **Story 14-6 complete** — run `pf sprint story complete 14-6`
+- [x] **Story 14-6 complete** — run `pf sprint story complete 14-6`
 
 ## Self-review notes
 
