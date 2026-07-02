@@ -11,9 +11,17 @@
 // so the helper stays render-agnostic; the clamping guarantees the shell can
 // never over- or under-draw the meter from an out-of-range caller.
 
-/** The on-display score: a plain, non-negative integer string ("1250"). */
+/**
+ * The on-display score: comma-grouped thousands, e.g. "12,066" — findings
+ * ## HUD & framing cites `sub_761D` "Display score" drawing a 6-digit BCD
+ * panel from `$485C`, which reads ambiguously on its own (BCD digit COUNT
+ * doesn't say whether leading zeros are suppressed or commas inserted). A
+ * real cabinet screenshot resolves it directly: the live readout shows
+ * "SCORE / 12,066" and "SCORE / 60,681" — comma-grouped, no leading zeros
+ * (see the task-5 report for the source screenshots and pixel sampling).
+ */
 export function formatScore(points: number): string {
-  return Math.max(0, Math.floor(points)).toString()
+  return Math.max(0, Math.floor(points)).toLocaleString('en-US')
 }
 
 /** Remaining shields/lives as a non-negative digit string ("3"). */

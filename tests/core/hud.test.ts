@@ -24,8 +24,14 @@ import { describe, it, expect } from 'vitest'
 import { formatScore, formatLives, formatWave, formatLevel, formatShield } from '../../src/core/hud'
 
 describe('formatScore', () => {
-  it('renders a plain integer score string', () => {
-    expect(formatScore(1250)).toBe('1250')
+  // findings ## HUD & framing (`sub_761D` "Display score") cites a 6-digit BCD
+  // source, which read ambiguously as "no punctuation" — but a real cabinet
+  // screenshot (task-5 report cites the source) settles it: the live SCORE
+  // readout shows "12,066" and "60,681", comma-grouped with NO leading zeros.
+  // (The zero-padded fixed-width reading was tried and rejected — see the
+  // task-5 report's RED/GREEN history.)
+  it('groups thousands per the 1983 HUD (findings ## HUD & framing; verified against a cabinet screenshot)', () => {
+    expect(formatScore(12066)).toBe('12,066')
   })
 
   // Falsy-zero guard (TS checklist #4): a score of 0 must render "0", not "" —
@@ -35,8 +41,8 @@ describe('formatScore', () => {
     expect(formatScore(0)).toBe('0')
   })
 
-  it('renders large six-figure scores without separators', () => {
-    expect(formatScore(1000000)).toBe('1000000')
+  it('groups large scores past a million', () => {
+    expect(formatScore(1000000)).toBe('1,000,000')
   })
 
   // A score must never display a decimal point. Scores are integer by
@@ -44,7 +50,7 @@ describe('formatScore', () => {
   // must be robust to a fractional input rather than leaking "1250.9" onto the
   // cabinet.
   it('never leaks a decimal point onto the display', () => {
-    expect(formatScore(1250.9)).toMatch(/^\d+$/)
+    expect(formatScore(1250.9)).toMatch(/^[\d,]+$/)
   })
 })
 
