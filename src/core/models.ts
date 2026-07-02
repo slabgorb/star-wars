@@ -387,6 +387,66 @@ export const EXHAUST_PORT: Model3D = {
 }
 
 /**
+ * Trench wall turret — a squat wall-mounted emplacement (fidelity epic task 3;
+ * findings ## Trench catwalks, turrets & wall squares — `sub_6FD9` "Draws
+ * trench turrets"). No authentic vertex table is directly portable: the ROM's
+ * `off_7CC0` → `off_7Bxx` shape blobs are confirmed (type-byte,dx,dy) draw
+ * scripts where type 2 = "turret housing", but the extraction notes flag it
+ * uncertain whether those blobs are placement or silhouette data, and there is
+ * no recovered ROM↔world-unit scale to turn either into exact vertices (Open
+ * follow-ups #1/#3). Authored here as a simple box-housing + barrel silhouette
+ * consistent with that "housing" description; PROVISIONAL pending a dedicated
+ * shape-decode pass.
+ */
+export const TRENCH_TURRET: Model3D = {
+  name: 'Trench Turret',
+  vertices: [
+    [-30, 0, -30], [30, 0, -30], [30, 0, 30], [-30, 0, 30], // base
+    [-16, 44, -16], [16, 44, -16], [16, 44, 16], [-16, 44, 16], // cap
+    [0, 44, 0], [0, 72, 0], // barrel
+  ],
+  edges: [
+    [0, 1], [1, 2], [2, 3], [3, 0],
+    [4, 5], [5, 6], [6, 7], [7, 4],
+    [0, 4], [1, 5], [2, 6], [3, 7],
+    [8, 9],
+  ],
+}
+
+/**
+ * Trench wall square — the shootable wall panel (fidelity epic task 3;
+ * findings ## Trench catwalks, turrets & wall squares — `sub_720B` "Draws
+ * trench green squares"; scored via `byte_9850`). Authored as a flat panel
+ * rectangle; PROVISIONAL for the same reason as TRENCH_TURRET — no recovered
+ * exact ROM shape data (Open follow-ups #1/#3).
+ */
+export const TRENCH_SQUARE: Model3D = {
+  name: 'Trench Square',
+  vertices: [[-40, -40, 0], [40, -40, 0], [40, 40, 0], [-40, 40, 0]],
+  edges: [[0, 1], [1, 2], [2, 3], [3, 0]],
+}
+
+/**
+ * Trench catwalk — a girder spanning the channel, pure hazard (fidelity epic
+ * task 3; findings ## Trench catwalks, turrets & wall squares — `sub_72D5`
+ * "Draws trench catwalks"; type 1 = "catwalk cross-brace" in the ROM's shape
+ * encoding, echoed here as the end-cap struts). PROVISIONAL for the same
+ * reason as TRENCH_TURRET/TRENCH_SQUARE (Open follow-ups #1/#3).
+ */
+export const TRENCH_CATWALK: Model3D = {
+  name: 'Trench Catwalk',
+  vertices: [
+    [-256, -12, 0], [256, -12, 0], [256, 12, 0], [-256, 12, 0],
+    [-256, -12, -24], [256, -12, -24], [256, 12, -24], [-256, 12, -24],
+  ],
+  edges: [
+    [0, 1], [1, 2], [2, 3], [3, 0],
+    [4, 5], [5, 6], [6, 7], [7, 4],
+    [0, 4], [1, 5], [2, 6], [3, 7],
+  ],
+}
+
+/**
  * The Death Star BODY — the thing the space phase is attacking (story 11-7, ADR
  * 0002 part C). Unlike the disassembly-ported models, no authentic vertex table
  * exists for it, so it is generated procedurally in the pure core (the same
@@ -491,4 +551,7 @@ export const MODELS: readonly Model3D[] = [
   TRENCH,
   EXHAUST_PORT,
   DEATH_STAR,
+  TRENCH_TURRET,
+  TRENCH_SQUARE,
+  TRENCH_CATWALK,
 ]

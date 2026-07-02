@@ -73,6 +73,15 @@ export interface Turret {
   pos: Vec3
 }
 
+/** A trench wall/channel entity: turrets and squares are shootable for score;
+ *  catwalks are hazards (cockpit contact costs a shield). Scrolls with the
+ *  channel like the exhaust port. Fidelity epic (findings ## Trench catwalks,
+ *  turrets & wall squares). */
+export interface TrenchObstacle {
+  kind: 'turret' | 'square' | 'catwalk'
+  pos: Vec3
+}
+
 // --- Wave 1 gameplay constants ----------------------------------------------
 //
 // Two of these are AUTHENTIC, from Mitchell Gant's "Atari Star Wars Theory of
@@ -290,6 +299,11 @@ export interface GameState {
   /** The trench run's target (Wave 3): the exhaust port scrolling toward the
    * cockpit, or `null` when no run is active (space/surface, or destroyed). */
   exhaustPort: { pos: Vec3 } | null
+  /** Trench wall turrets/squares (shootable, scored) and catwalks (hazard) —
+   * seeded from TRENCH_OBSTACLE_STATIONS on entering the trench, scrolling
+   * toward the cockpit alongside the port; empty in the other phases (fidelity
+   * epic, findings ## Trench catwalks, turrets & wall squares). */
+  trenchObstacles: TrenchObstacle[]
   /** Enemy fireballs currently in flight. */
   enemyShots: Projectile[]
   /** True once the last shield is lost — the wave is over. */
@@ -325,6 +339,7 @@ export function initialState(seed = 1983): GameState {
     enemies: [],
     turrets: [],
     exhaustPort: null,
+    trenchObstacles: [],
     enemyShots: [],
     gameOver: false,
     fireCooldown: 0,
