@@ -152,6 +152,20 @@ export const ENEMY_SHOT_HIT_RADIUS = 90
 export const TIE_HIT_RADIUS = 250
 /** Hit sphere around the cockpit for enemy contact and fire. */
 export const COCKPIT_HIT_RADIUS = 80
+/**
+ * Contact sphere for a trench catwalk reaching the cockpit (story 14-7). A
+ * catwalk hangs at y=200 above the cockpit centreline and only its z advances as
+ * it scrolls, so its closest approach is sqrt(200² + 0²) = 200 units at z=0 —
+ * beyond COCKPIT_HIT_RADIUS (80), which is why the crash never fired. Its own
+ * radius must span that fixed vertical offset PLUS a margin: at exactly 200 the
+ * hit shell is the razor-thin z=0 plane, which the discrete ~8.3 u/frame scroll
+ * can skip on floating-point drift. 240 opens a ~16-frame window around z=0 while
+ * staying far below the ~2090-unit spawn distance, so the catwalk crashes as it
+ * passes the cockpit but never fires early downrange. Separate from
+ * COCKPIT_HIT_RADIUS so widening the catwalk's reach can't broaden every other
+ * cockpit hit-test (TIE/port/fire).
+ */
+export const CATWALK_HIT_RADIUS = 240
 
 // --- Wave 1 — TIE flight model (story 9-2) ----------------------------------
 //

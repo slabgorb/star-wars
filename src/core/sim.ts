@@ -31,6 +31,7 @@ import {
   FIREBALL_SCORE,
   TIE_HIT_RADIUS,
   COCKPIT_HIT_RADIUS,
+  CATWALK_HIT_RADIUS,
   SKIM_ALTITUDE,
   MIN_SKIM_ALTITUDE,
   ALTITUDE_RATE,
@@ -441,8 +442,11 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
       // Hazard check FIRST, before the despawn cutoff below: a catwalk starting
       // right at the cockpit's doorstep can scroll past z=0 in the same step
       // that carries it through the cockpit's hit sphere, and the crash must
-      // still register rather than being silently despawned.
-      if (collides(pos, COCKPIT, COCKPIT_HIT_RADIUS)) {
+      // still register rather than being silently despawned. Uses
+      // CATWALK_HIT_RADIUS, not COCKPIT_HIT_RADIUS: the catwalk hangs at y=200
+      // above the centreline, so an 80-unit cockpit sphere never reached it and
+      // the crash was dead code (story 14-7).
+      if (collides(pos, COCKPIT, CATWALK_HIT_RADIUS)) {
         crashedCatwalk = true
         events.push({ type: 'terrain-crash' })
         continue // crashed through it — removed
