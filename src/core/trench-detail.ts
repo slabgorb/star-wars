@@ -7,7 +7,7 @@
 // SEPARATE Model3D from trenchChannel so the 11-6 full-height-rung contract
 // stays intact; the shell strokes both with the same glow.
 
-import type { Vec3 } from './math3d'
+import type { Vec3 } from '@arcade/shared/math3d'
 import type { Model3D } from './models'
 import { TRENCH_HALF_W, TRENCH_WALL_H, TRENCH_FAR } from './trench-channel'
 

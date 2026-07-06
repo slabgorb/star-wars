@@ -20,7 +20,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { aimDirection, crosshairNdc, collides } from '../../src/core/gameRules'
-import { length, sub, type Vec3 } from '../../src/core/math3d'
+import { length, sub, type Vec3 } from '@arcade/shared/math3d'
 
 describe('Wave 1 — crosshair', () => {
   it('sits dead centre at rest', () => {

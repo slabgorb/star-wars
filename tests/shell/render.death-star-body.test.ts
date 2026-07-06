@@ -42,7 +42,7 @@ vi.mock('../../src/shell/wireframe', () => ({
 import { drawWireframe } from '../../src/shell/wireframe'
 import { render } from '../../src/shell/render'
 import { initialState, type GameState, type Enemy } from '../../src/core/state'
-import { IDENTITY } from '../../src/core/math3d'
+import { IDENTITY } from '@arcade/shared/math3d'
 
 const W = 800
 const H = 600

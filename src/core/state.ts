@@ -9,7 +9,7 @@
 // no DOM, no time, no randomness. The 3D math that moves and hits them lives in
 // math3d.ts (the Math Box) and the rule functions in gameRules.ts.
 
-import type { Vec3, Mat4 } from './math3d'
+import type { Vec3, Mat4 } from '@arcade/shared/math3d'
 import type { GameEvent } from './events'
 import { createRng, type Rng } from './rng'
 

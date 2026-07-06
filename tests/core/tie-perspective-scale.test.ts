@@ -40,7 +40,7 @@
 // Everything obeys the sacred boundary: pure core, no DOM/time/randomness.
 
 import { describe, it, expect } from 'vitest'
-import { perspective, transform } from '../../src/core/math3d'
+import { perspective, transform } from '@arcade/shared/math3d'
 import { modelBounds } from '../../src/core/modelView'
 import { TIE_FIGHTER } from '../../src/core/models'
 import { FOV_Y } from '../../src/core/gameRules'

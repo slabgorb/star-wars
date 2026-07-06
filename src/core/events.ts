@@ -13,7 +13,7 @@
 
 // `import type` ⇒ a compile-time-only reference, so no runtime import cycle with
 // state.ts (which imports `GameEvent` back for the `events` channel) or math3d.ts.
-import type { Vec3 } from './math3d'
+import type { Vec3 } from '@arcade/shared/math3d'
 import type { Phase } from './state'
 
 // What an `enemy-death` destroyed: a space TIE fighter or a surface laser turret.

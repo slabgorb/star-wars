@@ -34,7 +34,7 @@ import {
   viewMatrix, // NEW (story 11-2)
   type Mat4,
   type Vec3,
-} from '../../src/core/math3d'
+} from '@arcade/shared/math3d'
 
 const dist = (a: Vec3, b: Vec3): number => length(sub(a, b))
 

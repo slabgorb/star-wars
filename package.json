@@ -11,6 +11,9 @@
     "test:watch": "vitest",
     "lint": "tsc --noEmit"
   },
+  "dependencies": {
+    "@arcade/shared": "github:slabgorb/arcade-shared#feat/SH-2-extract-math3d"
+  },
   "devDependencies": {
     "typescript": "^5.4.0",
     "vite": "^8.1.0",

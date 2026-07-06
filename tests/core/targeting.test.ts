@@ -38,7 +38,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { isLocked, lockedEnemy, LOCK_RADIUS_NDC, FOV_Y } from '../../src/core/gameRules'
-import { perspective, transform, IDENTITY, type Vec3 } from '../../src/core/math3d'
+import { perspective, transform, IDENTITY, type Vec3 } from '@arcade/shared/math3d'
 import { initialState, type GameState, type Enemy } from '../../src/core/state'
 
 // The projection the renderer paints the scene with (render.ts: 60° vertical FOV).

@@ -16,7 +16,7 @@
 // The shell only strokes the returned Model3D through drawWireframe; the camera
 // skims just above the floor.
 
-import type { Vec3 } from './math3d'
+import type { Vec3 } from '@arcade/shared/math3d'
 import type { Model3D } from './models'
 
 /** Half the channel width: the floor rails and the two side walls sit at

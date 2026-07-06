@@ -51,7 +51,7 @@ import {
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
 import type { FireballDestroyedEvent } from '../../src/core/events'
-import { IDENTITY, type Vec3 } from '../../src/core/math3d'
+import { IDENTITY, type Vec3 } from '@arcade/shared/math3d'
 
 // A point well downrange of the cockpit: far outside COCKPIT_HIT_RADIUS (80),
 // so anything destroyed here is destroyed "before it reaches the cockpit" and

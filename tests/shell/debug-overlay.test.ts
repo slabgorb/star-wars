@@ -53,7 +53,7 @@ import { frustumCorners, projectBounds, drawDebugOverlay } from '../../src/shell
 import { render } from '../../src/shell/render'
 import { NEAR, FAR } from '../../src/shell/wireframe'
 import { initialState, type GameState, type Enemy } from '../../src/core/state'
-import { perspective, transform, IDENTITY, type Mat4, type Vec3 } from '../../src/core/math3d'
+import { perspective, transform, IDENTITY, type Mat4, type Vec3 } from '@arcade/shared/math3d'
 
 const W = 800
 const H = 600

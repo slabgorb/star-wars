@@ -30,7 +30,7 @@ import {
 } from '../../src/core/state'
 import { DEATH_STAR_SURFACE } from '../../src/core/models'
 import { FOV_Y } from '../../src/core/gameRules'
-import { perspective, transform, add, type Vec3 } from '../../src/core/math3d'
+import { perspective, transform, add, type Vec3 } from '@arcade/shared/math3d'
 import { project, NEAR, FAR } from '../../src/shell/wireframe'
 import * as RenderModule from '../../src/shell/render'
 

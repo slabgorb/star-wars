@@ -9,7 +9,7 @@
 import { initialState, EXHAUST_PORT_DISTANCE, type GameState } from './state'
 import { enterPhase } from './sim'
 import { spawnTrenchObstacles } from './trench-obstacles'
-import type { Vec3 } from './math3d'
+import type { Vec3 } from '@arcade/shared/math3d'
 
 export interface ScenePreset {
   /** Stable slug, e.g. 'mid-run'. */

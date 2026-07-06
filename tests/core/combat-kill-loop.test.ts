@@ -42,7 +42,7 @@ import {
 import { stepGame } from '../../src/core/sim'
 import type { Input } from '../../src/core/input'
 import { aimDirection, crosshairNdc } from '../../src/core/gameRules'
-import { perspective, transform, IDENTITY, type Vec3 } from '../../src/core/math3d'
+import { perspective, transform, IDENTITY, type Vec3 } from '@arcade/shared/math3d'
 
 const DT = 1 / 60
 

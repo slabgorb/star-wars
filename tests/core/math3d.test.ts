@@ -9,7 +9,7 @@ import {
   dot,
   normalize,
   length,
-} from '../../src/core/math3d'
+} from '@arcade/shared/math3d'
 
 describe('math3d — the Math Box', () => {
   it('identity leaves a point unchanged', () => {

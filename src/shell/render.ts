@@ -44,7 +44,7 @@ import {
   IDENTITY,
   type Mat4,
   type Vec3,
-} from '../core/math3d'
+} from '@arcade/shared/math3d'
 import { project, drawWireframe, GLOW_FOR, NEAR, FAR } from './wireframe'
 
 const GLOW = '#00e5ff' // cockpit cyan

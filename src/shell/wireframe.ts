@@ -8,7 +8,7 @@
 // Render/shell-only (touches a canvas context). The pure core never imports it.
 
 import type { Model3D } from '../core/models'
-import { transform, type Mat4, type Vec3 } from '../core/math3d'
+import { transform, type Mat4, type Vec3 } from '@arcade/shared/math3d'
 
 // Camera clip planes — shared by project() and any perspective() the caller builds.
 // FAR encompasses the farthest spawn: TIEs appear at TIE_SPAWN_DISTANCE (8000,

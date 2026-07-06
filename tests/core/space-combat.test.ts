@@ -42,7 +42,7 @@ import {
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
-import { dot, sub, type Vec3 } from '../../src/core/math3d'
+import { dot, sub, type Vec3 } from '@arcade/shared/math3d'
 
 /** Trigger held, yoke centred. */
 const FIRE: Input = { aimX: 0, aimY: 0, fire: true }

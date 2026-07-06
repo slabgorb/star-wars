@@ -66,7 +66,7 @@ import {
   rotationZ,
   lookRotation,
   type Vec3,
-} from './math3d'
+} from '@arcade/shared/math3d'
 import { aimDirection, collides, waveParams } from './gameRules'
 import { nextFloat, nextInt, type Rng } from './rng'
 import {
