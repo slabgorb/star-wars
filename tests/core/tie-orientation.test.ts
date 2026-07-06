@@ -28,7 +28,7 @@ import {
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
-import { IDENTITY, type Vec3, type Mat4 } from '../../src/core/math3d'
+import { IDENTITY, type Vec3, type Mat4 } from '@arcade/shared/math3d'
 
 /** A complete TIE fixture at a chosen position. `orient` is a placeholder the
  *  sim must overwrite each step; it is seeded to IDENTITY so an unimplemented

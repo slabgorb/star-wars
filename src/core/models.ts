@@ -27,7 +27,7 @@
 //
 // PURE data. No DOM, no time, no randomness — safe for the deterministic core.
 
-import type { Vec3 } from './math3d'
+import type { Vec3 } from '@arcade/shared/math3d'
 
 export interface Model3D {
   readonly name: string

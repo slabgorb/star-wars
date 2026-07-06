@@ -14,7 +14,7 @@
 import { MODELS } from '../core/models'
 import {
   perspective, multiply, rotationX, rotationY, translation, IDENTITY, type Mat4,
-} from '../core/math3d'
+} from '@arcade/shared/math3d'
 import { drawWireframe, GLOW_FOR, DEFAULT_GLOW, NEAR, FAR } from '../shell/wireframe'
 import { SURFACE_ORIENT } from '../shell/render'
 import { modelBounds, fitDistance, cellRects } from '../core/modelView'

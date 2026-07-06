@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { drawWireframe, project, GLOW_FOR, NEAR } from '../../src/shell/wireframe'
-import { perspective, transform, translation, type Mat4, type Vec3 } from '../../src/core/math3d'
+import { perspective, transform, translation, type Mat4, type Vec3 } from '@arcade/shared/math3d'
 import { CUBE, type Model3D } from '../../src/core/models'
 
 // One projection shared by every case: 60° vertical FOV, square viewport, near=NEAR.

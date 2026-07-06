@@ -5,7 +5,7 @@
 // math routes through the Math Box (math3d), never ad-hoc trig, so there is a
 // single source of 3D truth.
 
-import { length, sub, normalize, perspective, transform, type Vec3 } from './math3d'
+import { length, sub, normalize, perspective, transform, type Vec3 } from '@arcade/shared/math3d'
 import {
   SPAWN_INTERVAL,
   ENEMY_SPEED,

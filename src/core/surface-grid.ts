@@ -14,7 +14,7 @@
 // counts, ±X symmetry, width/length envelope, scroll recycling). The shell only
 // strokes the returned Model3D through drawWireframe and lifts the camera.
 
-import type { Vec3 } from './math3d'
+import type { Vec3 } from '@arcade/shared/math3d'
 import type { Model3D } from './models'
 
 /** Lateral spacing between the longitudinal (parallel-to-−Z) lines. */

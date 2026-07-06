@@ -34,7 +34,7 @@ import {
 } from '../../src/core/state'
 import { enterPhase, stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
-import type { Vec3 } from '../../src/core/math3d'
+import type { Vec3 } from '@arcade/shared/math3d'
 
 // Minimal fixtures — stepGame/enterPhase only read `.pos` off these, and the jump
 // scrubs them anyway. Matches the house style in phase-progression.test.ts.

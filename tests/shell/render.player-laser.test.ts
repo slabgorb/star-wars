@@ -22,7 +22,7 @@
 import { describe, it, expect } from 'vitest'
 import { render } from '../../src/shell/render'
 import { initialState, type GameState, type Projectile } from '../../src/core/state'
-import type { Vec3 } from '../../src/core/math3d'
+import type { Vec3 } from '@arcade/shared/math3d'
 
 interface Seg {
   x1: number

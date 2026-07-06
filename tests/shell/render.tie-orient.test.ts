@@ -18,7 +18,7 @@
 import { describe, it, expect } from 'vitest'
 import { render } from '../../src/shell/render'
 import { initialState, type GameState, type Enemy } from '../../src/core/state'
-import { IDENTITY, rotationY, type Mat4 } from '../../src/core/math3d'
+import { IDENTITY, rotationY, type Mat4 } from '@arcade/shared/math3d'
 
 /** Minimal canvas-context stub recording every stroked segment, so we can assert
  *  what render() draws without a real DOM canvas (vitest runs in node). Mirrors

@@ -5,7 +5,7 @@
 // no time, no randomness — safe under the core's purity rule and unit-tested.
 
 import type { Model3D } from './models'
-import type { Vec3 } from './math3d'
+import type { Vec3 } from '@arcade/shared/math3d'
 
 /** Bounding sphere of a model's vertices: AABB centre + farthest-vertex radius. */
 export function modelBounds(model: Model3D): { center: Vec3; radius: number } {

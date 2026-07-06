@@ -44,7 +44,7 @@ import {
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
-import { normalize, sub, scale, length, dot, type Vec3, type Mat4 } from '../../src/core/math3d'
+import { normalize, sub, scale, length, dot, type Vec3, type Mat4 } from '@arcade/shared/math3d'
 
 const COCKPIT: Vec3 = [0, 0, 0]
 const DT = 0.05

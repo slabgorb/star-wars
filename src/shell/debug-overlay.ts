@@ -38,7 +38,7 @@ import {
   scaling,
   type Mat4,
   type Vec3,
-} from '../core/math3d'
+} from '@arcade/shared/math3d'
 import { project, drawWireframe, NEAR, FAR } from './wireframe'
 import {
   cameraView,
