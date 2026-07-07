@@ -114,8 +114,15 @@ export const WAVE_SIZE = 3
 // Internal tuning (not part of the test contract, but kept here so all the
 // space-combat magic numbers live in one place the reviewer can scan).
 
-/** Player bolt speed (units/second), fired down the aim direction. */
-export const PROJECTILE_SPEED = 900
+/** Player bolt speed (units/second), fired down the aim direction. A bolt's REACH
+ * is PROJECTILE_SPEED × PROJECTILE_TTL, and it must clear the whole TIE approach
+ * volume: fighters spawn at TIE_SPAWN_DISTANCE (8000, corner ~8015 with
+ * SPAWN_SPREAD) and bear in, so a bolt that dies short leaves inbound TIEs
+ * unhittable until they close to point-blank — the sw2-1 defect. At 5000 the reach
+ * is 10000 (≥ the 8015 worst-case spawn with margin), so the player can engage a
+ * TIE the moment it appears. It also restores a faithful FEEL: the old 900 was
+ * slower than the 1300-unit TIE approach — a laser the fighters outran. */
+export const PROJECTILE_SPEED = 5000
 /** Distance ahead (−Z) at which surface turrets appear, and the anchor the Death
  * Star surface is placed against. NOTE: TIEs no longer use this — they spawn at
  * TIE_SPAWN_DISTANCE (story 9-7). Kept at the original value so the surface phase
