@@ -69,6 +69,7 @@ const ALL_EVENTS: GameEvent[] = [
   { type: 'fireball-destroyed', pos: [0, 0, -400] },
   { type: 'trench-obstacle-destroyed', kind: 'turret' },
   { type: 'force-bonus', amount: 5000 },
+  { type: 'speech', line: 'useTheForceLuke' }, // sw2-5: speech is now a core event
 ]
 
 // Exhaustive narrowing over the union: the `never` default fails to compile if a
@@ -87,6 +88,7 @@ function discriminant(e: GameEvent): string {
     case 'fireball-destroyed': return `fb@${e.pos.join(',')}`
     case 'trench-obstacle-destroyed': return `obs-${e.kind}`
     case 'force-bonus': return `force@${e.amount}`
+    case 'speech': return `speech:${e.line}`
     default: {
       const _exhaustive: never = e
       return _exhaustive
@@ -95,17 +97,18 @@ function discriminant(e: GameEvent): string {
 }
 
 describe('GameEvent — discriminated union (AC1)', () => {
-  it('covers ten distinct, documented event types', () => {
-    // Ten: the original eight (story 8-7/8-18) plus 'trench-obstacle-destroyed'
-    // (fidelity epic task 3) and 'force-bonus' (fidelity epic task 4 — findings
-    // ## Exhaust port & run outcome).
+  it('covers eleven distinct, documented event types', () => {
+    // Eleven: the original eight (story 8-7/8-18), 'trench-obstacle-destroyed'
+    // (fidelity epic task 3), 'force-bonus' (fidelity epic task 4 — findings
+    // ## Exhaust port & run outcome), and 'speech' (sw2-5 — voice lines are now
+    // core-cued events, not shell-derived).
     const kinds = ALL_EVENTS.map((e) => e.type)
-    expect(new Set(kinds).size).toBe(10)
+    expect(new Set(kinds).size).toBe(11)
     expect(new Set(kinds)).toEqual(
       new Set([
         'fire', 'enemy-fire', 'enemy-death', 'player-death',
         'level-clear', 'player-spawn', 'terrain-crash', 'fireball-destroyed',
-        'trench-obstacle-destroyed', 'force-bonus',
+        'trench-obstacle-destroyed', 'force-bonus', 'speech',
       ]),
     )
   })
