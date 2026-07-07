@@ -424,7 +424,6 @@ function drawMuzzleFlash(
   ctx.shadowBlur = 0
 }
 
-/** A small glowing '+' for a bolt in flight. */
 // A fireball is drawn as this many-sided ring — enough facets to read as round,
 // not a polygon. Two concentric rings (outer + inner) give it body so it reads as
 // a glowing ball rather than a hollow circle.
