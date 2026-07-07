@@ -17,12 +17,12 @@ import { createLoop } from './shell/loop'
 import { createAudioEngine } from './shell/audio'
 import { render } from './shell/render'
 import { drawDebugOverlay } from './shell/debug-overlay'
+import { loadVectorFont } from './shell/font'
 
 // star-wars records the `wave` reached; the shared factory binds load/save to the
 // 'star-wars-high-scores' localStorage key and validates each row's finite score +
 // wave (the lobby reads the same key + shape — SH-4).
 const highScoreStorage = makeHighScoreStorage('star-wars', makeHighScoreRowGuard('wave'))
-import { loadVectorFont } from './shell/font'
 
 // Kick off the HUD vector font load. Best-effort and non-blocking: the loop
 // keeps drawing with the fallback font and picks up Vector Battle once it lands.
