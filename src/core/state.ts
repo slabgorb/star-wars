@@ -11,7 +11,7 @@
 
 import type { Vec3, Mat4 } from '@arcade/shared/math3d'
 import type { GameEvent } from './events'
-import { createRng, type Rng } from './rng'
+import { createRng, type Rng } from '@arcade/shared/rng'
 
 /** The three phases of an attack run, in order. */
 export type Phase = 'space' | 'surface' | 'trench'

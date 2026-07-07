@@ -68,7 +68,7 @@ import {
   type Vec3,
 } from '@arcade/shared/math3d'
 import { aimDirection, collides, waveParams } from './gameRules'
-import { nextFloat, nextInt, type Rng } from './rng'
+import { nextFloat, nextInt, type Rng } from '@arcade/shared/rng'
 import {
   spawnTrenchObstacles,
   TRENCH_TURRET_SCORE,
