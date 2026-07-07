@@ -159,7 +159,9 @@ describe('speech catalogue — all 23 cabinet lines listed (sw2-5 AC1)', () => {
   })
 
   it('SPEECH declares an R2 `.wav` for every one of the 23 authentic lines (AC1)', () => {
-    const files = new Set(Object.values(SPEECH))
+    // `SPEECH as const` narrows its values to literal filenames; widen to string
+    // so a scraped `${name}.wav` (plain string) is a valid `.has()` argument.
+    const files = new Set<string>(Object.values(SPEECH))
     for (const name of BAKED_NAMES) {
       expect(files.has(`${name}.wav`)).toBe(true) // e.g. red_five_standing_by.wav
     }

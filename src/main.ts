@@ -153,6 +153,12 @@ const loop = createLoop(
           // the same no-new-asset pattern as trench-obstacle-destroyed.
           audio.play('levelClear')
           break
+        case 'speech':
+          // A voice line the core cued this frame (sw2-5). One generic arm speaks
+          // every current AND future line — the core owns WHEN, the shell owns HOW.
+          // speak() lazily loads the line and is a no-op until the gesture unlocks.
+          audio.speak(event.line)
+          break
         default: {
           // Exhaustiveness guard: a new GameEvent variant added without an arm
           // above fails to type-check here instead of being silently dropped.
@@ -161,13 +167,9 @@ const loop = createLoop(
         }
       }
     }
-    // Wave-5 speech (story 8-7): Obi-Wan's "Use the Force, Luke" cues the trench
-    // approach — the climactic moment it plays in the film and the cabinet. Fire
-    // it once on the space/surface -> trench edge, during an active run. speak()
-    // lazily loads the line and is a no-op until the audio gesture unlocks it.
-    if (state.mode === 'playing' && prev.phase !== 'trench' && state.phase === 'trench') {
-      audio.speak('useTheForceLuke')
-    }
+    // Speech is now core-driven (sw2-5): the pump's `case 'speech'` above speaks
+    // each cued line — including "Use the Force, Luke" on the trench edge — so no
+    // line is hard-wired here any more.
     // On the playing -> gameover edge, bank a qualifying score and persist it.
     // (Initials entry is a follow-up; runs record under a default tag for now.)
     if (prev.mode === 'playing' && state.mode === 'gameover') {

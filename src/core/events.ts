@@ -95,6 +95,28 @@ export interface ForceBonusEvent {
   amount: number
 }
 
+// A scripted TMS5220 voice line the CORE cues at a gameplay moment (sw2-5). A
+// string-literal union — not `string` — so the shell's event->speak pump stays
+// exhaustive and a typo is a type error, not a silent miss. Only lines with a
+// reachable trigger in the current sim are listed; the shell's SPEECH map holds
+// the full 23-line cabinet catalogue (the other 19 are deferred — they need
+// mechanics the sim lacks: R2 damage, Vader-on-tail, wingmen). Each id here is a
+// key in that catalogue, so `speak(event.line)` type-checks (SpeechLine ⊆ SpeechName).
+export type SpeechLine =
+  | 'redFiveStandingBy' // run start — Luke reports in
+  | 'lookAtTheSizeOfThatThing' // entering the Death Star surface
+  | 'useTheForceLuke' // entering the trench (was shell-derived before sw2-5)
+  | 'greatShotKidThatWasOneInAMillion' // the exhaust-port kill — the winning shot
+
+// A voice line was cued this frame. Speech is DATA like every other event: the
+// core decides WHEN a line plays (deterministic, testable), the shell decides HOW
+// (the R2 LPC bake). Before sw2-5 only "Use the Force, Luke" fired, and it was
+// derived in the shell off a phase edge; now every cue is a first-class event.
+export interface SpeechEvent {
+  type: 'speech'
+  line: SpeechLine
+}
+
 export type GameEvent =
   | FireEvent
   | EnemyFireEvent
@@ -106,3 +128,4 @@ export type GameEvent =
   | FireballDestroyedEvent
   | TrenchObstacleDestroyedEvent
   | ForceBonusEvent
+  | SpeechEvent
