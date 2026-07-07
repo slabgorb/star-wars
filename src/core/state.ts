@@ -150,11 +150,14 @@ export const ENEMY_SHOT_TTL = 6
 export const ENEMY_FIRE_INTERVAL = 1
 /** Maximum enemy fireballs on screen at once — authentic "6 fireball slots". */
 export const MAX_FIREBALL_SLOTS = 6
-/** Hit sphere around an enemy fireball for player bolts (story 8-18). Smaller
- * than a TIE — a fireball is a small target — but forgiving enough that
- * intercepting incoming fire is an achievable skill, not pixel-perfect aim.
- * Authentic-FEEL, single-sourced like the other Wave-1 radii. */
-export const ENEMY_SHOT_HIT_RADIUS = 90
+/** Hit sphere around an enemy fireball for player bolts. A LARGE target (story
+ * sw2-2): the fireball renders as a big glowing orb, so it must be a big thing to
+ * shoot — what you see is what you shoot. Sized at 0.6× the TIE sphere — smaller
+ * than a fighter, but far bigger than the old 90u speck that read as a HUD tick
+ * and let real-speed bolts (PROJECTILE_SPEED 5000, ~83 u/frame) graze past
+ * between frames (the sw2-1 tunneling finding). render.ts draws the orb at this
+ * same radius. Authentic-FEEL, single-sourced like the other Wave-1 radii. */
+export const ENEMY_SHOT_HIT_RADIUS = 150
 /** Hit sphere around a TIE for player bolts (covers the model extent). */
 export const TIE_HIT_RADIUS = 250
 /** Hit sphere around the cockpit for enemy contact and fire. */

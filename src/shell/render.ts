@@ -10,6 +10,7 @@ import {
   EXHAUST_PORT_DISTANCE,
   PROJECTILE_TTL,
   ENEMY_SHOT_TTL,
+  ENEMY_SHOT_HIT_RADIUS,
   SPAWN_DISTANCE,
   SPACE_WAVE_QUOTA,
   STARTING_LIVES,
@@ -298,7 +299,7 @@ export function render(
   }
   // Bolts and fireballs ride the same camera as the models (transform through the
   // view), so they stay seated in the scene when the eye is lifted (surface/trench).
-  for (const s of state.enemyShots) drawSpark(ctx, transform(view, s.pos), proj, w, h, FIRE_GLOW, 6)
+  for (const s of state.enemyShots) drawFireball(ctx, transform(view, s.pos), proj, w, h)
 
   // The framing layer (story 8-6): the playing HUD during a run, the attract/title
   // screen at idle, the game-over board after. The 3D scene above renders behind
@@ -424,27 +425,48 @@ function drawMuzzleFlash(
 }
 
 /** A small glowing '+' for a bolt in flight. */
-function drawSpark(
-  ctx: CanvasRenderingContext2D,
-  pos: Vec3,
-  proj: Mat4,
-  w: number,
-  h: number,
-  color: string,
-  size: number,
-): void {
-  const p = project(pos, proj, w, h)
-  if (!p) return
+// A fireball is drawn as this many-sided ring — enough facets to read as round,
+// not a polygon. Two concentric rings (outer + inner) give it body so it reads as
+// a glowing ball rather than a hollow circle.
+const FIREBALL_FACETS = 14
+const FIREBALL_INNER = 0.55
+
+/**
+ * An enemy fireball as a large, round, glowing amber orb (story sw2-2). A
+ * billboarded ring facing the cockpit, sized in WORLD units by the same
+ * ENEMY_SHOT_HIT_RADIUS the sim uses to shoot it down — what you see is what you
+ * shoot. It projects like any 3D body (`camPos` is already view-space), so a near
+ * fireball swells and a distant one shrinks, replacing the old fixed 6px '+'
+ * spark that read as a HUD tick at any depth.
+ *
+ * Drawn as CLOSED perimeter polygons — every stroke lies on a ring, none radiate
+ * from the centre — so it is never mistaken for the muzzle starburst (story 9-6),
+ * whose rays anchor AT the projected point.
+ */
+function drawFireball(ctx: CanvasRenderingContext2D, camPos: Vec3, proj: Mat4, w: number, h: number): void {
+  const c = project(camPos, proj, w, h)
+  if (!c) return
+  // Screen radius: project a point one body-radius to the side in view space, so
+  // the orb scales with depth under the same perspective the whole scene uses.
+  const edge = project([camPos[0] + ENEMY_SHOT_HIT_RADIUS, camPos[1], camPos[2]], proj, w, h)
+  if (!edge) return
+  const sr = Math.hypot(edge[0] - c[0], edge[1] - c[1])
   ctx.lineWidth = 2
-  ctx.strokeStyle = color
-  ctx.shadowColor = color
+  ctx.strokeStyle = FIRE_GLOW
+  ctx.shadowColor = FIRE_GLOW
   ctx.shadowBlur = 12
-  ctx.beginPath()
-  ctx.moveTo(p[0] - size, p[1])
-  ctx.lineTo(p[0] + size, p[1])
-  ctx.moveTo(p[0], p[1] - size)
-  ctx.lineTo(p[0], p[1] + size)
-  ctx.stroke()
+  for (const scale of [1, FIREBALL_INNER]) {
+    const r = sr * scale
+    ctx.beginPath()
+    for (let i = 0; i <= FIREBALL_FACETS; i++) {
+      const a = (i / FIREBALL_FACETS) * Math.PI * 2
+      const x = c[0] + r * Math.cos(a)
+      const y = c[1] + r * Math.sin(a)
+      if (i === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    }
+    ctx.stroke()
+  }
   ctx.shadowBlur = 0
 }
 
