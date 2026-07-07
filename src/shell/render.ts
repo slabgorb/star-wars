@@ -18,7 +18,7 @@ import {
   FORCE_BONUS,
   type GameState,
 } from '../core/state'
-import type { HighScoreTable } from '../core/highscore'
+import type { HighScoreTable } from '@arcade/shared/highscore'
 import { formatScore, formatLives, formatWave } from '../core/hud'
 import {
   TIE_FIGHTER,
@@ -216,7 +216,7 @@ export function render(
   state: GameState,
   w: number,
   h: number,
-  highScores: HighScoreTable = [],
+  highScores: HighScoreTable<'wave'> = [],
 ): void {
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, w, h)
@@ -746,7 +746,7 @@ function glowLine(
 /** The attract/title screen: the marquee, a start prompt, and the high-score board. */
 function drawAttract(
   ctx: CanvasRenderingContext2D,
-  highScores: HighScoreTable,
+  highScores: HighScoreTable<'wave'>,
   w: number,
   h: number,
 ): void {
@@ -770,7 +770,7 @@ function drawAttract(
 function drawGameOver(
   ctx: CanvasRenderingContext2D,
   state: GameState,
-  highScores: HighScoreTable,
+  highScores: HighScoreTable<'wave'>,
   w: number,
   h: number,
 ): void {
@@ -794,7 +794,7 @@ function drawGameOver(
 /** The local high-score ladder (descending), shared by the framing screens. */
 function drawHighScoreBoard(
   ctx: CanvasRenderingContext2D,
-  highScores: HighScoreTable,
+  highScores: HighScoreTable<'wave'>,
   w: number,
   h: number,
 ): void {

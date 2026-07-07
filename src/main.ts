@@ -6,13 +6,22 @@
 
 import { initialState, type GameState, type Phase } from './core/state'
 import { stepGame, enterPhase } from './core/sim'
-import { qualifiesForHighScore, insertHighScore } from './core/highscore'
+import {
+  qualifiesForHighScore,
+  insertHighScore,
+  makeHighScoreStorage,
+  makeHighScoreRowGuard,
+} from '@arcade/shared/highscore'
 import { createInputController } from './shell/input'
 import { createLoop } from './shell/loop'
 import { createAudioEngine } from './shell/audio'
 import { render } from './shell/render'
 import { drawDebugOverlay } from './shell/debug-overlay'
-import { loadHighScores, saveHighScores } from './shell/storage'
+
+// star-wars records the `wave` reached; the shared factory binds load/save to the
+// 'star-wars-high-scores' localStorage key and validates each row's finite score +
+// wave (the lobby reads the same key + shape — SH-4).
+const highScoreStorage = makeHighScoreStorage('star-wars', makeHighScoreRowGuard('wave'))
 import { loadVectorFont } from './shell/font'
 
 // Kick off the HUD vector font load. Best-effort and non-blocking: the loop
@@ -54,7 +63,7 @@ window.addEventListener('keydown', unlockAudio)
 // pure core's initialState() is a fresh PLAYING run; the shell frames it.
 let state: GameState = { ...initialState(), mode: 'attract' }
 // Local high scores, loaded once and kept in the shell (IO, not simulation).
-let highScores = loadHighScores()
+let highScores = highScoreStorage.load()
 
 // Dev-only phase-jump (story 11-4): jump the run straight to a phase to eyeball
 // its scene — the surface grid (11-5) / the trench channel (11-6) — without
@@ -168,7 +177,7 @@ const loop = createLoop(
           score: state.score,
           wave: state.wave,
         })
-        saveHighScores(highScores)
+        highScoreStorage.save(highScores)
       }
     }
   },
