@@ -67,10 +67,16 @@ export interface Enemy {
   fireCooldown?: number
 }
 
-/** A laser turret standing on the Death Star surface (Wave 2). World space. */
+/** A tall tower standing on the Death Star surface (Wave 2). World space. */
 export interface Turret {
-  /** World-space position (y ≈ 0, on the floor). The hit-test reads this. */
+  /** World-space position of the tower BASE (y ≈ 0, on the floor). The hit-test
+   * reads this; the fireball launches from TOWER_HEIGHT above it (the cube top). */
   pos: Vec3
+  /** Seconds since this tower rose (Story sw2-3). A tower holds its fire for
+   * TOWER_FIRE_GRACE after it appears so round-1 firing is a readable beat, not
+   * instant. Optional — hand-placed `{ pos }` fixtures omit it and are treated as
+   * a fresh tower (age 0) via `?? 0`. */
+  age?: number
 }
 
 /** A trench wall/channel entity: turrets and squares are shootable for score;
@@ -244,6 +250,16 @@ export const TURRET_SPAWN_INTERVAL = 1.5
 export const MAX_TURRETS = 4
 /** Hit sphere around a turret for player bolts. */
 export const TURRET_HIT_RADIUS = 200
+/** Elevation of a tower's yellow cube top above its floor base (Story sw2-3).
+ * The tower's gun is the cube on top, so its fireballs launch from world
+ * y = TOWER_HEIGHT — not from the y=0 floor like a grounded turret. Matches the
+ * SURFACE_TOWER model's peak, so the shot erupts WYSIWYG from the drawn cube. */
+export const TOWER_HEIGHT = 96
+/** Grace window (seconds) a freshly-risen tower holds fire before its first shot
+ * (Story sw2-3). Turns round-1 firing into a readable reaction beat instead of a
+ * tower that fires the instant it appears. Kept well under the ~2s a tower dwells
+ * on screen (SPAWN_DISTANCE / TURRET_SCROLL_SPEED) so it still fires in time. */
+export const TOWER_FIRE_GRACE = 0.75
 
 // Internal tuning (not part of the test contract).
 

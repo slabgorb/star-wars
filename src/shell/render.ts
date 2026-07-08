@@ -25,6 +25,7 @@ import {
   DEATH_STAR_SURFACE,
   DEATH_STAR,
   SURFACE_TOWER,
+  TOWER_CUBE,
   EXHAUST_PORT,
   TRENCH_TURRET,
   TRENCH_SQUARE,
@@ -50,7 +51,8 @@ import { project, drawWireframe, GLOW_FOR, NEAR, FAR } from './wireframe'
 
 const GLOW = '#00e5ff' // cockpit cyan
 const TIE_GLOW = GLOW_FOR['TIE Fighter'] // enemy green (shared)
-const TURRET_GLOW = GLOW_FOR['Surface Tower'] // surface turret red (shared)
+const TURRET_GLOW = GLOW_FOR['Surface Tower'] // surface tower red body (shared)
+const CUBE_GLOW = '#ffd60a' // tower yellow cube top (sw2-3)
 const SURFACE_GLOW = GLOW_FOR['Death Star Surface'] // death star steel (shared)
 const DEATH_STAR_GLOW = GLOW_FOR['Death Star'] // death star body hull (shared)
 const BOLT_GLOW = '#9dff00' // player laser green
@@ -235,10 +237,15 @@ export function render(
     // camera (lifted to the ship's altitude) is the only transform.
     drawWireframe(ctx, surfaceGrid(state.surfaceScrollZ), view, proj, w, h, SURFACE_GLOW)
     for (const tu of state.turrets) {
-      // Turrets stand on the surface at their TRUE world Y (≈ 0). The camera lifts
-      // floor and turrets together, so they sit ON the floor as the ship climbs —
-      // the per-turret altitude drop (the 8-4 reconcile) is gone, the camera owns it.
-      drawWireframe(ctx, SURFACE_TOWER, multiply(view, modelMatrix(tu.pos, TOWER_ORIENT)), proj, w, h, TURRET_GLOW)
+      // Towers stand on the surface at their TRUE world Y (base ≈ 0). The camera
+      // lifts floor and towers together, so they sit ON the floor as the ship
+      // climbs — the per-turret altitude drop (the 8-4 reconcile) is gone, the
+      // camera owns it. The red body carries a yellow CUBE TOP (sw2-3) — the
+      // tower's gun, where its fireballs erupt — so it reads as a tall tower, not
+      // a grounded turret. Both share the tower's placement transform.
+      const towerMat = multiply(view, modelMatrix(tu.pos, TOWER_ORIENT))
+      drawWireframe(ctx, SURFACE_TOWER, towerMat, proj, w, h, TURRET_GLOW)
+      drawWireframe(ctx, TOWER_CUBE, towerMat, proj, w, h, CUBE_GLOW)
     }
   } else if (state.phase === 'trench') {
     // Story 11-6 — the trench is a procedural WALLED channel (ADR 0002 part B):

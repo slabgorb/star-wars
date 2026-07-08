@@ -40,6 +40,8 @@ import {
   MAX_TURRETS,
   TURRET_SCORE,
   TURRET_HIT_RADIUS,
+  TOWER_HEIGHT,
+  TOWER_FIRE_GRACE,
   SPACE_WAVE_QUOTA,
   SURFACE_WAVE_QUOTA,
   EXHAUST_PORT_DISTANCE,
@@ -319,7 +321,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
   const turrets = state.turrets
     .map((turret): Turret => {
       const pos: Vec3 = [turret.pos[0], turret.pos[1], turret.pos[2] + TURRET_SCROLL_SPEED * dt]
-      return { pos }
+      return { pos, age: (turret.age ?? 0) + dt } // age the tower toward its fire grace
     })
     .filter((turret) => turret.pos[2] < 0) // drop those that have scrolled past
   let spawnTimer = state.spawnTimer - dt
@@ -328,17 +330,23 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     spawnTimer = TURRET_SPAWN_INTERVAL
   }
 
-  // --- A turret lobs a bolt at the cockpit on the fire cadence --------------
+  // --- A tower lobs a fireball from its cube top on the fire cadence --------
+  // Only towers past their fire grace may shoot (Story sw2-3): a freshly-risen
+  // tower holds fire for TOWER_FIRE_GRACE so round-1 firing is a readable beat,
+  // not instant. The fireball erupts from the yellow cube up at TOWER_HEIGHT (the
+  // tower's gun), not from the floor, and heads for the cockpit from there.
+  const armed = turrets.filter((turret) => (turret.age ?? 0) >= TOWER_FIRE_GRACE)
   let enemyFireCooldown = state.enemyFireCooldown - dt
-  if (enemyFireCooldown <= 0 && turrets.length > 0 && enemyShots.length < MAX_FIREBALL_SLOTS) {
-    const shooter = turrets[nextInt(rng, turrets.length)]
+  if (enemyFireCooldown <= 0 && armed.length > 0 && enemyShots.length < MAX_FIREBALL_SLOTS) {
+    const shooter = armed[nextInt(rng, armed.length)]
+    const muzzle: Vec3 = [shooter.pos[0], shooter.pos[1] + TOWER_HEIGHT, shooter.pos[2]]
     enemyShots.push({
-      pos: [...shooter.pos] as Vec3,
-      vel: scale(toCockpit(shooter.pos), ENEMY_SHOT_SPEED),
+      pos: muzzle,
+      vel: scale(toCockpit(muzzle), ENEMY_SHOT_SPEED),
       ttl: ENEMY_SHOT_TTL,
     })
     enemyFireCooldown = ENEMY_FIRE_INTERVAL
-    events.push({ type: 'enemy-fire', pos: [...shooter.pos] as Vec3 })
+    events.push({ type: 'enemy-fire', pos: [...muzzle] as Vec3 })
   }
 
   // --- Player bolts vs turrets: destroy on contact, score per kill ---------
@@ -653,7 +661,7 @@ function clearRun(s: GameState): GameState {
 function spawnTurret(rng: Rng): Turret {
   const x = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
   const pos: Vec3 = [x, 0, -SPAWN_DISTANCE]
-  return { pos }
+  return { pos, age: 0 } // a fresh tower — holds fire for TOWER_FIRE_GRACE
 }
 
 /** Move bolts by their velocity, age them, and drop the expired. New array. */
