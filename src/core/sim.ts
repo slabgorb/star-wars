@@ -516,21 +516,32 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     // Han's line on the winning shot — cued on ANY port kill (clean or not), so
     // it is independent of the clean-run Force bonus above (sw2-5).
     events.push({ type: 'speech', line: 'greatShotKidThatWasOneInAMillion' })
-    // The Death Star blows: the whole run clears and loops to the next wave's
-    // space phase — emit the warp / wave-clear cue (8-7), as `clearRun` re-opens
-    // 'space'. `clearRun` → `enterPhase` spreads `...s`, so this event rides along.
+    // The Death Star BLOWS (sw2-4): a positioned explosion cue at the port's own
+    // spot, emitted BEFORE the level-clear warp below so the shell stages the boom
+    // before the jump to the next wave. `[...port]` keeps the step pure.
+    events.push({ type: 'death-star-destroyed', pos: [...port] as Vec3 })
+    // The whole run clears and loops to the next wave's space phase — emit the
+    // warp / wave-clear cue (8-7), as `clearRun` re-opens 'space'. `clearRun` →
+    // `enterPhase` spreads `...s`, so this event rides along.
     events.push({ type: 'level-clear', next: 'space' })
     return clearRun({
       ...afterObstacles,
       projectiles: liveBolts,
       score: afterObstacles.score + bonus,
       forceBonusAwardedAt: clean ? t : null,
+      // Stamp the kill so the shell's Death-Star explosion survives the warp to
+      // space that `clearRun` triggers this same frame (sw2-4). Unlike the Force
+      // bonus, this fires on ANY port kill, clean or not.
+      deathStarDestroyedAt: t,
     })
   }
 
   // --- The port reaching the cockpit un-destroyed is a crash: costs a shield --
   if (collides(port, COCKPIT, COCKPIT_HIT_RADIUS)) {
     const lives = Math.max(0, afterObstacles.lives - 1)
+    // The run is LOST — the port slipped past un-destroyed. A distinct miss cue
+    // (sw2-4) so the shell can say "YOU MISSED", separate from the crash tell.
+    events.push({ type: 'exhaust-port-missed' })
     // Flying into the trench structure is a crash, not hostile fire — reuse the
     // terrain-crash cue (8-7) rather than widen player-death's cause union.
     events.push({ type: 'terrain-crash' })
@@ -540,6 +551,9 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
       gameOver: lives <= 0,
       mode: lives <= 0 ? 'gameover' : afterObstacles.mode,
       exhaustPort: spawnPort(), // another pass down the trench
+      // Stamp the miss so the shell can show a distinct "you missed" tell for a
+      // beat (sw2-4), separate from the terrain-crash cue above.
+      exhaustPortMissedAt: t,
     }
   }
 
@@ -625,6 +639,11 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     // the wave transition.
     trenchShotsFired: 0,
     forceBonusAwardedAt: null,
+    // Outcome-feedback stamps reset on every phase entry, like forceBonusAwardedAt
+    // (sw2-4); `clearRun` re-stamps `deathStarDestroyedAt` so the explosion banner
+    // survives the wave transition, and a fresh trench never opens mid-"missed".
+    deathStarDestroyedAt: null,
+    exhaustPortMissedAt: null,
     enemyShots: [],
     altitude: phase === 'surface' ? SKIM_ALTITUDE : s.altitude,
     // Reset the surface scroll on every phase entry so a fresh (or jumped) surface
@@ -654,7 +673,14 @@ function clearRun(s: GameState): GameState {
   // `enterPhase` resets `forceBonusAwardedAt` to null (every phase entry does,
   // like `trenchScrollZ`) — re-stamp it here so a clean port kill's banner
   // survives into the next wave's space phase (fidelity epic, task 4).
-  return { ...enterPhase(s, 'space'), wave: s.wave + 1, forceBonusAwardedAt: s.forceBonusAwardedAt }
+  // `deathStarDestroyedAt` rides along the same way so the explosion beat survives
+  // the warp too (sw2-4).
+  return {
+    ...enterPhase(s, 'space'),
+    wave: s.wave + 1,
+    forceBonusAwardedAt: s.forceBonusAwardedAt,
+    deathStarDestroyedAt: s.deathStarDestroyedAt,
+  }
 }
 
 /** A fresh turret: lateral-spread spawn far down −Z, standing on the floor. */

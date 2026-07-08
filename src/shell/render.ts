@@ -303,6 +303,13 @@ export function render(
       if (elapsed <= ENEMY_MUZZLE_FLASH_SECONDS)
         drawMuzzleFlash(ctx, transform(view, s.pos), 1 - elapsed / ENEMY_MUZZLE_FLASH_SECONDS, proj, w, h)
     }
+    // The Death-Star explosion beat (sw2-4), derived purely from the sim stamp —
+    // no shell-side effect state, like the flashes above. Screen-space and centred
+    // so it plays through the warp to space the port kill triggers this frame.
+    if (state.deathStarDestroyedAt !== null) {
+      const boom = state.t - state.deathStarDestroyedAt
+      if (boom <= DEATH_STAR_BOOM_SECONDS) drawDeathStarBoom(ctx, boom / DEATH_STAR_BOOM_SECONDS, w, h)
+    }
   }
   // Bolts and fireballs ride the same camera as the models (transform through the
   // view), so they stay seated in the scene when the eye is lifted (surface/trench).
@@ -428,6 +435,47 @@ function drawMuzzleFlash(
     ctx.lineTo(p[0] + Math.cos(a) * len, p[1] + Math.sin(a) * len)
   }
   ctx.stroke()
+  ctx.shadowBlur = 0
+}
+
+// The Death-Star explosion burst (sw2-4): concentric rings + a ray starburst,
+// SCREEN-SPACE and centred so it survives the same-frame warp to space that a
+// port kill triggers (the trench and its port are gone by the next frame, so a
+// world-anchored effect would vanish instantly). `progress` runs 0 → 1 across
+// DEATH_STAR_BOOM_SECONDS: the rings expand outward while the glow fades, so the
+// blast flares then dissipates — the vector-arcade "it blew up" idiom.
+const BOOM_RINGS = 3
+const BOOM_RAYS = 16
+function drawDeathStarBoom(ctx: CanvasRenderingContext2D, progress: number, w: number, h: number): void {
+  const cx = w / 2
+  const cy = h / 2
+  const life = 1 - progress // 1 at the blast → 0 as it clears
+  const maxR = Math.min(w, h) * 0.42
+  ctx.strokeStyle = '#ffdd66'
+  ctx.shadowColor = '#ffdd66'
+  ctx.shadowBlur = 20 * life
+  ctx.lineWidth = 2
+  // Expanding concentric rings, each trailing the leading edge slightly.
+  for (let i = 0; i < BOOM_RINGS; i++) {
+    const r = maxR * progress * (1 - i * 0.22)
+    if (r <= 0) continue
+    ctx.globalAlpha = life * (1 - i * 0.25)
+    ctx.beginPath()
+    ctx.arc(cx, cy, r, 0, Math.PI * 2)
+    ctx.stroke()
+  }
+  // A ray starburst that flares out with the leading ring.
+  ctx.globalAlpha = life
+  ctx.beginPath()
+  const inner = maxR * 0.12
+  const outer = maxR * (0.3 + 0.7 * progress)
+  for (let i = 0; i < BOOM_RAYS; i++) {
+    const a = (i / BOOM_RAYS) * Math.PI * 2
+    ctx.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner)
+    ctx.lineTo(cx + Math.cos(a) * outer, cy + Math.sin(a) * outer)
+  }
+  ctx.stroke()
+  ctx.globalAlpha = 1
   ctx.shadowBlur = 0
 }
 
@@ -623,6 +671,12 @@ function drawHudHeader(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
 // on-screen timing for it, so this is a tuned UX choice, like LASER_FLASH_SECONDS.
 const FORCE_BANNER_SECONDS = 3
 
+// How long the Death-Star explosion beat (flash + "DESTROYED" banner) plays after
+// a port kill, and how long the "MISSED" banner shows after a slipped-past port
+// (sw2-4). Tuned UX dwell times like FORCE_BANNER_SECONDS — no ROM timing exists.
+const DEATH_STAR_BOOM_SECONDS = 2.5
+const MISS_BANNER_SECONDS = 2
+
 /**
  * Trench banners (fidelity epic, task 4): "EXHAUST PORT AHEAD" while the port
  * is within PORT_AHEAD_RANGE, and the "Use the Force" bonus banner for a few
@@ -650,6 +704,23 @@ function drawTrenchBanners(ctx: CanvasRenderingContext2D, state: GameState, w: n
     // string listed earlier in the same item is a shorter ROM string-table
     // fragment, not the full banner text.
     glowText(ctx, `${FORCE_BONUS.toLocaleString('en-US')} FOR USING THE FORCE`, w / 2, h * 0.16, '#dddddd', 12)
+  }
+  // The winning shot's payoff (sw2-4): a bold "DEATH STAR DESTROYED" callout that
+  // rides across the warp into the next wave's space phase (deathStarDestroyedAt
+  // is re-stamped by clearRun), pairing with the explosion flash below.
+  if (
+    state.deathStarDestroyedAt !== null &&
+    state.t - state.deathStarDestroyedAt <= DEATH_STAR_BOOM_SECONDS
+  ) {
+    glowText(ctx, 'DEATH STAR DESTROYED', w / 2, h * 0.45, '#ffffff', 18)
+  }
+  // The run's failure tell (sw2-4): a clear "EXHAUST PORT MISSED", so a slipped
+  // port no longer reads as a nondescript scrape.
+  if (
+    state.exhaustPortMissedAt !== null &&
+    state.t - state.exhaustPortMissedAt <= MISS_BANNER_SECONDS
+  ) {
+    glowText(ctx, 'EXHAUST PORT MISSED', w / 2, h * 0.45, '#ff5555', 16)
   }
   ctx.textAlign = 'left'
 }

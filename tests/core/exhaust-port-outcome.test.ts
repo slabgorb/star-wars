@@ -51,7 +51,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   initialState,
-  EXHAUST_PORT_DISTANCE,
   TRENCH_BONUS,
   PROJECTILE_TTL,
   STARTING_LIVES,
