@@ -88,15 +88,15 @@ describe('Story sw2-3 — the surface tower wears a yellow cube top', () => {
 
   it('draws a distinct YELLOW element on the tower (not an all-red turret)', () => {
     render(makeCtx(), surfaceScene, W, H)
-    const glows = vi.mocked(drawWireframe).mock.calls.map((c) => c[6] as string)
+    const glows = vi.mocked(drawWireframe).mock.calls.map((c) => c[6])
     expect(glows.length).toBeGreaterThan(0) // the scene actually drew something
     expect(glows.some(isYellow)).toBe(true) // …and at least one stroke is the yellow cube
   })
 
   it('still draws a tall tower structure (a model reaching above the y=0 floor)', () => {
     render(makeCtx(), surfaceScene, W, H)
-    const models = vi.mocked(drawWireframe).mock.calls.map((c) => c[1] as { vertices: number[][] })
-    const tall = models.find((m) => Array.isArray(m.vertices) && m.vertices.some((v) => v[1] > 0))
+    const models = vi.mocked(drawWireframe).mock.calls.map((c) => c[1])
+    const tall = models.find((m) => m.vertices.some((v) => v[1] > 0))
     expect(tall).toBeDefined()
   })
 })

@@ -329,6 +329,37 @@ export const SURFACE_TOWER: Model3D = {
 }
 
 /**
+ * The tower's yellow CUBE TOP (Story sw2-3). The authentic surface tower is
+ * tipped with a bright cube — its gun — from which fireballs erupt. A compact
+ * box capping the SURFACE_TOWER peak, centred at y = TOWER_HEIGHT (96); the shell
+ * strokes it yellow so the tower reads as a tall tower with a glowing cube top,
+ * not an all-red grounded turret. Object-space, sharing the tower's placement
+ * transform. Like the Wave-0 placeholder CUBE, this is authored decoration, so it
+ * is intentionally NOT in the authentic MODELS registry — it is drawn directly.
+ */
+export const TOWER_CUBE: Model3D = {
+  name: 'Tower Cube',
+  vertices: [
+    [-24, 72, -24],
+    [24, 72, -24],
+    [24, 72, 24],
+    [-24, 72, 24],
+    [-24, 120, -24],
+    [24, 120, -24],
+    [24, 120, 24],
+    [-24, 120, 24],
+  ],
+  edges: [
+    // bottom ring (y = 72)
+    [0, 1], [1, 2], [2, 3], [3, 0],
+    // top ring (y = 120)
+    [4, 5], [5, 6], [6, 7], [7, 4],
+    // corner pillars
+    [0, 4], [1, 5], [2, 6], [3, 7],
+  ],
+}
+
+/**
  * Authentic `Obj_Trench_Squares` geometry from the cabinet disassembly: two
  * concentric floor squares (outer 0-3, inner 4-7) lying flat in y=0. The ported
  * floor rings already close cleanly; story 8-5 adds the CATWALK RAILS that bridge
