@@ -70,6 +70,8 @@ const ALL_EVENTS: GameEvent[] = [
   { type: 'trench-obstacle-destroyed', kind: 'turret' },
   { type: 'force-bonus', amount: 5000 },
   { type: 'speech', line: 'useTheForceLuke' }, // sw2-5: speech is now a core event
+  { type: 'death-star-destroyed', pos: [0, 0, -300] }, // sw2-4: the winning-shot explosion
+  { type: 'exhaust-port-missed' }, // sw2-4: the port slipped past un-destroyed
 ]
 
 // Exhaustive narrowing over the union: the `never` default fails to compile if a
@@ -89,6 +91,8 @@ function discriminant(e: GameEvent): string {
     case 'trench-obstacle-destroyed': return `obs-${e.kind}`
     case 'force-bonus': return `force@${e.amount}`
     case 'speech': return `speech:${e.line}`
+    case 'death-star-destroyed': return `ds@${e.pos.join(',')}`
+    case 'exhaust-port-missed': return 'port-miss'
     default: {
       const _exhaustive: never = e
       return _exhaustive
@@ -97,18 +101,21 @@ function discriminant(e: GameEvent): string {
 }
 
 describe('GameEvent — discriminated union (AC1)', () => {
-  it('covers eleven distinct, documented event types', () => {
-    // Eleven: the original eight (story 8-7/8-18), 'trench-obstacle-destroyed'
+  it('covers thirteen distinct, documented event types', () => {
+    // Thirteen: the original eight (story 8-7/8-18), 'trench-obstacle-destroyed'
     // (fidelity epic task 3), 'force-bonus' (fidelity epic task 4 — findings
-    // ## Exhaust port & run outcome), and 'speech' (sw2-5 — voice lines are now
-    // core-cued events, not shell-derived).
+    // ## Exhaust port & run outcome), 'speech' (sw2-5 — voice lines are now
+    // core-cued events), and sw2-4's two exhaust-port outcome cues:
+    // 'death-star-destroyed' (the winning-shot explosion, positioned) and
+    // 'exhaust-port-missed' (the port slipped past the cockpit un-destroyed).
     const kinds = ALL_EVENTS.map((e) => e.type)
-    expect(new Set(kinds).size).toBe(11)
+    expect(new Set(kinds).size).toBe(13)
     expect(new Set(kinds)).toEqual(
       new Set([
         'fire', 'enemy-fire', 'enemy-death', 'player-death',
         'level-clear', 'player-spawn', 'terrain-crash', 'fireball-destroyed',
         'trench-obstacle-destroyed', 'force-bonus', 'speech',
+        'death-star-destroyed', 'exhaust-port-missed',
       ]),
     )
   })
