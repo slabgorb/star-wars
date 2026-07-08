@@ -38,12 +38,40 @@ export type SoundName = keyof typeof SOUNDS
 // re-synthesis bakes of the cabinet's speech-ROM bitstreams (tools/speech-bake/),
 // decoded from the Speech*.asm disassembly. Speech samples are larger and rarely
 // triggered, so unlike SFX they are loaded LAZILY (on first `speak()`), not
-// eagerly on resume(). Only the lines the game actually cues are listed here; the
-// full set of 23 is hosted on R2 for future use.
+// eagerly on resume().
 const SPEECH_BASE_URL = 'https://arcade-assets.slabgorb.com/star-wars/speech/'
 
-const SPEECH = {
-  useTheForceLuke: 'use_the_force_luke.wav', // Obi-Wan, cued at the trench approach
+// The full 23-line cabinet catalogue (sw2-5). Keys are camelCase logical names;
+// values are the exact baked R2 filenames (case-sensitive, snake_case), matching
+// tools/speech-bake/speech-data.mjs. Lines the CORE currently cues are marked
+// [wired] — their keys equal the core's `SpeechLine` ids, so the event->speak
+// pump is a thin lookup. The rest are catalogued but not yet cued: they need
+// gameplay mechanics the sim lacks (R2 damage, Vader-on-tail, wingmen) and are
+// left to a follow-on story (see the sw2-5 session).
+export const SPEECH = {
+  useTheForceLuke: 'use_the_force_luke.wav', // [wired] entering the trench
+  redFiveStandingBy: 'red_five_standing_by.wav', // [wired] run start
+  lookAtTheSizeOfThatThing: 'look_at_the_size_of_that_thing.wav', // [wired] enter surface
+  greatShotKidThatWasOneInAMillion: 'great_shot_kid_that_was_one_in_a_million.wav', // [wired] port kill
+  remember: 'remember.wav',
+  imOnTheLeader: 'i_m_on_the_leader.wav',
+  theForceIsStrongInThisOne: 'the_force_is_strong_in_this_one.wav',
+  redFiveImGoingIn: 'red_five_i_m_going_in.wav',
+  r2TryAndIncreaseThePower: 'r2_try_and_increase_the_power.wav',
+  youreAllClearKid: 'you_re_all_clear_kid.wav',
+  letGoLuke: 'let_go_luke.wav',
+  vaderBreathing: 'vader_breathing.wav',
+  yahoo: 'yahoo.wav',
+  iHaveYouNow: 'i_have_you_now.wav',
+  stayInAttackFormation: 'stay_in_attack_formation.wav',
+  theForceWillBeWithYou: 'the_force_will_be_with_you.wav',
+  always: 'always.wav',
+  r2Scream: 'r2_scream.wav',
+  tieFighter: 'tie_fighter.wav',
+  imHitButNotBadR2SeeWhatYouCanDoWithIt: 'i_m_hit_but_not_bad_r2_see_what_you_can_do_with_it.wav',
+  iveLostR2: 'i_ve_lost_r2.wav',
+  iCantShakeHim: 'i_can_t_shake_him.wav',
+  lukeTrustMe: 'luke_trust_me.wav',
 } as const
 
 export type SpeechName = keyof typeof SPEECH

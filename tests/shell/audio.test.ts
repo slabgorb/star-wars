@@ -12,10 +12,14 @@
 // Nothing here exists yet: `src/shell/audio.ts` is absent, so the value imports
 // below fail to resolve and the whole file is RED today (valid RED).
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { createAudioEngine, type SoundName } from '../../src/shell/audio'
+import { createAudioEngine, SPEECH, type SoundName, type SpeechName } from '../../src/shell/audio'
 // Read main.ts as text (Vite `?raw`) for the event->sound wiring check below —
 // main.ts bootstraps a canvas, so it cannot be imported in the node test env.
 import mainSrc from '../../src/main.ts?raw'
+// The AUTHENTIC line inventory: the baked TMS5220 catalogue (tools/speech-bake),
+// read as text so the "all 23 listed" check is single-sourced to the real data
+// rather than a hand-copied list that could drift (sw2-5 AC1).
+import speechDataSrc from '../../tools/speech-bake/speech-data.mjs?raw'
 
 // star-wars SFX live under their own prefix on the shared arcade assets host
 // (mirrors tempest's '/tempest/sfx/' layout).
@@ -33,6 +37,23 @@ const REQUIRED_SOUNDS: SoundName[] = [
   'playerSpawn',
   'terrainCrash',
 ]
+
+// The speech lines the CORE cues (sw2-5 reachable subset). Typed as SpeechName[],
+// this is a COMPILE-TIME assertion that the SPEECH catalogue declares a filename
+// for each core-emittable line — a missing key is a type error, not a silent
+// pass, and the shell pump's `speak(event.line)` type-checks against it.
+const REQUIRED_SPEECH: SpeechName[] = [
+  'useTheForceLuke',
+  'redFiveStandingBy',
+  'lookAtTheSizeOfThatThing',
+  'greatShotKidThatWasOneInAMillion',
+]
+
+// The authentic baked line names (snake_case → `${name}.wav`), scraped from the
+// speech-bake catalogue that generated the R2 files. The cabinet has 23.
+const BAKED_NAMES: string[] = [...speechDataSrc.matchAll(/name:\s*["']([^"']+)["']/g)].map(
+  (m) => m[1],
+)
 
 // The engine builds an AudioContext lazily in resume(), reading the constructor
 // off globalThis. Node's test env has no Web Audio, so we stub a minimal fake.
@@ -128,6 +149,54 @@ describe('audio engine graceful degradation (AC3)', () => {
   })
 })
 
+describe('speech catalogue — all 23 cabinet lines listed (sw2-5 AC1)', () => {
+  const R2_SPEECH = 'https://arcade-assets.slabgorb.com/star-wars/speech/'
+
+  it('scrapes the full authentic 23-line catalogue from speech-bake', () => {
+    // Guards the guard: if this is not 23, the source-of-truth regex broke and
+    // the AC1 check below would be vacuously satisfiable.
+    expect(BAKED_NAMES.length).toBe(23)
+  })
+
+  it('SPEECH declares an R2 `.wav` for every one of the 23 authentic lines (AC1)', () => {
+    // `SPEECH as const` narrows its values to literal filenames; widen to string
+    // so a scraped `${name}.wav` (plain string) is a valid `.has()` argument.
+    const files = new Set<string>(Object.values(SPEECH))
+    for (const name of BAKED_NAMES) {
+      expect(files.has(`${name}.wav`)).toBe(true) // e.g. red_five_standing_by.wav
+    }
+    // Exactly the cabinet set — no phantom lines, no omissions.
+    expect(Object.keys(SPEECH).length).toBe(23)
+  })
+
+  it('every SPEECH filename resolves under the R2 speech prefix on speak() (AC3)', () => {
+    const engine = createAudioEngine()
+    engine.resume()
+    for (const name of Object.keys(SPEECH) as SpeechName[]) {
+      const before = fetched.length
+      engine.speak(name)
+      const got = fetched.slice(before)
+      // First speak of a line fetches exactly one URL, from the speech prefix.
+      expect(got.length).toBe(1)
+      expect(got[0].startsWith(R2_SPEECH)).toBe(true)
+      expect(got[0].endsWith('.wav')).toBe(true)
+    }
+  })
+
+  it('speaks each CORE-cued line from the R2 speech prefix (AC3)', () => {
+    const engine = createAudioEngine()
+    engine.resume()
+    for (const name of REQUIRED_SPEECH) {
+      const before = fetched.length
+      engine.speak(name)
+      const got = fetched.slice(before)
+      expect(got.length).toBe(1)
+      expect(got[0].startsWith(R2_SPEECH)).toBe(true)
+      expect(got[0].endsWith('.wav')).toBe(true)
+    }
+  })
+})
+
 describe('audio engine speech (AC6 — TMS5220 lines)', () => {
   // Speech lines live under their own R2 prefix and load LAZILY (on first speak),
   // not eagerly on resume() like the SFX.
@@ -206,8 +275,20 @@ describe('event -> sound wiring in main.ts (AC4)', () => {
     }
   })
 
-  it('cues the iconic speech line on the trench approach (AC6)', () => {
-    expect(mainSrc).toMatch(/\.speak\(\s*['"]useTheForceLuke['"]\s*\)/)
-    expect(mainSrc).toMatch(/['"]trench['"]/)
+  it('routes CORE speech events to speak() via one generic pump arm (sw2-5 AC3)', () => {
+    // sw2-5: speech is now a core GameEvent ({ type:'speech', line }). The pump
+    // handles it with a single arm — audio.speak(event.line) — so every current
+    // AND future line is spoken without touching the shell. `\w+` matches the
+    // switch scrutinee name (e.g. `event.line`).
+    expect(mainSrc).toMatch(/case\s+['"]speech['"]/)
+    expect(mainSrc).toMatch(/\.speak\(\s*\w+\.line\s*\)/)
+  })
+
+  it('no longer hard-codes the trench-approach speak in the shell (sw2-5 AC2)', () => {
+    // The iconic line is cued by the CORE on trench entry (see
+    // tests/core/speech-cues.test.ts) — NOT by a phase-edge speak() in main.ts.
+    // A lingering shell trigger would double-fire it (once from the core event,
+    // once from the edge), so the old hard-coded call must be gone.
+    expect(mainSrc).not.toMatch(/\.speak\(\s*['"]useTheForceLuke['"]\s*\)/)
   })
 })

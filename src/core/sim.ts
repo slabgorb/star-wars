@@ -54,7 +54,7 @@ import {
   TIE_PEEL_SWEEP,
 } from './state'
 import type { Input } from './input'
-import type { GameEvent } from './events'
+import type { GameEvent, SpeechLine } from './events'
 import {
   add,
   scale,
@@ -275,8 +275,12 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
  * transitions never consume randomness — so a run is reproducible from its seed.
  */
 function startRun(s: GameState): GameState {
-  // The ship spawns into the cockpit — emit the run-start cue (story 8-7).
-  return { ...initialState(s.rng.seed), events: [{ type: 'player-spawn' }] }
+  // The ship spawns into the cockpit — emit the run-start cue (story 8-7) and
+  // Luke reporting in over the comm (sw2-5).
+  return {
+    ...initialState(s.rng.seed),
+    events: [{ type: 'player-spawn' }, { type: 'speech', line: 'redFiveStandingBy' }],
+  }
 }
 
 /** Pieces the shared prologue already computed, threaded into a phase step. */
@@ -501,6 +505,9 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     const clean = afterObstacles.trenchShotsFired <= 1 // only the killing torpedo
     const bonus = TRENCH_BONUS + (clean ? FORCE_BONUS : 0)
     if (clean) events.push({ type: 'force-bonus', amount: FORCE_BONUS })
+    // Han's line on the winning shot — cued on ANY port kill (clean or not), so
+    // it is independent of the clean-run Force bonus above (sw2-5).
+    events.push({ type: 'speech', line: 'greatShotKidThatWasOneInAMillion' })
     // The Death Star blows: the whole run clears and loops to the next wave's
     // space phase — emit the warp / wave-clear cue (8-7), as `clearRun` re-opens
     // 'space'. `clearRun` → `enterPhase` spreads `...s`, so this event rides along.
@@ -556,6 +563,14 @@ const PHASE_QUOTA: Record<Phase, number> = {
   trench: Infinity,
 }
 
+/** The voice line cued when a run ENTERS a phase (sw2-5). Only the surface and
+ * trench edges carry a line; a new wave's space phase (reached via clearRun, not
+ * progress) has none. A `Partial` map so an unwired phase simply cues nothing. */
+const ENTER_PHASE_SPEECH: Partial<Record<Phase, SpeechLine>> = {
+  surface: 'lookAtTheSizeOfThatThing', // "Look at the size of that thing"
+  trench: 'useTheForceLuke', // "Use the Force, Luke"
+}
+
 /**
  * Drop the run into the next phase once the current one is cleared. A finished
  * run never advances; phases advance in order, one at a time; score and lives
@@ -566,9 +581,13 @@ function progress(s: GameState): GameState {
   if (s.phaseKills < PHASE_QUOTA[s.phase]) return s
   const next = NEXT_PHASE[s.phase]
   if (next === null) return s
-  // The phase cleared — carry the frame's events forward and announce the warp.
+  // The phase cleared — carry the frame's events forward, announce the warp, and
+  // cue the entering phase's voice line if it has one (sw2-5).
   const advanced = enterPhase(s, next)
-  return { ...advanced, events: [...s.events, { type: 'level-clear', next }] }
+  const events: GameEvent[] = [...s.events, { type: 'level-clear', next }]
+  const line = ENTER_PHASE_SPEECH[next]
+  if (line) events.push({ type: 'speech', line })
+  return { ...advanced, events }
 }
 
 /**
