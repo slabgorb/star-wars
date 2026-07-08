@@ -52,7 +52,11 @@ import { describe, it, expect } from 'vitest'
 import {
   initialState,
   TRENCH_BONUS,
+  TRENCH_SCROLL_SPEED,
   PROJECTILE_TTL,
+  PORT_HIT_RADIUS,
+  COCKPIT_HIT_RADIUS,
+  SURFACE_WAVE_QUOTA,
   STARTING_LIVES,
   type GameState,
   type Projectile,
@@ -119,22 +123,27 @@ describe('sw2-4 — destroying the port emits a Death-Star-destroyed cue', () =>
     const s1 = stepGame(s0, NO_INPUT, 0.001)
     const cue = s1.events.find((e) => e.type === 'death-star-destroyed')
     expect(cue).toBeDefined()
-    // Positioned like enemy-death / fireball-destroyed: a real Vec3 out in front
-    // (the port's own down-range spot), not the cockpit origin.
-    expect(cue && 'pos' in cue ? cue.pos : null).not.toBeNull()
-    expect(cue && 'pos' in cue ? cue.pos.length : 0).toBe(3)
-    expect(cue && 'pos' in cue ? cue.pos[2] : 0).toBeLessThan(0)
+    // Positioned like enemy-death / fireball-destroyed, and at the port's EXACT
+    // scrolled world spot on the kill frame — [0,0,-300] advanced one micro-tick's
+    // scroll toward the cockpit (TRENCH_SCROLL_SPEED × dt) — not the cockpit origin
+    // and not a stale pre-scroll point. Exact value, tied to the scroll constant.
+    expect(cue).toMatchObject({
+      type: 'death-star-destroyed',
+      pos: [0, 0, -300 + TRENCH_SCROLL_SPEED * 0.001],
+    })
   })
 
-  it('emits the explosion BEFORE the level-clear warp (explode, then jump to space)', () => {
+  it('emits the explosion AND the level-clear warp on the same kill frame', () => {
+    // The boom and the warp fire together on the killing frame. We do NOT pin their
+    // array ORDER: the shell's audio pump is an order-insensitive switch, and the
+    // render layer stages the explosion off the persisted `deathStarDestroyedAt`
+    // stamp (covered below), never off event position — so array order carries no
+    // behavioural contract. What matters is that both cues are present to react to.
     const base = trench(portAt([0, 0, -300]), { trenchShotsFired: 2 })
     const s0: GameState = { ...base, projectiles: [bolt([0, 0, -300])] }
     const s1 = stepGame(s0, NO_INPUT, 0.001)
-    const boom = s1.events.findIndex((e) => e.type === 'death-star-destroyed')
-    const warp = s1.events.findIndex((e) => e.type === 'level-clear')
-    expect(boom).toBeGreaterThanOrEqual(0)
-    expect(warp).toBeGreaterThanOrEqual(0)
-    expect(boom).toBeLessThan(warp) // the shell can stage the boom before the warp
+    expect(s1.events.some((e) => e.type === 'death-star-destroyed')).toBe(true)
+    expect(s1.events).toContainEqual({ type: 'level-clear', next: 'space' })
   })
 
   it('preserves the existing payoff — the run still clears, scores, and cues speech', () => {
@@ -176,15 +185,21 @@ describe('sw2-4 — a real-fired torpedo detonates the port (real-speed coverage
   })
 
   it('a real wide shot flies past and does NOT detonate the port (no false hit)', () => {
-    // The negative case sw2-2's review found missing. The port sits 800u off-axis
-    // — far outside PORT_HIT_RADIUS (120) and any plausible WYSIWYG widening of it
-    // (the octagon spans ~64) — so a straight-ahead torpedo can never touch it.
-    // Only ~45 frames: enough for the bolt to pass the port's z-plane, but far too
-    // few for the still-distant port to scroll to the cockpit (which would itself
-    // count as a miss), isolating "the wide bolt did not detonate it."
-    const base = trench(portAt([800, 0, -1500]))
+    // The negative case sw2-2's review found missing. The port sits well off-axis —
+    // a multiple of PORT_HIT_RADIUS, so it stays outside the sphere even if a future
+    // story widens the radius (WYSIWYG) — so a straight-ahead torpedo never touches
+    // it. The offset is DERIVED from the constant (guarded below), not hardcoded, so
+    // it can't silently rot if PORT_HIT_RADIUS is re-tuned (it already moved 90→120).
+    const OFF_AXIS = PORT_HIT_RADIUS * 6 // 720u today — far outside any plausible sphere
+    expect(OFF_AXIS).toBeGreaterThan(PORT_HIT_RADIUS)
+    // An off-axis port can NEVER satisfy the cockpit-crash test: `stepTrench` only
+    // scrolls z, so the port holds x=OFF_AXIS and its 3D distance to the cockpit is
+    // always ≥ OFF_AXIS ≫ COCKPIT_HIT_RADIUS — the 45-frame cap is just a bound on a
+    // no-op flight, not what prevents a confounding cockpit-arrival miss.
+    const base = trench(portAt([OFF_AXIS, 0, -1500]))
     const { state, events } = fireAndFollowPort(base, 45)
     expect(events.some((e) => e.type === 'death-star-destroyed')).toBe(false)
+    expect(events.some((e) => e.type === 'exhaust-port-missed')).toBe(false) // no confound
     expect(state.exhaustPort).not.toBeNull() // still standing, un-hit
     expect(state.phase).toBe('trench') // the run did not clear
     expect(state.lives).toBe(STARTING_LIVES) // and nothing crashed
@@ -200,15 +215,20 @@ describe('sw2-4 — a missed run gives a clear miss indication', () => {
     expect(s1.events.some((e) => e.type === 'exhaust-port-missed')).toBe(true)
   })
 
-  it('the miss cue is DISTINCT from a generic terrain-crash', () => {
+  it('the miss cue rides ALONGSIDE terrain-crash as its own distinct event', () => {
     // The story's core ask: a miss must not read as "nothing" or as a generic
-    // scrape. Whatever the shell does with terrain-crash, the port-miss carries its
-    // own identity so "YOU MISSED" can be shown/heard.
+    // scrape. The port slipping past emits BOTH cues on the same frame — the crash
+    // (physics: a shield is lost) AND a dedicated `exhaust-port-missed` so the shell
+    // can say "YOU MISSED". This asserts co-occurrence of two DISTINCT event types,
+    // not one replacing the other (and is not the earlier tautology of comparing an
+    // event's own type against a literal it can never equal).
     const base = trench(portAt([0, 0, 0]))
     const s1 = stepGame(base, NO_INPUT, 0.001)
-    const miss = s1.events.find((e) => e.type === 'exhaust-port-missed')
-    expect(miss).toBeDefined()
-    expect(miss?.type).not.toBe('terrain-crash')
+    expect(s1.events.some((e) => e.type === 'exhaust-port-missed')).toBe(true)
+    expect(s1.events.some((e) => e.type === 'terrain-crash')).toBe(true)
+    // Two separate entries in the stream, not a single conflated cue.
+    const kinds = s1.events.map((e) => e.type)
+    expect(kinds.filter((k) => k === 'exhaust-port-missed' || k === 'terrain-crash')).toHaveLength(2)
   })
 
   it('a missed pass still costs a shield (the miss adds a cue, it does not remove the stakes)', () => {
@@ -217,14 +237,95 @@ describe('sw2-4 — a missed run gives a clear miss indication', () => {
     expect(s1.lives).toBe(base.lives - 1)
   })
 
-  it('a single errant bolt mid-flight is NOT a miss — no cue while the port still runs', () => {
-    // A miss is the port slipping PAST, not one wide shot — you can fire again. The
-    // cue must fire only when the run is actually lost, never on every stray bolt.
-    const base = trench(portAt([0, 0, -1500]))
-    const s0: GameState = { ...base, projectiles: [bolt([9999, 0, -1500])] }
-    const s1 = stepGame(s0, NO_INPUT, 0.001)
-    expect(s1.events.some((e) => e.type === 'exhaust-port-missed')).toBe(false)
-    expect(s1.exhaustPort).not.toBeNull() // the port is still in the run
+  it('a stray shot in flight with the port still downrange is NOT a miss', () => {
+    // A miss is the port slipping PAST the cockpit — gated purely on
+    // COCKPIT_HIT_RADIUS — never on shots. So a live stray bolt (here far off-axis,
+    // physically unable to reach the on-axis port) coexisting with a still-approaching
+    // port yields NO miss across many frames. The port sits several cockpit-radii
+    // downrange (tied to the constant, not a magic number); it scrolls toward the
+    // cockpit but never arrives in the window, and the run simply continues.
+    const portZ = -COCKPIT_HIT_RADIUS * 5 // 400u ahead — nowhere near arrival
+    let s: GameState = { ...trench(portAt([0, 0, portZ])), projectiles: [bolt([9999, 0, portZ])] }
+    for (let i = 0; i < 5; i++) {
+      s = stepGame(s, NO_INPUT, FRAME)
+      expect(s.events.some((e) => e.type === 'exhaust-port-missed')).toBe(false)
+      expect(s.exhaustPort).not.toBeNull() // the port is still in the run
+      expect(s.projectiles.length).toBeGreaterThan(0) // the stray bolt is still in flight
+    }
+  })
+})
+
+// --- State-field lifecycle: the stamps that carry the visual beat -----------
+//
+// The two GameState timestamps ARE the visible payoff mechanism — the shell reads
+// them to stage the explosion/miss for a beat (the events alone are invisible once
+// the same-frame warp fires). They must be stamped on the outcome, `clearRun` must
+// carry `deathStarDestroyedAt` THROUGH the warp, and `enterPhase` must reset both.
+// The sibling `forceBonusAwardedAt` is pinned exactly this way in force-bonus.test.ts;
+// without these, a dropped re-stamp or reset ships silently (events still fire).
+
+describe('sw2-4 — the outcome timestamps drive & survive the visual beat', () => {
+  it('a hit stamps deathStarDestroyedAt (= this frame’s sim time), miss stamp stays null', () => {
+    const base = trench(portAt([0, 0, -300]), { trenchShotsFired: 2 })
+    const s1 = stepGame({ ...base, projectiles: [bolt([0, 0, -300])] }, NO_INPUT, 0.001)
+    expect(s1.deathStarDestroyedAt).toBe(s1.t) // stamped with THIS frame's sim time
+    expect(s1.exhaustPortMissedAt).toBeNull() // a hit is not a miss
+  })
+
+  it('deathStarDestroyedAt SURVIVES the warp — still stamped once phase === space', () => {
+    // The regression this field exists to prevent: clearRun warps to space the same
+    // frame and enterPhase nulls the stamp; clearRun re-stamps it so the explosion
+    // beat plays INTO the next wave. Drop the re-stamp and the boom/banner never show
+    // after the kill — yet every event/score/phase assertion would still pass. Pin it.
+    const base = trench(portAt([0, 0, -300]), { trenchShotsFired: 2 })
+    const s1 = stepGame({ ...base, projectiles: [bolt([0, 0, -300])] }, NO_INPUT, 0.001)
+    expect(s1.phase).toBe('space') // warped
+    expect(s1.deathStarDestroyedAt).not.toBeNull() // ...and the stamp rode along
+  })
+
+  it('a miss stamps exhaustPortMissedAt (= this frame’s sim time), hit stamp stays null', () => {
+    const s1 = stepGame(trench(portAt([0, 0, 0])), NO_INPUT, 0.001)
+    expect(s1.exhaustPortMissedAt).toBe(s1.t)
+    expect(s1.deathStarDestroyedAt).toBeNull()
+  })
+
+  it('entering a fresh trench RESETS both stamps (no beat leaks across phases)', () => {
+    // enterPhase nulls both on every phase entry, so a stale stamp from a prior run
+    // can't re-trigger a banner in a new trench. Cross surface→trench carrying
+    // non-null stamps and assert they are cleared on arrival.
+    const surface: GameState = {
+      ...initialState(1),
+      phase: 'surface',
+      phaseKills: SURFACE_WAVE_QUOTA,
+      turrets: [],
+      enemyShots: [],
+      deathStarDestroyedAt: 999,
+      exhaustPortMissedAt: 999,
+    }
+    let s = surface
+    for (let i = 0; i < 8 && s.phase === 'surface'; i++) s = stepGame(s, NO_INPUT, 0.001)
+    expect(s.phase).toBe('trench') // crossed into the trench
+    expect(s.deathStarDestroyedAt).toBeNull() // stale stamps cleared on entry
+    expect(s.exhaustPortMissedAt).toBeNull()
+  })
+})
+
+// --- Same-frame race: a last-instant kill beats the cockpit crash ------------
+
+describe('sw2-4 — a killing shot on the arrival frame beats the crash', () => {
+  it('a hit AND a cockpit-arrival the same frame resolves as a HIT (player-favouring)', () => {
+    // The port is inside COCKPIT_HIT_RADIUS (would crash) AND a bolt is on it (would
+    // detonate) the same step. stepTrench checks the hit branch FIRST and returns, so
+    // the player gets the last-instant save. Reorder the two if-blocks and this save
+    // silently becomes a death — nothing else pins the precedence.
+    const portZ = -COCKPIT_HIT_RADIUS / 2 // inside the cockpit sphere → would crash un-hit
+    const base = trench(portAt([0, 0, portZ]), { trenchShotsFired: 2 })
+    const s1 = stepGame({ ...base, projectiles: [bolt([0, 0, portZ])] }, NO_INPUT, 0.001)
+    expect(s1.events.some((e) => e.type === 'death-star-destroyed')).toBe(true) // hit won
+    expect(s1.events.some((e) => e.type === 'exhaust-port-missed')).toBe(false) // not a miss
+    expect(s1.events.some((e) => e.type === 'terrain-crash')).toBe(false) // not a crash
+    expect(s1.lives).toBe(base.lives) // the last-instant save costs no shield
+    expect(s1.phase).toBe('space') // the run cleared
   })
 })
 
@@ -241,10 +342,14 @@ describe('sw2-4 — outcome feedback preserves core purity & determinism', () =>
     expect(s0.events.length).toBe(beforeEvents)
   })
 
-  it('the same seed + inputs yields an identical outcome-event stream', () => {
+  it('the same seed + inputs yields an identical event stream AND terminal state', () => {
     const mk = (): GameState => trench(portAt([0, 0, -1500]), {}, 7)
     const a = fireAndFollowPort(mk())
     const b = fireAndFollowPort(mk())
     expect(a.events).toEqual(b.events)
+    // Full terminal-state equality — catches an impure source in the new stamps
+    // (a wall-clock/random timestamp would diverge here while the events matched).
+    expect(a.state).toEqual(b.state)
+    expect(a.state.deathStarDestroyedAt).not.toBeNull() // the run actually resolved in a kill
   })
 })
