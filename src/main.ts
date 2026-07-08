@@ -13,7 +13,7 @@ import {
   makeHighScoreRowGuard,
 } from '@arcade/shared/highscore'
 import { createInputController } from './shell/input'
-import { createLoop } from './shell/loop'
+import { createLoop } from '@arcade/shared/loop'
 import { createAudioEngine } from './shell/audio'
 import { render } from './shell/render'
 import { drawDebugOverlay } from './shell/debug-overlay'
