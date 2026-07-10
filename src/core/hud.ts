@@ -2,9 +2,9 @@
 //
 // Pure, deterministic formatting helpers for the cabinet HUD header (story 8-17).
 // The shell (render.ts) calls these to turn raw GameState numbers into the
-// display strings and the shield-meter fill it then lays out in the Vector Battle
-// face and canvas geometry. No DOM, no time, no randomness — this is core, so it
-// stays unit-testable and the render layer owns nothing but pixels.
+// display strings and the shield-meter fill it then lays out in the shared ROM
+// stroke-vector face and canvas geometry. No DOM, no time, no randomness — this
+// is core, so it stays unit-testable and the render layer owns nothing but pixels.
 //
 // `formatShield` returns a FILL FRACTION in [0, 1] — not an angle, not a percent.
 // The shell multiplies it by the meter's pixel width (a bar) or sweep (an arc),
