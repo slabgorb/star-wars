@@ -98,6 +98,9 @@ tables; the sound disassembly and the linked audio repo hold the SFX/speech data
 ## Git Workflow
 
 - **Default branch:** `develop` (gitflow). PRs target `develop`.
+- **`main` = production:** release merges only (`just release star-wars` from
+  the arcade orchestrator); every push to `main` auto-deploys to R2 — never
+  push it by hand.
 - **Branches:** `feat/{description}`, `fix/{description}`, `chore/{description}`.
 - Don't commit/push unless asked.
 

@@ -13,14 +13,13 @@
 import { SCENE_PRESETS } from '../core/scenePresets'
 import { cellRects } from '../core/modelView'
 import { render } from '../shell/render'
-import { loadVectorFont } from '../shell/font'
 
 const COLS = 2
-const LABEL_FONT = "700 14px 'Vector Battle', 'Orbitron', monospace"
+// Dev-only tool labels stay on plain canvas text (SH2-5): they use characters
+// the caps-only shared stroke font deliberately lacks.
+const LABEL_FONT = '700 14px monospace'
 const LABEL_COLOR = '#ff9f0a' // target amber, matching the exhaust-port glow
 const HINT_COLOR = '#7a8699'
-
-void loadVectorFont() // best-effort; falls back to monospace if it never lands
 
 const canvas = document.getElementById('sheet') as HTMLCanvasElement
 const ctx = canvas.getContext('2d')!

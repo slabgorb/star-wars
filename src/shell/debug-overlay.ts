@@ -122,7 +122,9 @@ const FRUSTUM_GIZMO_YAW = 0.6
 const FRUSTUM_GIZMO_PUSH = 700
 
 const BOUNDS_COLOR = '#ff44ff' // magenta rings + labels
-const OVERLAY_FONT = "12px 'Vector Battle', monospace"
+// Dev-only diagnostic labels stay on plain canvas text (SH2-5): model names need
+// characters the caps-only shared stroke font deliberately lacks.
+const OVERLAY_FONT = '12px monospace'
 
 // ── Model builders ───────────────────────────────────────────────────────────
 

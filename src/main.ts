@@ -13,20 +13,17 @@ import {
   makeHighScoreRowGuard,
 } from '@arcade/shared/highscore'
 import { createInputController } from './shell/input'
-import { createLoop } from './shell/loop'
+import { createLoop } from '@arcade/shared/loop'
 import { createAudioEngine } from './shell/audio'
 import { render } from './shell/render'
 import { drawDebugOverlay } from './shell/debug-overlay'
-import { loadVectorFont } from './shell/font'
 
 // star-wars records the `wave` reached; the shared factory binds load/save to the
 // 'star-wars-high-scores' localStorage key and validates each row's finite score +
 // wave (the lobby reads the same key + shape — SH-4).
+// (SH2-5: no font boot needed — HUD text is stroked from the shared ROM vector
+// font, a synchronous glyph table with no async asset to load.)
 const highScoreStorage = makeHighScoreStorage('star-wars', makeHighScoreRowGuard('wave'))
-
-// Kick off the HUD vector font load. Best-effort and non-blocking: the loop
-// keeps drawing with the fallback font and picks up Vector Battle once it lands.
-void loadVectorFont()
 
 const canvas = document.getElementById('game') as HTMLCanvasElement
 const ctx = canvas.getContext('2d')!
