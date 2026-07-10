@@ -3,6 +3,8 @@
 A faithful, browser-based clone of Atari's 1983 vector arcade game *Star Wars* —
 the first-person cockpit shooter where you fly the trench run and "use the Force."
 
+**▶ Play it live: [star-wars.slabgorb.com](https://star-wars.slabgorb.com)**
+
 Glowing 3D vector lines on black, rendered with HTML5 Canvas 2D. No 3D engine,
 no physics engine, no backend. The game is a **deterministic pure simulation
 core** (its own little "Math Box") wrapped by a thin input/render/audio shell —
@@ -112,3 +114,11 @@ under `reference/` (gitignored — see [reference/README.md](reference/README.md
 Private project, for personal/educational use. *Star Wars* and *Atari* are
 trademarks of their respective owners; this is an educational clone built to
 learn how the original worked.
+
+## Releasing
+
+This repo ships from the [arcade orchestrator](https://github.com/slabgorb/arcade):
+`just release star-wars` gates on tests + build, merges `develop` → `main`, tags
+`vX.Y.Z`, and pushes. Every push to `main` auto-deploys to Cloudflare R2 via
+GitHub Actions (`.github/workflows/deploy.yml`) — **`main` is production; never
+push it by hand.** A red CI run deploys nothing.
