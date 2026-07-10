@@ -136,6 +136,15 @@ export interface SpeechEvent {
   line: SpeechLine
 }
 
+// The player confirmed their high-score initials on the entry screen
+// (SH2-13). The same core-owns-WHEN / shell-owns-HOW split as speech: the
+// shell (main.ts owns the table + persistence seam) inserts and saves
+// `name` on this cue.
+export interface NameEnteredEvent {
+  type: 'name-entered'
+  name: string
+}
+
 export type GameEvent =
   | FireEvent
   | EnemyFireEvent
@@ -150,3 +159,4 @@ export type GameEvent =
   | DeathStarDestroyedEvent
   | ExhaustPortMissedEvent
   | SpeechEvent
+  | NameEnteredEvent

@@ -844,9 +844,19 @@ function drawGameOver(
 ): void {
   glowText(ctx, 'GAME OVER', w / 2, h * 0.24, BANNER_TEXT_PX, 'center', TIE_GLOW, 24)
   glowText(ctx, `SCORE ${state.score}`, w / 2, h * 0.33, HUD_TEXT_PX, 'center', GLOW, 12)
-  glowText(ctx, 'PRESS START', w / 2, h * 0.39, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)
 
-  drawHighScoreBoard(ctx, highScores, w, h)
+  if (state.entry !== null) {
+    // SH2-13: the armed initials entry — the typed buffer with a cursor slot
+    // while the 3-char convention still has room. The board waits until the
+    // commit lands so the screen reads as one question.
+    glowText(ctx, 'ENTER YOUR INITIALS', w / 2, h * 0.42, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)
+    const buf = state.entry.initials
+    glowText(ctx, buf.length < 3 ? `${buf}_` : buf, w / 2, h * 0.52, BANNER_TEXT_PX, 'center', GLOW, 18)
+    glowText(ctx, 'TYPE A-Z  BACKSPACE FIXES  START CONFIRMS', w / 2, h * 0.62, HUD_TEXT_PX, 'center', GLOW, 6)
+  } else {
+    glowText(ctx, 'PRESS START', w / 2, h * 0.39, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)
+    drawHighScoreBoard(ctx, highScores, w, h)
+  }
 
   ctx.shadowBlur = 0
 }

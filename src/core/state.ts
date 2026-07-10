@@ -387,6 +387,14 @@ export interface GameState {
   enemyShots: Projectile[]
   /** True once the last shield is lost — the wave is over. */
   gameOver: boolean
+  /** The initials-entry buffer (SH2-13) — non-null only while the game-over
+   * screen has an ARMED entry (the shell arms it via sim.beginNameEntry when
+   * the run's score qualifies). Holds exactly what the player has typed. */
+  entry: { initials: string } | null
+  /** Last step's `input.start` — the rising-edge register (SH2-13, the
+   * asteroids startPrev precedent): the entry confirm fires on a fresh press
+   * only, so a start held across the entry-screen transition cannot commit. */
+  startPrev: boolean
   /** Seconds until the trigger can fire again. */
   fireCooldown: number
   /** Seconds until the next TIE spawns into a free slot. */
@@ -425,6 +433,8 @@ export function initialState(seed = 1983): GameState {
     exhaustPortMissedAt: null,
     enemyShots: [],
     gameOver: false,
+    entry: null,
+    startPrev: false,
     fireCooldown: 0,
     spawnTimer: SPAWN_INTERVAL,
     enemyFireCooldown: ENEMY_FIRE_INTERVAL,
