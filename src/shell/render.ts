@@ -49,6 +49,7 @@ import {
 } from '@arcade/shared/math3d'
 import { project, drawWireframe, GLOW_FOR, NEAR, FAR } from './wireframe'
 import { layoutText, CELL_H } from './font'
+import { glowPolyline } from './glow'
 
 const GLOW = '#00e5ff' // cockpit cyan
 const TIE_GLOW = GLOW_FOR['TIE Fighter'] // enemy green (shared)
@@ -805,16 +806,13 @@ function glowLine(
   y1: number,
   color: string,
 ): void {
+  // The cabinet's additive-glow envelope ('lighter') stays here, per-cabinet; the
+  // line itself strokes through the shared primitive. glowPolyline resets shadowBlur
+  // inside the save scope, so the explicit reset after restore preserves the original
+  // no-leak behaviour (restore brings back the pre-save shadowBlur).
   ctx.save()
   ctx.globalCompositeOperation = 'lighter'
-  ctx.strokeStyle = color
-  ctx.shadowColor = color
-  ctx.shadowBlur = 8
-  ctx.lineWidth = 1.5
-  ctx.beginPath()
-  ctx.moveTo(x0, y0)
-  ctx.lineTo(x1, y1)
-  ctx.stroke()
+  glowPolyline(ctx, [[x0, y0], [x1, y1]], { stroke: color, width: 1.5, blur: 8 })
   ctx.restore()
   ctx.shadowBlur = 0
 }
