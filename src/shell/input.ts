@@ -28,7 +28,13 @@ export function createInputController(canvas: HTMLCanvasElement): InputControlle
   window.addEventListener('pointerup', () => { state.fire = false })
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Space') state.fire = true
-    if (e.code === 'Enter' || e.code === 'Digit1' || e.code === 'Numpad1') pendingStart = true
+    // Edge, not level: only a fresh press (never an OS key-repeat) arms start
+    // (SH2-13, the battlezone latch discipline). With the typed initials entry
+    // behind this same key, a repeat-armed latch would machine-gun start edges
+    // into the entry screen.
+    if ((e.code === 'Enter' || e.code === 'Digit1' || e.code === 'Numpad1') && !e.repeat) {
+      pendingStart = true
+    }
   })
   window.addEventListener('keyup', (e) => { if (e.code === 'Space') state.fire = false })
 

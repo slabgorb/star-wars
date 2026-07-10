@@ -5,7 +5,7 @@
 // in the dark, proving the math box → projection → glow pipeline end to end.
 
 import { initialState, type GameState, type Phase } from './core/state'
-import { stepGame, enterPhase } from './core/sim'
+import { stepGame, enterPhase, beginNameEntry, enterInitial } from './core/sim'
 import {
   qualifiesForHighScore,
   insertHighScore,
@@ -100,6 +100,14 @@ if (import.meta.env.DEV) {
   })
 }
 
+// Initials entry (SH2-13): typed letters and Backspace are edge events, not
+// held state, so they bypass the per-frame Input sample and feed the core's
+// pure event function. enterInitial is inert without an armed entry, so no
+// mode guard is needed here.
+window.addEventListener('keydown', (e: KeyboardEvent) => {
+  if (/^[a-zA-Z]$/.test(e.key) || e.key === 'Backspace') state = enterInitial(state, e.key)
+})
+
 const loop = createLoop(
   (dt) => {
     const prev = state
@@ -170,6 +178,18 @@ const loop = createLoop(
           // speak() lazily loads the line and is a no-op until the gesture unlocks.
           audio.speak(event.line)
           break
+        case 'name-entered':
+          // The player confirmed their initials on the entry screen (SH2-13) —
+          // the core announces the commit; this shell owns the table and the
+          // persistence seam, so the insert + save happen here. The name is
+          // exactly what was typed: the old constant auto-tag is retired.
+          highScores = insertHighScore(highScores, {
+            name: event.name,
+            score: state.score,
+            wave: state.wave,
+          })
+          highScoreStorage.save(highScores)
+          break
         default: {
           // Exhaustiveness guard: a new GameEvent variant added without an arm
           // above fails to type-check here instead of being silently dropped.
@@ -181,16 +201,13 @@ const loop = createLoop(
     // Speech is now core-driven (sw2-5): the pump's `case 'speech'` above speaks
     // each cued line — including "Use the Force, Luke" on the trench edge — so no
     // line is hard-wired here any more.
-    // On the playing -> gameover edge, bank a qualifying score and persist it.
-    // (Initials entry is a follow-up; runs record under a default tag for now.)
+    // On the playing -> gameover edge, a qualifying score ARMS the typed
+    // initials entry (SH2-13, the auto-tag retired): qualification is computed
+    // here because this shell owns the table; the core owns the machine from
+    // there and announces the commit as the 'name-entered' event above.
     if (prev.mode === 'playing' && state.mode === 'gameover') {
       if (qualifiesForHighScore(highScores, state.score)) {
-        highScores = insertHighScore(highScores, {
-          name: 'ACE',
-          score: state.score,
-          wave: state.wave,
-        })
-        highScoreStorage.save(highScores)
+        state = beginNameEntry(state)
       }
     }
   },

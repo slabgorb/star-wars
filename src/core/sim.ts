@@ -71,6 +71,7 @@ import {
 } from '@arcade/shared/math3d'
 import { aimDirection, collides, waveParams } from './gameRules'
 import { nextFloat, nextInt, type Rng } from '@arcade/shared/rng'
+import { stepNameEntry } from '@arcade/shared/name-entry'
 import {
   spawnTrenchObstacles,
   TRENCH_TURRET_SCORE,
@@ -99,8 +100,34 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     return { ...state, t, events: [] }
   }
   if (state.mode === 'gameover' || state.gameOver) {
-    if (input.start) return { ...state, mode: 'attract', gameOver: false, t, aimX, aimY, events: [] }
-    return { ...state, t, aimX, aimY, events: [] }
+    const startHeld = input.start === true
+    if (state.entry !== null) {
+      // SH2-13: the ARMED initials entry gates the exit. A start press can
+      // neither abandon the run's score (incomplete buffer → inert) nor
+      // auto-commit it — the confirm fires only on a RISING edge (the
+      // startPrev register) with all MAX_INITIALS typed, so a press held
+      // across the entry-screen transition (or machine-gunned by a key-repeat
+      // latch) never commits. The commit is announced as a GameEvent; the
+      // shell owns the table and persists on the cue.
+      if (startHeld && !state.startPrev && state.entry.initials.length === MAX_INITIALS) {
+        return {
+          ...state,
+          mode: 'attract',
+          gameOver: false,
+          entry: null,
+          startPrev: startHeld,
+          t,
+          aimX,
+          aimY,
+          events: [{ type: 'name-entered', name: state.entry.initials }],
+        }
+      }
+      return { ...state, startPrev: startHeld, t, aimX, aimY, events: [] }
+    }
+    if (startHeld) {
+      return { ...state, mode: 'attract', gameOver: false, startPrev: startHeld, t, aimX, aimY, events: [] }
+    }
+    return { ...state, startPrev: startHeld, t, aimX, aimY, events: [] }
   }
 
   // Clone the RNG so the step never mutates its input — purity intact.
@@ -283,6 +310,36 @@ function startRun(s: GameState): GameState {
     ...initialState(s.rng.seed),
     events: [{ type: 'player-spawn' }, { type: 'speech', line: 'redFiveStandingBy' }],
   }
+}
+
+/** Initials the entry screen collects — the 3-char arcade convention. One of
+ * star-wars' per-cabinet NUMBERS; the entry VERB itself is the cabinet-wide
+ * shared reducer (SH2-13). */
+const MAX_INITIALS = 3
+
+/**
+ * Arm the high-score initials entry on the game-over screen (SH2-13, retiring
+ * the shell's silent 'ACE' auto-tag). The SHELL calls this on the qualifying
+ * playing→gameover edge — main.ts owns the table, so qualification is only
+ * computable there; once armed, the core owns the machine and announces the
+ * commit as a `name-entered` GameEvent. Inert outside the game-over screen.
+ */
+export function beginNameEntry(state: GameState): GameState {
+  if (state.mode !== 'gameover' && !state.gameOver) return state
+  return { ...state, entry: { initials: '' } }
+}
+
+/** One initials keydown on the armed entry screen. A PURE core event function
+ * the shell calls per keydown — typed letters are edge events, not per-frame
+ * held state, so they never ride on Input. The shared reducer
+ * (@arcade/shared/name-entry) appends A–Z uppercased up to MAX_INITIALS and
+ * deletes on Backspace (never past empty); every other key is inert. Inert
+ * without an armed entry; a no-op returns the same state. */
+export function enterInitial(state: GameState, key: string): GameState {
+  if ((state.mode !== 'gameover' && !state.gameOver) || state.entry === null) return state
+  const initials = stepNameEntry(state.entry.initials, key, MAX_INITIALS)
+  if (initials === state.entry.initials) return state
+  return { ...state, entry: { initials } }
 }
 
 /** Pieces the shared prologue already computed, threaded into a phase step. */
