@@ -48,6 +48,7 @@ import {
   type Vec3,
 } from '@arcade/shared/math3d'
 import { project, drawWireframe, GLOW_FOR, NEAR, FAR } from './wireframe'
+import { layoutText, CELL_H } from './font'
 
 const GLOW = '#00e5ff' // cockpit cyan
 const TIE_GLOW = GLOW_FOR['TIE Fighter'] // enemy green (shared)
@@ -206,12 +207,21 @@ export function trenchPlacement(state: GameState): { floor: Vec3; port: Vec3 } {
   return { floor: [0, 0, port[2]], port }
 }
 
-// The shared arcade vector face (loaded by shell/font.ts), with the same
-// 'Orbitron', monospace fallback chain tempest uses so the HUD reads even before
-// the web font lands.
-const HUD_FONT = "700 18px 'Vector Battle', 'Orbitron', monospace"
-const BANNER_FONT = "900 48px 'Vector Battle', 'Orbitron', monospace"
-const TITLE_FONT = "900 64px 'Vector Battle', 'Orbitron', monospace"
+// HUD / framing type (SH2-5). The shared ROM stroke-vector face
+// (@arcade/shared/font via ./font) replaces the retired vendored TTF; these are
+// cap heights in screen px — the 24-unit glyph cell (CELL_H) scales onto each.
+// The face is CAPS-ONLY; glowText uppercases defensively.
+const HUD_TEXT_PX = 18
+const BANNER_TEXT_PX = 48
+const TITLE_TEXT_PX = 64
+
+// Inter-glyph tracking for the thin caps-only face — it reads cramped at zero.
+// glowText's old canvas tracking was 0.1em (0.1 × the font px: 1.80/4.80/6.40px
+// at 18/48/64). A CONSTANT tracking in glyph-cell units (0.1 × CELL_H) reproduces
+// that screen tracking at every size, because each run scales the cell by
+// sizePx/CELL_H and layoutText's letterSpacing opt is in the same cell units.
+const HUD_TRACKING_EM = 0.1
+const GLYPH_TRACKING = HUD_TRACKING_EM * CELL_H
 
 export function render(
   ctx: CanvasRenderingContext2D,
@@ -578,32 +588,27 @@ const HUD_SHIELD_COLOR = '#22e600' // PROVISIONAL(findings ## HUD & framing, ## 
  * glowing frame lines, the closest approximation this renderer has of the
  * ROM's 4-corner-dot HUD frame (findings ## HUD & framing, `sub_6112`; a true
  * corner-dot frame is tracked in Open follow-ups #7). All text is the shared
- * Vector Battle face via glowText; every value is formatted by the pure core
- * (`core/hud.ts`) so the shell only lays out what the core computed — the
+ * ROM stroke-vector face via glowText; every value is formatted by the pure
+ * core (`core/hud.ts`) so the shell only lays out what the core computed — the
  * boundary holds.
  */
 function drawHudHeader(ctx: CanvasRenderingContext2D, state: GameState, w: number, _h: number): void {
   const margin = Math.round(w * HUD_MARGIN_FRAC)
 
-  ctx.textBaseline = 'alphabetic'
-  ctx.font = HUD_FONT
-
   // Left: SCORE label (red) over the value (green) — two short lines.
-  ctx.textAlign = 'left'
-  glowText(ctx, 'SCORE', margin, HUD_ROW1_Y, HUD_LABEL_COLOR, 10)
-  glowText(ctx, formatScore(state.score), margin, HUD_ROW2_Y, HUD_VALUE_COLOR, 10)
+  glowText(ctx, 'SCORE', margin, HUD_ROW1_Y, HUD_TEXT_PX, 'left', HUD_LABEL_COLOR, 10)
+  glowText(ctx, formatScore(state.score), margin, HUD_ROW2_Y, HUD_TEXT_PX, 'left', HUD_VALUE_COLOR, 10)
 
   // Right: WAVE — one line, value then label, each its own colour (a real
   // cabinet screenshot shows this asymmetric layout: SCORE stacks label over
-  // value, WAVE runs value-then-label on a single row). No `ctx.measureText`
-  // here — render() is exercised by many shell tests against a minimal stub
-  // context (see render.trench-channel.test.ts's `makeCtx`) that doesn't
-  // implement it, so the label sits a fixed, eyeball-tuned gap to the right
-  // of the numeral rather than one measured off the label's rendered width.
-  ctx.textAlign = 'right'
-  const waveLabelGap = 56 // ~width of "WAVE" at HUD_FONT + tracking, tuned by eyeball
-  glowText(ctx, 'WAVE', w - margin, HUD_ROW1_Y, HUD_LABEL_COLOR, 10)
-  glowText(ctx, formatWave(state.wave), w - margin - waveLabelGap, HUD_ROW1_Y, HUD_VALUE_COLOR, 10)
+  // value, WAVE runs value-then-label on a single row). The gap is MEASURED off
+  // the label's laid-out width (layoutText is pure — no ctx.measureText needed),
+  // not a fixed px constant: the old TTF-tuned 56 put the numeral inside the
+  // wider stroke-face label (SH2-5 review [HIGH]). +8px of air between them.
+  const waveLabelGap =
+    layoutText('WAVE', { letterSpacing: GLYPH_TRACKING }).width * (HUD_TEXT_PX / CELL_H) + 8
+  glowText(ctx, 'WAVE', w - margin, HUD_ROW1_Y, HUD_TEXT_PX, 'right', HUD_LABEL_COLOR, 10)
+  glowText(ctx, formatWave(state.wave), w - margin - waveLabelGap, HUD_ROW1_Y, HUD_TEXT_PX, 'right', HUD_VALUE_COLOR, 10)
 
   // Centre: the wireframe shield gauge with its numeral + label.
   drawShieldMeter(ctx, state, w)
@@ -612,9 +617,7 @@ function drawHudHeader(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
   glowLine(ctx, margin, HUD_FRAME_TOP_Y, w - margin, HUD_FRAME_TOP_Y, GLOW)
   glowLine(ctx, margin, HUD_FRAME_BOTTOM_Y, w - margin, HUD_FRAME_BOTTOM_Y, GLOW)
 
-  // Reset shared text state so nothing leaks into the next frame.
-  ctx.textAlign = 'left'
-  ctx.letterSpacing = '0px'
+  // Reset shared glow state so nothing leaks into the next frame.
   ctx.shadowBlur = 0
 }
 
@@ -633,14 +636,12 @@ const FORCE_BANNER_SECONDS = 3
  * into the next wave's space phase, not just while still in the trench.
  */
 function drawTrenchBanners(ctx: CanvasRenderingContext2D, state: GameState, w: number, h: number): void {
-  ctx.font = BANNER_FONT
-  ctx.textAlign = 'center'
   if (
     state.phase === 'trench' &&
     state.exhaustPort &&
     -state.exhaustPort.pos[2] <= PORT_AHEAD_RANGE
   ) {
-    glowText(ctx, 'EXHAUST PORT AHEAD', w / 2, h * 0.22, '#dddddd', 14)
+    glowText(ctx, 'EXHAUST PORT AHEAD', w / 2, h * 0.22, BANNER_TEXT_PX, 'center', '#dddddd', 14)
   }
   if (state.forceBonusAwardedAt !== null && state.t - state.forceBonusAwardedAt <= FORCE_BANNER_SECONDS) {
     // "<amount> FOR USING THE FORCE" is the confirmed authentic cabinet banner
@@ -649,9 +650,8 @@ function drawTrenchBanners(ctx: CanvasRenderingContext2D, state: GameState, w: n
     // (docs/star-wars-1983-source-findings.md:655); the plain "USE THE FORCE"
     // string listed earlier in the same item is a shorter ROM string-table
     // fragment, not the full banner text.
-    glowText(ctx, `${FORCE_BONUS.toLocaleString('en-US')} FOR USING THE FORCE`, w / 2, h * 0.16, '#dddddd', 12)
+    glowText(ctx, `${FORCE_BONUS.toLocaleString('en-US')} FOR USING THE FORCE`, w / 2, h * 0.16, BANNER_TEXT_PX, 'center', '#dddddd', 12)
   }
-  ctx.textAlign = 'left'
 }
 
 // Shield-gauge width as a fraction of the viewport — findings ## HUD & framing
@@ -720,10 +720,8 @@ function drawShieldMeter(ctx: CanvasRenderingContext2D, state: GameState, w: num
   ctx.stroke()
   ctx.restore()
 
-  ctx.font = HUD_FONT
-  ctx.textAlign = 'center'
-  glowText(ctx, formatLives(state.lives), w / 2, yBot + 16, HUD_SHIELD_COLOR, 8)
-  glowText(ctx, 'SHIELD', w / 2, yBot + 34, HUD_SHIELD_COLOR, 8)
+  glowText(ctx, formatLives(state.lives), w / 2, yBot + 16, HUD_TEXT_PX, 'center', HUD_SHIELD_COLOR, 8)
+  glowText(ctx, 'SHIELD', w / 2, yBot + 34, HUD_TEXT_PX, 'center', HUD_SHIELD_COLOR, 8)
   ctx.shadowBlur = 0
 }
 
@@ -757,19 +755,11 @@ function drawAttract(
   w: number,
   h: number,
 ): void {
-  ctx.textBaseline = 'alphabetic'
-  ctx.textAlign = 'center'
-
-  ctx.font = TITLE_FONT
-  glowText(ctx, 'STAR WARS', w / 2, h * 0.26, GLOW, 28)
-
-  ctx.font = HUD_FONT
-  glowText(ctx, 'PRESS START', w / 2, h * 0.38, BOLT_GLOW, 12)
+  glowText(ctx, 'STAR WARS', w / 2, h * 0.26, TITLE_TEXT_PX, 'center', GLOW, 28)
+  glowText(ctx, 'PRESS START', w / 2, h * 0.38, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)
 
   drawHighScoreBoard(ctx, highScores, w, h)
 
-  ctx.textAlign = 'left'
-  ctx.letterSpacing = '0px'
   ctx.shadowBlur = 0
 }
 
@@ -781,20 +771,12 @@ function drawGameOver(
   w: number,
   h: number,
 ): void {
-  ctx.textBaseline = 'alphabetic'
-  ctx.textAlign = 'center'
-
-  ctx.font = BANNER_FONT
-  glowText(ctx, 'GAME OVER', w / 2, h * 0.24, TIE_GLOW, 24)
-
-  ctx.font = HUD_FONT
-  glowText(ctx, `SCORE ${state.score}`, w / 2, h * 0.33, GLOW, 12)
-  glowText(ctx, 'PRESS START', w / 2, h * 0.39, BOLT_GLOW, 12)
+  glowText(ctx, 'GAME OVER', w / 2, h * 0.24, BANNER_TEXT_PX, 'center', TIE_GLOW, 24)
+  glowText(ctx, `SCORE ${state.score}`, w / 2, h * 0.33, HUD_TEXT_PX, 'center', GLOW, 12)
+  glowText(ctx, 'PRESS START', w / 2, h * 0.39, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)
 
   drawHighScoreBoard(ctx, highScores, w, h)
 
-  ctx.textAlign = 'left'
-  ctx.letterSpacing = '0px'
   ctx.shadowBlur = 0
 }
 
@@ -805,51 +787,69 @@ function drawHighScoreBoard(
   w: number,
   h: number,
 ): void {
-  ctx.textAlign = 'center'
-  ctx.font = HUD_FONT
-  glowText(ctx, 'HIGH SCORES', w / 2, h * 0.5, GLOW, 10)
+  glowText(ctx, 'HIGH SCORES', w / 2, h * 0.5, HUD_TEXT_PX, 'center', GLOW, 10)
 
   let y = h * 0.5 + 30
   if (highScores.length === 0) {
-    glowText(ctx, 'NO SCORES YET', w / 2, y, GLOW, 6)
+    glowText(ctx, 'NO SCORES YET', w / 2, y, HUD_TEXT_PX, 'center', GLOW, 6)
     return
   }
   for (let i = 0; i < highScores.length; i++) {
     const e = highScores[i]
     const rank = String(i + 1).padStart(2, ' ')
     const pts = String(e.score).padStart(6, ' ')
-    glowText(ctx, `${rank}  ${e.name}  ${pts}  WAVE ${e.wave}`, w / 2, y, GLOW, 6)
+    glowText(ctx, `${rank}  ${e.name}  ${pts}  WAVE ${e.wave}`, w / 2, y, HUD_TEXT_PX, 'center', GLOW, 6)
     y += 24
   }
 }
 
 // Glowing vector-style text (caps): a wide bloom plus a tighter inner glow under
 // a crisp core, mirroring tempest's HUD so both games light their thin caps the
-// same way. Respects the caller's current font and textAlign.
+// same way. SH2-5: glyphs are STROKED from the shared ROM vector font
+// (layoutText geometry via ./font), not drawn through the canvas text API —
+// text lights up exactly like the wireframes it flies over. `sizePx` is the cap
+// height the 24-unit glyph cell scales onto; `align` anchors the text box on x
+// (the old ctx.textAlign contract, now explicit); y stays the baseline.
 function glowText(
   ctx: CanvasRenderingContext2D,
   text: string,
   x: number,
   y: number,
+  sizePx: number,
+  align: 'left' | 'center' | 'right',
   color: string,
   blur: number,
 ): void {
-  // ~0.1em tracking, derived from the current font's px size, for an airy
-  // arcade-marquee feel that also helps the thin vector caps read.
-  const px = /(\d+(?:\.\d+)?)px/.exec(ctx.font)
-  ctx.letterSpacing = `${((px ? parseFloat(px[1]) : 16) * 0.1).toFixed(2)}px`
-  const caps = text.toUpperCase() // Vector Battle is caps-only
-  ctx.fillStyle = color
+  const caps = text.toUpperCase() // the shared VGMSGA face is caps-only
+  const scale = sizePx / CELL_H
+  const { strokes, width } = layoutText(caps, { letterSpacing: GLYPH_TRACKING })
+  const w = width * scale
+  const ox = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x
+  const trace = (): void => {
+    ctx.beginPath()
+    for (const s of strokes) {
+      // Glyph space is y-up with the baseline at 0; map to screen (y grows down).
+      s.points.forEach((p, i) => {
+        const sx = ox + p.x * scale
+        const sy = y - p.y * scale
+        if (i === 0) ctx.moveTo(sx, sy)
+        else ctx.lineTo(sx, sy)
+      })
+    }
+    ctx.stroke()
+  }
+  ctx.strokeStyle = color
   ctx.shadowColor = color
+  ctx.lineWidth = 1.5
   if (blur > 0) {
     ctx.save()
     ctx.globalCompositeOperation = 'lighter'
     ctx.shadowBlur = blur * 1.5
-    ctx.fillText(caps, x, y)
+    trace()
     ctx.shadowBlur = blur * 0.8
-    ctx.fillText(caps, x, y)
+    trace()
     ctx.restore()
   }
   ctx.shadowBlur = 0
-  ctx.fillText(caps, x, y)
+  trace()
 }

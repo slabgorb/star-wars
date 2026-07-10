@@ -18,14 +18,15 @@ import {
 import { drawWireframe, GLOW_FOR, DEFAULT_GLOW, NEAR, FAR } from '../shell/wireframe'
 import { SURFACE_ORIENT } from '../shell/render'
 import { modelBounds, fitDistance, cellRects } from '../core/modelView'
-import { loadVectorFont } from '../shell/font'
 
 const FOV_Y = Math.PI / 3 // match the game camera
 const COLS = 3
 const SPIN_RATE = 0.6 // radians per second
 const VIEW_TILT = -Math.PI / 6 // fixed 3/4-view pitch so flat y=0 models aren't edge-on
 const GAMEPLAY_DISTANCE = 2200 // representative engagement distance for "G" mode
-const LABEL_FONT = "700 14px 'Vector Battle', 'Orbitron', monospace"
+// Dev-only tool labels stay on plain canvas text (SH2-5): they use characters
+// the caps-only shared stroke font deliberately lacks.
+const LABEL_FONT = '700 14px monospace'
 const HINT_COLOR = '#7a8699'
 
 // Per-model display orientation, mirroring render.ts: the surface lies flat as in
@@ -33,8 +34,6 @@ const HINT_COLOR = '#7a8699'
 function orientFor(name: string): Mat4 {
   return name === 'Death Star Surface' ? SURFACE_ORIENT : IDENTITY
 }
-
-void loadVectorFont() // best-effort; falls back to monospace if it never lands
 
 const canvas = document.getElementById('sheet') as HTMLCanvasElement
 const ctx = canvas.getContext('2d')!
