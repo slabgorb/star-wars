@@ -241,25 +241,7 @@ describe('SH2-5 — render.ts draws text via @arcade/shared/font layoutText', ()
   })
 })
 
-// ---- (4) the shared font resolves and carries the audited character set -------
-
-describe('SH2-5 — @arcade/shared/font resolves with the star-wars glyph set', () => {
-  // RED: the current pin (v0.5.0) has NO /font subpath — this import throws
-  // until Dev re-pins @arcade/shared (>= f9676be; tag v0.7.0 is the clean pin).
-  it('resolves the /font subpath and covers every audited character', async () => {
-    const font = await import('@arcade/shared/font')
-    expect(typeof font.layoutText).toBe('function')
-    // Full alphabet + digits (high-score names can be any A-Z) and the ','
-    // that formatScore / the force-bonus banner render via toLocaleString —
-    // the SH2-3 audit's star-wars gap glyph, absent from tags <= v0.6.0.
-    const NEEDED = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,'
-    for (const ch of NEEDED) {
-      expect(font.hasGlyph(ch), `shared font missing glyph ${JSON.stringify(ch)}`).toBe(true)
-    }
-    expect(font.GLYPH_CHARS).toContain(',')
-    // Representative banner text (comma + spaces) lays out to real geometry.
-    const laid = font.layoutText('12,066 FOR USING THE FORCE')
-    expect(laid.strokes.length).toBeGreaterThan(0)
-    expect(laid.width).toBeGreaterThan(0)
-  })
-})
+// ---- (4) shared-font resolution + glyph coverage lives in its own file --------
+// (tests/shell/font-shared-resolution.test.ts) so the unresolvable-subpath
+// failure at the v0.5.0 pin reads as a TEST failure there without any risk of a
+// module-level resolution crash silencing the mechanism/scan tests above.
