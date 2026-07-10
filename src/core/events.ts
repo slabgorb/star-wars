@@ -95,6 +95,25 @@ export interface ForceBonusEvent {
   amount: number
 }
 
+// The winning shot — a player torpedo destroyed the exhaust port and the Death
+// Star blows (sw2-4). Positioned like `enemy-death` / `fireball-destroyed` so the
+// shell can stage the explosion AT the port's world spot; `pos` is the port's
+// down-range position on the killing frame. Emitted BEFORE the `level-clear` warp
+// so the shell shows the boom before the jump to the next wave's space phase.
+export interface DeathStarDestroyedEvent {
+  type: 'death-star-destroyed'
+  pos: Vec3
+}
+
+// The run's failure beat — the exhaust port scrolled past the cockpit un-destroyed
+// (sw2-4). Its own cue, distinct from the generic `terrain-crash`, so the shell can
+// say "YOU MISSED" rather than read the lost run as a nondescript scrape or as
+// nothing. Positionless like `terrain-crash`: the miss is a HUD/audio tell, not a
+// world-placed effect.
+export interface ExhaustPortMissedEvent {
+  type: 'exhaust-port-missed'
+}
+
 // A scripted TMS5220 voice line the CORE cues at a gameplay moment (sw2-5). A
 // string-literal union — not `string` — so the shell's event->speak pump stays
 // exhaustive and a typo is a type error, not a silent miss. Only lines with a
@@ -128,4 +147,6 @@ export type GameEvent =
   | FireballDestroyedEvent
   | TrenchObstacleDestroyedEvent
   | ForceBonusEvent
+  | DeathStarDestroyedEvent
+  | ExhaustPortMissedEvent
   | SpeechEvent

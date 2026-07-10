@@ -370,6 +370,19 @@ export interface GameState {
    * transition, which re-stamps it after `enterPhase`'s reset (see `clearRun`
    * in sim.ts). Reset to `null` on every phase entry. */
   forceBonusAwardedAt: number | null
+  /** Sim time (`t`) the exhaust port was destroyed, or `null` if not this run.
+   * Stamped by ANY port kill (clean or not, unlike `forceBonusAwardedAt`) so the
+   * shell can stage the Death-Star explosion for a beat — including across the
+   * `clearRun` warp, which re-stamps it after `enterPhase`'s reset (sw2-4). The
+   * `death-star-destroyed` GameEvent fires the same frame for the SFX pump; this
+   * timestamp is what lets the VISUAL survive the immediate jump to space. Reset
+   * to `null` on every phase entry. */
+  deathStarDestroyedAt: number | null
+  /** Sim time (`t`) the port slipped past the cockpit un-destroyed (a MISS), or
+   * `null` if it hasn't this run. Stamped by the port-reaches-cockpit path so the
+   * shell can show a "you missed" tell distinct from a generic crash (sw2-4);
+   * pairs with the `exhaust-port-missed` GameEvent. Reset on every phase entry. */
+  exhaustPortMissedAt: number | null
   /** Enemy fireballs currently in flight. */
   enemyShots: Projectile[]
   /** True once the last shield is lost — the wave is over. */
@@ -408,6 +421,8 @@ export function initialState(seed = 1983): GameState {
     trenchObstacles: [],
     trenchShotsFired: 0,
     forceBonusAwardedAt: null,
+    deathStarDestroyedAt: null,
+    exhaustPortMissedAt: null,
     enemyShots: [],
     gameOver: false,
     fireCooldown: 0,
