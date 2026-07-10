@@ -601,9 +601,12 @@ function drawHudHeader(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
 
   // Right: WAVE — one line, value then label, each its own colour (a real
   // cabinet screenshot shows this asymmetric layout: SCORE stacks label over
-  // value, WAVE runs value-then-label on a single row). The label sits a fixed,
-  // eyeball-tuned gap to the right of the numeral.
-  const waveLabelGap = 56 // ~width of "WAVE" at HUD_TEXT_PX + tracking, tuned by eyeball
+  // value, WAVE runs value-then-label on a single row). The gap is MEASURED off
+  // the label's laid-out width (layoutText is pure — no ctx.measureText needed),
+  // not a fixed px constant: the old TTF-tuned 56 put the numeral inside the
+  // wider stroke-face label (SH2-5 review [HIGH]). +8px of air between them.
+  const waveLabelGap =
+    layoutText('WAVE', { letterSpacing: GLYPH_TRACKING }).width * (HUD_TEXT_PX / CELL_H) + 8
   glowText(ctx, 'WAVE', w - margin, HUD_ROW1_Y, HUD_TEXT_PX, 'right', HUD_LABEL_COLOR, 10)
   glowText(ctx, formatWave(state.wave), w - margin - waveLabelGap, HUD_ROW1_Y, HUD_TEXT_PX, 'right', HUD_VALUE_COLOR, 10)
 
