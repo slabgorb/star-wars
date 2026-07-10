@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   // Served under /star-wars/ on arcade.slabgorb.com, mirroring tempest's
   // /tempest/ base so root-relative asset URLs resolve in dev and build.
-  base: '/star-wars/',
+  base: '/',
   build: {
     // Multi-page: ship the game (index.html) AND the model contact sheet.
     rollupOptions: {
