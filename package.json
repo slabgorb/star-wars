@@ -1,7 +1,7 @@
 {
   "name": "star-wars",
   "private": true,
-  "version": "0.0.3",
+  "version": "0.0.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@arcade/shared": "github:slabgorb/arcade-shared#feat/SH2-13-keyboard-highscore-entry"
+    "@arcade/shared": "github:slabgorb/arcade-shared#v0.10.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
