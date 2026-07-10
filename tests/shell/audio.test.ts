@@ -262,6 +262,11 @@ describe('event -> sound wiring in main.ts (AC4)', () => {
   })
 
   it('handles every audio-bearing event type in the pump', () => {
+    // Every event the pump maps to an `audio.play(...)` sample. Kept exhaustive:
+    // 'fireball-destroyed'/'trench-obstacle-destroyed'/'force-bonus' were added by
+    // earlier stories and 'death-star-destroyed'/'exhaust-port-missed' by sw2-4 —
+    // all belong here (the pure list of audio.play events; 'speech' routes through
+    // its own generic speak() arm, asserted separately below).
     for (const type of [
       'fire',
       'enemy-fire',
@@ -270,6 +275,11 @@ describe('event -> sound wiring in main.ts (AC4)', () => {
       'level-clear',
       'player-spawn',
       'terrain-crash',
+      'fireball-destroyed',
+      'trench-obstacle-destroyed',
+      'force-bonus',
+      'death-star-destroyed',
+      'exhaust-port-missed',
     ]) {
       expect(mainSrc).toMatch(new RegExp(`['"]${type}['"]`))
     }

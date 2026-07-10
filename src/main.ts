@@ -150,6 +150,20 @@ const loop = createLoop(
           // the same no-new-asset pattern as trench-obstacle-destroyed.
           audio.play('levelClear')
           break
+        case 'death-star-destroyed':
+          // The winning shot — the Death Star blows (sw2-4). Reuse the explosion
+          // sample (same no-new-asset pattern as fireball/obstacle destroyed); a
+          // bespoke Death-Star boom can swap in later without touching the core.
+          // Rides alongside this frame's level-clear fanfare: boom + fanfare.
+          audio.play('enemyDeath')
+          break
+        case 'exhaust-port-missed':
+          // The port slipped past un-destroyed (sw2-4). Reuse the player-explosion
+          // cue for a "you blew the run" tell — deliberately DIFFERENT from the
+          // co-emitted terrain-crash sound so the miss reads distinctly, not as a
+          // generic scrape.
+          audio.play('playerDeath')
+          break
         case 'speech':
           // A voice line the core cued this frame (sw2-5). One generic arm speaks
           // every current AND future line — the core owns WHEN, the shell owns HOW.
