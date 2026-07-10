@@ -9,6 +9,7 @@
 
 import type { Model3D } from '../core/models'
 import { transform, type Mat4, type Vec3 } from '@arcade/shared/math3d'
+import { withGlow } from './glow'
 
 // Camera clip planes — shared by project() and any perspective() the caller builds.
 // FAR encompasses the farthest spawn: TIEs appear at TIE_SPAWN_DISTANCE (8000,
@@ -75,25 +76,25 @@ export function drawWireframe(
   h: number,
   color: string,
 ): void {
-  ctx.lineWidth = 1.5
-  ctx.strokeStyle = color
-  ctx.shadowColor = color
-  ctx.shadowBlur = 10
-  ctx.beginPath()
-  for (const [a, b] of m.edges) {
-    const ea = transform(modelView, m.vertices[a])
-    const eb = transform(modelView, m.vertices[b])
-    // In EYE space (post-view) a vertex is in front of (or on) the near plane when
-    // its Z <= -NEAR; a larger Z is too close / behind the cockpit and is clipped.
-    const aFront = ea[2] <= NEAR_Z
-    const bFront = eb[2] <= NEAR_Z
-    if (!aFront && !bFront) continue // whole edge is behind the near plane — drop it
-    // Clip each behind-plane endpoint to the crossing instead of dropping the edge.
-    const sa = toScreen(aFront ? ea : clipToNear(ea, eb), proj, w, h)
-    const sb = toScreen(bFront ? eb : clipToNear(eb, ea), proj, w, h)
-    ctx.moveTo(sa[0], sa[1])
-    ctx.lineTo(sb[0], sb[1])
-  }
-  ctx.stroke()
-  ctx.shadowBlur = 0
+  // The model is many disjoint edges in a single path, so withGlow (not glowPolyline)
+  // wraps the whole beginPath→stroke in the shared set-draw-reset-blur envelope. The
+  // per-cabinet width (1.5) + blur (10) stay inline here.
+  withGlow(ctx, { stroke: color, width: 1.5, blur: 10 }, () => {
+    ctx.beginPath()
+    for (const [a, b] of m.edges) {
+      const ea = transform(modelView, m.vertices[a])
+      const eb = transform(modelView, m.vertices[b])
+      // In EYE space (post-view) a vertex is in front of (or on) the near plane when
+      // its Z <= -NEAR; a larger Z is too close / behind the cockpit and is clipped.
+      const aFront = ea[2] <= NEAR_Z
+      const bFront = eb[2] <= NEAR_Z
+      if (!aFront && !bFront) continue // whole edge is behind the near plane — drop it
+      // Clip each behind-plane endpoint to the crossing instead of dropping the edge.
+      const sa = toScreen(aFront ? ea : clipToNear(ea, eb), proj, w, h)
+      const sb = toScreen(bFront ? eb : clipToNear(eb, ea), proj, w, h)
+      ctx.moveTo(sa[0], sa[1])
+      ctx.lineTo(sb[0], sb[1])
+    }
+    ctx.stroke()
+  })
 }
