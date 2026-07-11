@@ -174,9 +174,13 @@ describe('sw2-4 — a real-fired torpedo detonates the port (real-speed coverage
   it('a dead-centre torpedo fired at PROJECTILE_SPEED detonates the port at 60fps', () => {
     // The sw2-1 tunneling finding directed here: the existing port tests hand-place
     // unit bolts on a 0.001s tick; none fire at 5000 u/s and follow at 60fps, where
-    // a dead-on torpedo sits inside the 120u sphere for only ~2-3 frames. A torpedo
-    // that visibly flies into the port MUST register.
-    const base = trench(portAt([0, 0, -1500]))
+    // a dead-on torpedo sits inside the (post-sw3-15, octagon-tight) hit sphere for
+    // only a frame or two. A torpedo that visibly flies into the port MUST register.
+    // Re-seated in-window (sw3-15): the hit/miss now resolves only in the ROM's narrow
+    // $800 end-wall window, so the port is placed near the cockpit — well inside it —
+    // rather than the mid-trench -1500 this predates the window gate; the no-tunnel
+    // coverage (real speed through a small sphere) is unchanged, and tighter if anything.
+    const base = trench(portAt([0, 0, -300]))
     const { state, events } = fireAndFollowPort(base)
     expect(state.exhaustPort).toBeNull() // detonated, not tunneled through
     expect(state.phase).toBe('space') // the winning shot cleared the run

@@ -17,14 +17,23 @@ import {
 } from '../../src/core/state'
 import { stepGame, enterPhase } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
+import type { Vec3 } from '@arcade/shared/math3d'
 
-/** A playing trench state with the port at `portZ` and a bolt already on it. */
+/** A port kill now lands only inside the narrow approach window (sw3-15: the ROM
+ *  $800 window near the end wall). spawnPort seeds the port far downrange at
+ *  -EXHAUST_PORT_DISTANCE, which is OUTSIDE that window, so we seat the port near the
+ *  cockpit — deep inside any plausible window — where a kill actually registers. The
+ *  bonus semantics under test (clean run vs prior shots) are unchanged by WHERE the
+ *  kill lands; only that it lands at all, which requires the in-window port. */
+const IN_WINDOW_PORT: Vec3 = [0, 0, -300]
+
+/** A playing trench state with the port in the approach window and a bolt on it. */
 function portKill(state: GameState): GameState {
-  const port = state.exhaustPort!.pos
   return {
     ...state,
     mode: 'playing',
-    projectiles: [{ pos: [port[0], port[1], port[2]], vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
+    exhaustPort: { pos: [...IN_WINDOW_PORT] as Vec3 },
+    projectiles: [{ pos: [...IN_WINDOW_PORT] as Vec3, vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
   }
 }
 
