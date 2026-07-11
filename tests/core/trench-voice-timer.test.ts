@@ -43,7 +43,7 @@
 import { describe, it, expect } from 'vitest'
 import type { GameEvent, SpeechLine } from '../../src/core/events'
 import { stepGame, enterPhase } from '../../src/core/sim'
-import { initialState, type GameState } from '../../src/core/state'
+import { initialState, PROJECTILE_TTL, type GameState } from '../../src/core/state'
 import { NO_INPUT } from '../../src/core/input'
 
 const DT = 1 / 60
@@ -171,13 +171,31 @@ describe('a line fires ONCE per run, not every frame past its threshold (AC5)', 
 })
 
 describe('the timer + cues reset each run (AC6)', () => {
-  it('a fresh trench zeroes the timer and re-arms the parity set', () => {
+  it('resets a NON-ZERO timer to 0 on entering the trench', () => {
+    // Drive the reset from a genuinely dirty value — NOT from a pristine
+    // `initialState` (whose trenchTimer is already 0, which would pass even if the
+    // `enterPhase` reset were deleted). Mirrors trench-channel.test.ts:342's
+    // `{ ...initialState, trenchScrollZ: 555 }` dirty-fixture pattern.
+    const dirty: GameState = { ...initialState(1), trenchTimer: 47 }
+    expect(enterPhase(dirty, 'trench').trenchTimer).toBe(0)
+  })
+
+  it('re-arms the cues on a second run whose prior timer had already climbed past 24', () => {
+    // Run 1 climbs the timer well past every threshold...
     const run1 = collectRun(freshTrench(1, 2), 30)
+    expect(run1[run1.length - 1].timer).toBeGreaterThan(T_YAHOO) // really climbed past 24
     expect(firedAt(run1, 'lukeTrustMe')).toEqual([T_LUKE])
-    // A new run (next wave re-enters the trench) opens with a zeroed timer...
-    const run2Start = freshTrench(1, 2)
+    // ...then a NEW trench opens from a state that STILL carries that climbed timer
+    // (as the real run→run transition would). The entry MUST zero it, or the second
+    // run is silent forever (timer never falls back to 16). If the enterPhase reset
+    // were missing, `run2Start.trenchTimer` would be 30 and the cue would never fire.
+    const climbed: GameState = { ...initialState(1), wave: 2, trenchTimer: 30 }
+    const run2Start: GameState = {
+      ...enterPhase(climbed, 'trench'),
+      mode: 'playing',
+      trenchObstacles: [],
+    }
     expect(run2Start.trenchTimer).toBe(0)
-    // ...and cues the line all over again — the timer is per-run, not per-game.
     expect(firedAt(collectRun(run2Start, 30), 'lukeTrustMe')).toEqual([T_LUKE])
   })
 })
@@ -231,6 +249,44 @@ describe('SpeechEvent carries the new trench SpeechLine ids (AC9 / union exhaust
       expect(e.type).toBe('speech')
       if (e.type === 'speech') expect(typeof e.line).toBe('string')
     }
+  })
+})
+
+describe('a cue rides every return path — coexists with crash / port-kill events', () => {
+  it('fires alongside the win cue when timer 16 lands on the SAME frame as a port kill (clearRun path)', () => {
+    // Even wave, timer one step short of 16, with a bolt parked on the port so this
+    // ONE step both cues "Luke, trust me" (timer -> 16) AND destroys the port. The
+    // port kill runs clearRun -> enterPhase (the most complex return path); the cue,
+    // pushed at the TOP of stepTrench, must still ride the frame's events out.
+    const trench = enterPhase(initialState(1983), 'trench')
+    const port = trench.exhaustPort!.pos
+    const s0: GameState = {
+      ...trench,
+      mode: 'playing',
+      wave: 2,
+      trenchTimer: T_LUKE - 1,
+      trenchObstacles: [],
+      projectiles: [{ pos: [port[0], port[1], port[2]], vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
+    }
+    const lines = spokenLines(stepGame(s0, NO_INPUT, DT))
+    expect(lines).toContain('lukeTrustMe') // the timer cue survived the port-hit return
+    expect(lines).toContain('greatShotKidThatWasOneInAMillion') // ...next to the win cue
+  })
+
+  it('fires alongside a catwalk crash on the SAME frame (obstacle-crash path)', () => {
+    // A synthetic catwalk parked at the cockpit forces the crash branch on this
+    // step, while the timer hits 16. The cue must ride the crash return path too.
+    const trench = enterPhase(initialState(1983), 'trench')
+    const s0: GameState = {
+      ...trench,
+      mode: 'playing',
+      wave: 2,
+      trenchTimer: T_LUKE - 1,
+      trenchObstacles: [{ kind: 'catwalk', pos: [0, 0, -1] }],
+    }
+    const out = stepGame(s0, NO_INPUT, DT)
+    expect(spokenLines(out)).toContain('lukeTrustMe') // the cue survived the crash return
+    expect(out.events.some((e) => e.type === 'terrain-crash')).toBe(true) // crash really fired
   })
 })
 
