@@ -31,7 +31,7 @@ import { stepGame, enterPhase } from '../../src/core/sim'
 import {
   initialState,
   SPACE_WAVE_QUOTA,
-  SURFACE_WAVE_QUOTA,
+  towersForWave,
   FORCE_BONUS,
   PROJECTILE_TTL,
   type GameState,
@@ -111,7 +111,7 @@ describe('speech cue — entering the Death Star surface (AC2)', () => {
 
 describe('speech cue — entering the trench (AC2)', () => {
   it("cues 'Use the Force, Luke' on the surface -> trench transition", () => {
-    const out = stepGame(playing({ phase: 'surface', phaseKills: SURFACE_WAVE_QUOTA }), NO_INPUT, DT)
+    const out = stepGame(playing({ phase: 'surface', phaseKills: towersForWave(1) }), NO_INPUT, DT)
     expect(out.phase).toBe('trench') // the transition actually happened
     expect(out.events).toContainEqual({ type: 'level-clear', next: 'trench' })
     expect(out.events).toContainEqual({ type: 'speech', line: 'useTheForceLuke' })
@@ -119,7 +119,7 @@ describe('speech cue — entering the trench (AC2)', () => {
 
   it('cues the trench line exactly ONCE — not re-emitted on later trench frames', () => {
     const entered = stepGame(
-      playing({ phase: 'surface', phaseKills: SURFACE_WAVE_QUOTA }),
+      playing({ phase: 'surface', phaseKills: towersForWave(1) }),
       NO_INPUT,
       DT,
     )
@@ -183,7 +183,7 @@ describe('speech cues are deterministic (AC2 — pure core)', () => {
       for (let f = 0; f < 3; f++) {
         // After the space->surface step, force the surface quota so the next step
         // advances to the trench — a fixed script, no RNG divergence.
-        if (s.phase === 'surface') s = { ...s, phaseKills: SURFACE_WAVE_QUOTA }
+        if (s.phase === 'surface') s = { ...s, phaseKills: towersForWave(1) }
         s = stepGame(s, NO_INPUT, DT)
         lines.push(...spokenLines(s))
       }

@@ -25,7 +25,8 @@ import {
   DEATH_STAR_SURFACE,
   DEATH_STAR,
   SURFACE_TOWER,
-  TOWER_CUBE,
+  TOWER_CAP,
+  SURFACE_BUNKER,
   EXHAUST_PORT,
   TRENCH_TURRET,
   TRENCH_SQUARE,
@@ -53,8 +54,12 @@ import { glowPolyline } from './glow'
 
 const GLOW = '#00e5ff' // cockpit cyan
 const TIE_GLOW = GLOW_FOR['TIE Fighter'] // enemy green (shared)
-const TURRET_GLOW = GLOW_FOR['Surface Tower'] // surface tower red body (shared)
-const CUBE_GLOW = '#ffd60a' // tower yellow cube top (sw2-3)
+const TURRET_GLOW = GLOW_FOR['Surface Tower'] // vector red (shared) — trench turrets + bunkers
+// The GDVIEW surface palette (sw3-11, WSGRND.MAC): the tower column strokes
+// VGCYLW yellow, its cap/hat "SPECIAL WHITE" (VGCWHT), and lone undamaged
+// bunkers VGCRED — which is exactly the shared 'Surface Tower' red above.
+const TOWER_GLOW = '#ffd60a' // tower yellow column (VGCYLW; the sw2-3 cabinet yellow)
+const CAP_GLOW = '#f4f4ff' // tower white cap (VGCWHT, faint vector-blue cast)
 const SURFACE_GLOW = GLOW_FOR['Death Star Surface'] // death star steel (shared)
 const DEATH_STAR_GLOW = GLOW_FOR['Death Star'] // death star body hull (shared)
 const BOLT_GLOW = '#9dff00' // player laser green
@@ -254,15 +259,20 @@ export function render(
     // camera (lifted to the ship's altitude) is the only transform.
     drawWireframe(ctx, surfaceGrid(state.surfaceScrollZ), view, proj, w, h, SURFACE_GLOW)
     for (const tu of state.turrets) {
-      // Towers stand on the surface at their TRUE world Y (base ≈ 0). The camera
-      // lifts floor and towers together, so they sit ON the floor as the ship
-      // climbs — the per-turret altitude drop (the 8-4 reconcile) is gone, the
-      // camera owns it. The red body carries a yellow CUBE TOP (sw2-3) — the
-      // tower's gun, where its fireballs erupt — so it reads as a tall tower, not
-      // a grounded turret. Both share the tower's placement transform.
+      // Ground objects stand on the surface at their TRUE world Y (base ≈ 0).
+      // The camera lifts floor and objects together, so they sit ON the floor as
+      // the ship climbs — the per-turret altitude drop (the 8-4 reconcile) is
+      // gone, the camera owns it. The GDVIEW palette (sw3-11): towers are the
+      // tall YELLOW column wearing the WHITE cap — the tower's gun, where its
+      // fireballs erupt — and bunker-kind sites are the squat RED shorty.
+      // Column and cap share the tower's placement transform.
       const towerMat = multiply(view, modelMatrix(tu.pos, TOWER_ORIENT))
-      drawWireframe(ctx, SURFACE_TOWER, towerMat, proj, w, h, TURRET_GLOW)
-      drawWireframe(ctx, TOWER_CUBE, towerMat, proj, w, h, CUBE_GLOW)
+      if (tu.kind === 'bunker') {
+        drawWireframe(ctx, SURFACE_BUNKER, towerMat, proj, w, h, TURRET_GLOW)
+      } else {
+        drawWireframe(ctx, SURFACE_TOWER, towerMat, proj, w, h, TOWER_GLOW)
+        drawWireframe(ctx, TOWER_CAP, towerMat, proj, w, h, CAP_GLOW)
+      }
     }
   } else if (state.phase === 'trench') {
     // Story 11-6 — the trench is a procedural WALLED channel (ADR 0002 part B):
@@ -330,7 +340,7 @@ export function render(
   }
   // Bolts and fireballs ride the same camera as the models (transform through the
   // view), so they stay seated in the scene when the eye is lifted (surface/trench).
-  for (const s of state.enemyShots) drawFireball(ctx, transform(view, s.pos), proj, w, h)
+  for (const s of state.enemyShots) drawFireball(ctx, transform(view, s.pos), proj, w, h, s.ttl)
 
   // The framing layer (story 8-6): the playing HUD during a run, the attract/title
   // screen at idle, the game-over board after. The 3D scene above renders behind
@@ -496,56 +506,98 @@ function drawDeathStarBoom(ctx: CanvasRenderingContext2D, progress: number, w: n
   ctx.shadowBlur = 0
 }
 
-// The authentic enemy fireball is a RED radial SPARKLE, not a ring. The ROM's
-// gunshot picture (WSVROM.MAC `GNB0-3`, ".SBTTLE GUNSHOT PICTURES / GUN SHOTS --
-// SPARKLES WITH FUSE BALLS") draws ~8 spikes radiating FROM the centre outward
-// (`CXY 0,0`, then `AON 0,0` → `AON dx,dy`) in the vector-generator red, aspect-
-// rounded, flickering across 4 frames. These are one frame's spike deltas (GNB0),
-// re-expressed in a nominal ±16 space and scaled to the projected body radius;
-// hand-irregular on purpose — an evenly-spaced asterisk reads mechanical, not like
-// a sparkle. (Fuse-ball tips + the 4-frame flicker are eyeball follow-ons, unpinned.)
-const FIREBALL_SPIKES: ReadonlyArray<readonly [number, number]> = [
-  [2, 16],
-  [15, 8],
-  [16, -6],
-  [6, -10],
-  [-6, -16],
-  [-12, -8],
-  [-16, 2],
-  [-6, 8],
+// The authentic enemy fireball is a RED radial SPARKLE that FLICKERS across four
+// frames with fuse-ball tips — the ROM's gunshot picture (WSVROM.MAC `.SBTTLE
+// GUNSHOT PICTURES`, "GUN SHOTS -- SPARKLES WITH FUSE BALLS"). Each frame draws ~8
+// spikes radiating FROM the centre (`CXY 0,0`, then `AON 0,0` → `AON dx,dy`) in the
+// vector-generator red, aspect-rounded. `GNB0-3` are four DISTINCT spike tables the
+// cabinet cycles as an animation; these are each frame's spike deltas (the `AON`
+// after every `AON 0,0` return-to-centre), re-expressed in a nominal ±18 space and
+// scaled to the projected body radius. Hand-irregular on purpose — an evenly-spaced
+// asterisk reads mechanical, not like a sparkle. Story sw3-11 added the flicker +
+// fuse tips that sw3-9 shipped without (it drew GNB0 alone, frozen).
+const FIREBALL_FRAMES: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
+  // GNB0
+  [[2, 16], [15, 8], [16, -6], [6, -10], [-6, -16], [-12, -8], [-16, 2], [-6, 8]],
+  // GNB1
+  [[3, 12], [16, 6], [14, -10], [0, -16], [-10, -15], [-16, -4], [-16, 6], [-6, 12]],
+  // GNB2
+  [[2, 12], [12, 10], [17, 2], [14, -8], [-2, -14], [-14, -12], [-18, -2], [-12, 12]],
+  // GNB3
+  [[3, -17], [12, -10], [17, -2], [14, 10], [-3, 14], [-14, 10], [-17, 0], [-12, -12]],
 ]
-const FIREBALL_SPIKE_NOM = 16 // the ±nominal radius the spike deltas are authored in
+const FIREBALL_SPIKE_NOM = 18 // the ±nominal radius the spike deltas are authored in
+
+// The tip fuse ball (`GNT0-3`, the `FUSE` macro → `JSRL VRGNT`): a small three-spoke
+// cluster the cabinet draws AT each spike's outer tip, itself rotating across the
+// four frames. Each is one frame's `AON dx,dy` spokes, authored in a nominal ±6 and
+// drawn SMALL relative to the sparkle so it reads as a fuse ball at the tip, not a
+// second spike.
+const FIREBALL_FUSE_FRAMES: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
+  [[0, 2], [4, -2], [-4, -2]], // GNT0
+  [[-2, 0], [2, 4], [2, -4]], // GNT1
+  [[0, -2], [-4, 2], [4, 2]], // GNT2
+  [[2, 0], [-2, -4], [-2, 4]], // GNT3
+]
+const FIREBALL_FUSE_NOM = 6 // the ±nominal the fuse spokes are authored in
+const FIREBALL_FUSE_SCALE = 0.22 // fuse-ball spoke length as a fraction of the sparkle radius
+// The gunshot flickers through its four frames; ~0.05 s/frame reads as a live
+// sparkle rather than a frozen star. The frame is derived from the shot's own age
+// (ENEMY_SHOT_TTL - ttl) — deterministic, shell-side, no effect state — the same
+// "elapsed vs TTL" rule the muzzle flash and player laser already use.
+const FIREBALL_FRAME_SECONDS = 0.05
 
 /**
- * An enemy fireball as the authentic RED sparkle (story sw3-9), replacing sw2-2's
- * amber concentric rings. Billboarded and sized in WORLD units by the same
- * ENEMY_SHOT_HIT_RADIUS the sim uses to shoot it down — what you see is what you
- * shoot — so it projects like any 3D body (`camPos` is already view-space): a near
- * fireball swells, a distant one shrinks.
+ * An enemy fireball as the authentic RED sparkle (story sw3-9), animated across the
+ * ROM's four gunshot frames with fuse-ball tips (story sw3-11). Billboarded and
+ * sized in WORLD units by the same ENEMY_SHOT_HIT_RADIUS the sim uses to shoot it
+ * down — what you see is what you shoot — so it projects like any 3D body (`camPos`
+ * is already view-space): a near fireball swells, a distant one shrinks.
  *
- * The spikes radiate FROM the projected centre (matching the ROM's GNB sparkle),
- * so — unlike sw2-2's perimeter ring — they overlap the muzzle starburst (story
- * 9-6). The two are kept apart by COLOUR, not geometry: the fireball is red
- * (FIREBALL_GLOW / VGCRED), the muzzle flash stays amber (FIRE_GLOW).
+ * The frame is picked from the shot's age (`ttl` in, elapsed = ENEMY_SHOT_TTL - ttl)
+ * so the flicker is deterministic and lives entirely in the shell — the sim never
+ * knows about it. The spikes radiate FROM the projected centre (matching the ROM's
+ * GNB sparkle), so — unlike sw2-2's perimeter ring — they overlap the muzzle
+ * starburst (story 9-6). The two are kept apart by COLOUR, not geometry: the
+ * fireball is red (FIREBALL_GLOW / VGCRED), the muzzle flash stays amber (FIRE_GLOW).
  */
-function drawFireball(ctx: CanvasRenderingContext2D, camPos: Vec3, proj: Mat4, w: number, h: number): void {
+function drawFireball(
+  ctx: CanvasRenderingContext2D,
+  camPos: Vec3,
+  proj: Mat4,
+  w: number,
+  h: number,
+  ttl: number,
+): void {
   const c = project(camPos, proj, w, h)
   if (!c) return
   // Screen radius: project a point one body-radius to the side in view space, so
   // the sparkle scales with depth under the same perspective the whole scene uses.
   const edge = project([camPos[0] + ENEMY_SHOT_HIT_RADIUS, camPos[1], camPos[2]], proj, w, h)
   if (!edge) return
-  const k = Math.hypot(edge[0] - c[0], edge[1] - c[1]) / FIREBALL_SPIKE_NOM
+  const projR = Math.hypot(edge[0] - c[0], edge[1] - c[1])
+  const k = projR / FIREBALL_SPIKE_NOM
+  const fuseK = (projR * FIREBALL_FUSE_SCALE) / FIREBALL_FUSE_NOM
+  const frame = Math.floor(Math.max(0, ENEMY_SHOT_TTL - ttl) / FIREBALL_FRAME_SECONDS) % FIREBALL_FRAMES.length
+  const spikes = FIREBALL_FRAMES[frame]
+  const fuse = FIREBALL_FUSE_FRAMES[frame]
   ctx.lineWidth = 2
   ctx.strokeStyle = FIREBALL_GLOW
   ctx.shadowColor = FIREBALL_GLOW
   ctx.shadowBlur = 12
   ctx.beginPath()
-  for (const [dx, dy] of FIREBALL_SPIKES) {
-    // Radiate FROM the projected centre outward — the mark of the sparkle (a ring
-    // would lie on its perimeter with nothing at the centre).
+  for (const [dx, dy] of spikes) {
+    const tx = c[0] + dx * k
+    const ty = c[1] + dy * k
+    // The spike radiates FROM the projected centre outward — the mark of the sparkle
+    // (a ring would lie on its perimeter with nothing at the centre).
     ctx.moveTo(c[0], c[1])
-    ctx.lineTo(c[0] + dx * k, c[1] + dy * k)
+    ctx.lineTo(tx, ty)
+    // Its fuse ball — a small rotating cluster AT the tip, short and off the centre.
+    for (const [fx, fy] of fuse) {
+      ctx.moveTo(tx, ty)
+      ctx.lineTo(tx + fx * fuseK, ty + fy * fuseK)
+    }
   }
   ctx.stroke()
   ctx.shadowBlur = 0

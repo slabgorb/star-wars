@@ -385,7 +385,18 @@ describe('models — Death Star surface ring topology (8-4)', () => {
   })
 })
 
-describe('models — surface tower ring topology (8-4)', () => {
+describe('models — surface tower topology (8-4, revised by sw3-11)', () => {
+  // REVISED (sw3-11, following the 8-10 precedent): the 8-4 "close every derived
+  // ring" contract is WRONG for the authentic tower. The original source
+  // (historicalsource/star-wars WSOBJ.MAC, `.WGD TWR`) draws the tower as THREE
+  // VERTICAL PROFILE POLYLINES up the tapering column plus the cap outline — the
+  // 3-point cross-section levels are never closed into triangles (only a partial
+  // ring at the cannon bottom: two of three sides). Forcing ring closure would
+  // fabricate horizontal bands the cabinet never strokes. The guard is therefore
+  // connectivity (one wireframe, no floating sections); the sw3-11 silhouette
+  // suite (tests/core/surface-tower-geometry.test.ts) pins the profile itself.
+  // (The pre-sw3-11 model this guard originally closed rings over was Object_10
+  // — trench furniture misread as the tower; see that suite's header.)
   it('exists with vertices and edges', () => {
     const m = findTower()
     expect(m).toBeDefined()
@@ -394,16 +405,11 @@ describe('models — surface tower ring topology (8-4)', () => {
     expect(m.edges.length).toBeGreaterThan(0)
   })
 
-  it('every coplanar ring closes into a single loop (base + stacked rings)', () => {
+  it('is a single connected wireframe (profile polylines share their joints)', () => {
     const m = findTower()
     expect(m).toBeDefined()
     if (!m) return
-    const rings = deriveRings(m.vertices)
-    // At minimum the y=0 base square and the upper stack ring.
-    expect(rings.length).toBeGreaterThanOrEqual(2)
-    for (const ring of rings) {
-      expect(inducedSingleCycle(m.edges, ring)).toBe(true)
-    }
+    expect(isSingleComponent(m)).toBe(true)
   })
 })
 

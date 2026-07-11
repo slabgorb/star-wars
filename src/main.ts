@@ -158,6 +158,13 @@ const loop = createLoop(
           // the same no-new-asset pattern as trench-obstacle-destroyed.
           audio.play('levelClear')
           break
+        case 'tower-bonus':
+          // Clearing every surface tower banks the 50,000 bonus on the same frame
+          // as the surface->trench level-clear (sw3-3) — reuse the fanfare cue,
+          // the same no-new-asset pattern as force-bonus. A bespoke
+          // "50,000 FOR SHOOTING ALL TOWERS" banner is a HUD follow-on.
+          audio.play('levelClear')
+          break
         case 'death-star-destroyed':
           // The winning shot — the Death Star blows (sw2-4). Reuse the explosion
           // sample (same no-new-asset pattern as fireball/obstacle destroyed); a
@@ -177,6 +184,13 @@ const loop = createLoop(
           // every current AND future line — the core owns WHEN, the shell owns HOW.
           // speak() lazily loads the line and is a no-op until the gesture unlocks.
           audio.speak(event.line)
+          break
+        case 'music':
+          // The core swapped the phase music this frame (sw3-5). One generic arm
+          // starts the cued track on the looping `music` channel — voice-stealing
+          // means the previous loop stops and this one rings. The core owns WHEN
+          // (phase edges only), the shell owns HOW (the @arcade/shared loop).
+          audio.startLoop(event.track)
           break
         case 'name-entered':
           // The player confirmed their initials on the entry screen (SH2-13) —

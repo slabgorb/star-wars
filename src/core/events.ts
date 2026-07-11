@@ -95,6 +95,16 @@ export interface ForceBonusEvent {
   amount: number
 }
 
+// Every tower on the Death Star surface was destroyed — the run banks the 50,000
+// "cleared all towers" bonus (ROM byte_9862; on-screen banner
+// "50,000 FOR SHOOTING ALL TOWERS", ROM:E039) as it drops into the trench
+// (sw3-3). `amount` carries SURFACE_CLEAR_BONUS for the SFX/HUD layer, mirroring
+// how ForceBonusEvent and the other scoring events carry their own payload.
+export interface TowerBonusEvent {
+  type: 'tower-bonus'
+  amount: number
+}
+
 // The winning shot — a player torpedo destroyed the exhaust port and the Death
 // Star blows (sw2-4). Positioned like `enemy-death` / `fireball-destroyed` so the
 // shell can stage the explosion AT the port's world spot; `pos` is the port's
@@ -149,6 +159,29 @@ export interface NameEnteredEvent {
   name: string
 }
 
+// The looping background-music track the cabinet plays for the current phase
+// (sw3-5). A string-literal union — not `string` — so the shell's event->startLoop
+// pump stays exhaustive and a typo is a type error, not a silent miss. Names follow
+// the ROM sound board (docs/star-wars-1983-source-findings.md, "## Sound hooks"):
+// the space wave is Sound_24/25, the Death Star surface is Sound_20/21 ("Towers
+// music" — hence 'towers', not the phase name 'surface'), the trench is Sound_22,
+// and the Imperial March (Sound_1D) replaces the space theme at wave>=3 odd.
+export type MusicTrack =
+  | 'space' // space wave — Sound_24/25
+  | 'towers' // Death Star surface — Sound_20/21
+  | 'trench' // trench run — Sound_22
+  | 'imperialMarch' // replaces the space theme at wave>=3 odd (sub_6838) — Sound_1D
+
+// A phase edge swapped the looping music channel this frame (sw3-5). Like speech,
+// the core decides WHICH track and WHEN (deterministic, tested); the shell owns HOW
+// (the @arcade/shared/audio looping channel). Emitted ONLY on a phase edge — never
+// on a frame that merely stays in a phase — so the shell's startLoop is not
+// re-triggered 60x a second (which would stutter the loop to silence).
+export interface MusicEvent {
+  type: 'music'
+  track: MusicTrack
+}
+
 export type GameEvent =
   | FireEvent
   | EnemyFireEvent
@@ -160,7 +193,9 @@ export type GameEvent =
   | FireballDestroyedEvent
   | TrenchObstacleDestroyedEvent
   | ForceBonusEvent
+  | TowerBonusEvent
   | DeathStarDestroyedEvent
   | ExhaustPortMissedEvent
   | SpeechEvent
+  | MusicEvent
   | NameEnteredEvent

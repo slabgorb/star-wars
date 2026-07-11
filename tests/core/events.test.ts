@@ -69,10 +69,12 @@ const ALL_EVENTS: GameEvent[] = [
   { type: 'fireball-destroyed', pos: [0, 0, -400] },
   { type: 'trench-obstacle-destroyed', kind: 'turret' },
   { type: 'force-bonus', amount: 5000 },
+  { type: 'tower-bonus', amount: 50000 }, // sw3-3: the cleared-all-towers bonus
   { type: 'speech', line: 'useTheForceLuke' }, // sw2-5: speech is now a core event
   { type: 'death-star-destroyed', pos: [0, 0, -300] }, // sw2-4: the winning-shot explosion
   { type: 'exhaust-port-missed' }, // sw2-4: the port slipped past un-destroyed
   { type: 'name-entered', name: 'ACE' }, // SH2-13: the entry screen's commit cue
+  { type: 'music', track: 'towers' }, // sw3-5: the phase music channel swapped a track
 ]
 
 // Exhaustive narrowing over the union: the `never` default fails to compile if a
@@ -91,10 +93,12 @@ function discriminant(e: GameEvent): string {
     case 'fireball-destroyed': return `fb@${e.pos.join(',')}`
     case 'trench-obstacle-destroyed': return `obs-${e.kind}`
     case 'force-bonus': return `force@${e.amount}`
+    case 'tower-bonus': return `tower@${e.amount}`
     case 'speech': return `speech:${e.line}`
     case 'death-star-destroyed': return `ds@${e.pos.join(',')}`
     case 'exhaust-port-missed': return 'port-miss'
     case 'name-entered': return `name:${e.name}`
+    case 'music': return `music:${e.track}`
     default: {
       const _exhaustive: never = e
       return _exhaustive
@@ -103,22 +107,24 @@ function discriminant(e: GameEvent): string {
 }
 
 describe('GameEvent — discriminated union (AC1)', () => {
-  it('covers fourteen distinct, documented event types', () => {
-    // Fourteen: the original eight (story 8-7/8-18), 'trench-obstacle-destroyed'
+  it('covers sixteen distinct, documented event types', () => {
+    // Sixteen: the original eight (story 8-7/8-18), 'trench-obstacle-destroyed'
     // (fidelity epic task 3), 'force-bonus' (fidelity epic task 4 — findings
-    // ## Exhaust port & run outcome), 'speech' (sw2-5 — voice lines are now
-    // core-cued events), and sw2-4's two exhaust-port outcome cues:
-    // 'death-star-destroyed' (the winning-shot explosion, positioned),
-    // 'exhaust-port-missed' (the port slipped past the cockpit un-destroyed),
-    // and 'name-entered' (SH2-13 — the initials-entry commit cue).
+    // ## Exhaust port & run outcome), 'tower-bonus' (sw3-3 — the cleared-all-
+    // towers 50,000 bonus), 'speech' (sw2-5 — voice lines are now core-cued
+    // events), sw2-4's two exhaust-port outcome cues 'death-star-destroyed'
+    // (the winning-shot explosion, positioned) / 'exhaust-port-missed' (the port
+    // slipped past the cockpit un-destroyed), 'name-entered' (SH2-13 — the
+    // initials-entry commit cue), and 'music' (sw3-5 — the phase music channel
+    // swaps a looping track on each phase edge; findings ## Sound hooks).
     const kinds = ALL_EVENTS.map((e) => e.type)
-    expect(new Set(kinds).size).toBe(14)
+    expect(new Set(kinds).size).toBe(16)
     expect(new Set(kinds)).toEqual(
       new Set([
         'fire', 'enemy-fire', 'enemy-death', 'player-death',
         'level-clear', 'player-spawn', 'terrain-crash', 'fireball-destroyed',
-        'trench-obstacle-destroyed', 'force-bonus', 'speech',
-        'death-star-destroyed', 'exhaust-port-missed', 'name-entered',
+        'trench-obstacle-destroyed', 'force-bonus', 'tower-bonus', 'speech',
+        'death-star-destroyed', 'exhaust-port-missed', 'name-entered', 'music',
       ]),
     )
   })
