@@ -178,6 +178,13 @@ const loop = createLoop(
           // speak() lazily loads the line and is a no-op until the gesture unlocks.
           audio.speak(event.line)
           break
+        case 'music':
+          // The core swapped the phase music this frame (sw3-5). One generic arm
+          // starts the cued track on the looping `music` channel — voice-stealing
+          // means the previous loop stops and this one rings. The core owns WHEN
+          // (phase edges only), the shell owns HOW (the @arcade/shared loop).
+          audio.startLoop(event.track)
+          break
         case 'name-entered':
           // The player confirmed their initials on the entry screen (SH2-13) —
           // the core announces the commit; this shell owns the table and the

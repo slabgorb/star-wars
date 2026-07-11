@@ -54,6 +54,33 @@ const CHANNELS: Record<SoundName, string> = {
   terrainCrash: 'terrain-crash',
 }
 
+// Looping music (sw3-5), under its own R2 prefix mirroring the sfx/ and speech/
+// layout. AUTHENTIC POKEY music bakes from the arcade sound board (transcribed from
+// historicalsource — findings ## Sound hooks). Track names match the core's
+// `MusicTrack` union, so the event->startLoop wiring is a thin lookup.
+const DEFAULT_MUSIC_BASE_URL = 'https://arcade-assets.slabgorb.com/star-wars/music/'
+
+// Logical music track -> R2 filename (per-cabinet NUMBERS). One file per phase theme
+// plus the Imperial March.
+export const MUSIC = {
+  space: 'space_theme.wav', // space wave — Sound_24/25
+  towers: 'towers_theme.wav', // Death Star surface — Sound_20/21
+  trench: 'trench_theme.wav', // trench run — Sound_22
+  imperialMarch: 'imperial_march.wav', // replaces the space theme at wave>=3 odd — Sound_1D
+} as const
+
+export type MusicName = keyof typeof MUSIC
+
+// Every track shares ONE logical channel, so starting a track voice-steals whatever
+// was looping — exactly one music loop rings at a time and a phase edge swaps it
+// (the looping music channel this story needs, per @arcade/shared/audio SH2-16).
+const MUSIC_CHANNELS: Record<MusicName, string> = {
+  space: 'music',
+  towers: 'music',
+  trench: 'music',
+  imperialMarch: 'music',
+}
+
 // TMS5220 LPC speech (story 8-7), under its own R2 prefix. AUTHENTIC re-synthesis bakes
 // of the cabinet's speech-ROM bitstreams. Speech samples are larger and rarely
 // triggered, so unlike SFX they are loaded LAZILY (on first `speak()`), not eagerly.
@@ -98,6 +125,12 @@ export interface AudioEngine {
   play(name: SoundName): void
   // Speak a TMS5220 line once, loading it lazily on first use. No-op if unavailable.
   speak(name: SpeechName): void
+  // Start a looping music track on the shared `music` channel (sw3-5). Voice-steals
+  // whatever was looping, so one track rings and a phase edge swaps it. No-op until
+  // resume() has run and the track has decoded; silent when WebAudio is unavailable.
+  startLoop(name: MusicName): void
+  // Stop the looping music. Safe no-op when nothing is looping there.
+  stopLoop(name: MusicName): void
   // True once at least one SFX sample has decoded. Mainly for tests / readiness UI.
   ready(): boolean
 }
@@ -121,6 +154,16 @@ export function createAudioEngine(baseUrl: string = DEFAULT_BASE_URL): AudioEngi
     baseUrl,
     sounds: SOUNDS,
     channels: CHANNELS,
+  })
+
+  // Looping music runs through its OWN shared-engine instance (sw3-5): a separate R2
+  // prefix (music/) and a single `music` channel shared by every track, so startLoop
+  // voice-steals to exactly one loop and a phase edge swaps it. Same silent-degrade
+  // contract as the SFX engine — a missing/undecoded track simply never plays.
+  const music: SharedAudioEngine<MusicName> = createSharedAudioEngine<MusicName>({
+    baseUrl: DEFAULT_MUSIC_BASE_URL,
+    sounds: MUSIC,
+    channels: MUSIC_CHANNELS,
   })
 
   // Speech keeps its OWN gesture-unlocked context (AC-3). Larger, rarely-triggered
@@ -147,6 +190,7 @@ export function createAudioEngine(baseUrl: string = DEFAULT_BASE_URL): AudioEngi
 
   function resume(): void {
     sfx.resume()
+    music.resume()
     if (!speechCtx) {
       const Ctor = getAudioContextCtor()
       if (!Ctor) return // no WebAudio — speech stays inert (SFX handled the same way)
@@ -190,6 +234,8 @@ export function createAudioEngine(baseUrl: string = DEFAULT_BASE_URL): AudioEngi
     resume,
     play: (name: SoundName) => sfx.play(name),
     speak,
+    startLoop: (name: MusicName) => music.startLoop(name),
+    stopLoop: (name: MusicName) => music.stopLoop(name),
     ready: () => sfx.ready(),
   }
 }

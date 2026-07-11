@@ -56,7 +56,7 @@ import {
   TIE_PEEL_SWEEP,
 } from './state'
 import type { Input } from './input'
-import type { GameEvent, SpeechLine } from './events'
+import type { GameEvent, SpeechLine, MusicTrack } from './events'
 import {
   add,
   scale,
@@ -309,7 +309,13 @@ function startRun(s: GameState): GameState {
   // Luke reporting in over the comm (sw2-5).
   return {
     ...initialState(s.rng.seed),
-    events: [{ type: 'player-spawn' }, { type: 'speech', line: 'redFiveStandingBy' }],
+    events: [
+      { type: 'player-spawn' },
+      { type: 'speech', line: 'redFiveStandingBy' },
+      // Open the space theme on the run-start edge (sw3-5). Wave 1 is odd but < 3,
+      // so it is never the Imperial March here — musicTrackFor still owns the rule.
+      { type: 'music', track: musicTrackFor('space', 1) },
+    ],
   }
 }
 
@@ -610,6 +616,10 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     // warp / wave-clear cue (8-7), as `clearRun` re-opens 'space'. `clearRun` →
     // `enterPhase` spreads `...s`, so this event rides along.
     events.push({ type: 'level-clear', next: 'space' })
+    // Reopen the space theme for the next wave (sw3-5) — `clearRun` bumps the wave
+    // to `state.wave + 1`, so the Imperial March takes over here at wave>=3 odd
+    // (ROM sub_6838). Rides through `clearRun`->`enterPhase` like the level-clear.
+    events.push({ type: 'music', track: musicTrackFor('space', state.wave + 1) })
     return clearRun({
       ...afterObstacles,
       projectiles: liveBolts,
@@ -671,6 +681,24 @@ const PHASE_QUOTA: Record<Phase, number> = {
   trench: Infinity,
 }
 
+/** The looping music track a phase opens with (sw3-5). The space wave swaps to the
+ *  Imperial March at wave >= 3 AND odd (ROM `sub_6838`); the towers/trench themes are
+ *  wave-independent. Track names are the ROM sound-board music (findings ## Sound
+ *  hooks) — the surface phase's music is "Towers music", hence 'towers', not
+ *  'surface'. */
+const PHASE_MUSIC: Record<Phase, MusicTrack> = {
+  space: 'space',
+  surface: 'towers',
+  trench: 'trench',
+}
+
+/** Which looping track opens `phase` on the wave `wave`. Only the space wave is
+ *  wave-sensitive (the Imperial March replaces it at wave>=3 odd). */
+function musicTrackFor(phase: Phase, wave: number): MusicTrack {
+  if (phase === 'space' && wave >= 3 && wave % 2 === 1) return 'imperialMarch'
+  return PHASE_MUSIC[phase]
+}
+
 /** The voice line cued when a run ENTERS a phase (sw2-5). Only the surface and
  * trench edges carry a line; a new wave's space phase (reached via clearRun, not
  * progress) has none. A `Partial` map so an unwired phase simply cues nothing. */
@@ -712,6 +740,10 @@ function progress(s: GameState): GameState {
   const events: GameEvent[] = [...s.events, { type: 'level-clear', next }]
   const line = ENTER_PHASE_SPEECH[next]
   if (line) events.push({ type: 'speech', line })
+  // Swap the looping music channel to the entering phase's theme (sw3-5). Fires on
+  // this edge only; `enterPhase` preserves the wave, so surface->'towers' /
+  // trench->'trench' regardless of wave (the Imperial March is a space-only swap).
+  events.push({ type: 'music', track: musicTrackFor(next, advanced.wave) })
   return { ...advanced, events }
 }
 
