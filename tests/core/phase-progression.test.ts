@@ -51,7 +51,8 @@ import {
   MIN_SKIM_ALTITUDE,
   PROJECTILE_TTL,
   SPACE_WAVE_QUOTA,
-  SURFACE_WAVE_QUOTA,
+  towersForWave,
+  SURFACE_CLEAR_BONUS,
   type GameState,
   type Projectile,
   type Enemy,
@@ -88,7 +89,9 @@ describe('Wave progression — phase-clear counter', () => {
 
   it('defines positive per-phase wave quotas', () => {
     expect(SPACE_WAVE_QUOTA).toBeGreaterThan(0)
-    expect(SURFACE_WAVE_QUOTA).toBeGreaterThan(0)
+    // The surface quota is now wave-scaled (sw3-3, byte_98CB) rather than a flat
+    // constant; its wave-1 value must still be a positive kill target.
+    expect(towersForWave(1)).toBeGreaterThan(0)
   })
 
   it('counts kills toward the current phase quota', () => {
@@ -158,16 +161,19 @@ describe('Wave progression — space clears to surface', () => {
 // --- AC1: surface -> trench --------------------------------------------------
 
 describe('Wave progression — surface clears to trench', () => {
+  // sw3-3 replaced the flat 4-kill surface quota with the wave-scaled
+  // towers-remaining table (byte_98CB); wave 1 (the default here) needs
+  // towersForWave(1) = 22 kills, and clearing them all banks SURFACE_CLEAR_BONUS.
   it('advances to trench once the surface quota is met', () => {
-    const s0: GameState = { ...surface(), phaseKills: SURFACE_WAVE_QUOTA, turrets: [], enemyShots: [] }
+    const s0: GameState = { ...surface(), phaseKills: towersForWave(1), turrets: [], enemyShots: [] }
     const s1 = crossFrom(s0, 'surface')
     expect(s1.phase).toBe('trench')
   })
 
-  it('the clearing kill scores and carries score/lives forward into the trench', () => {
+  it('the clearing kill scores (+ the 50k all-towers bonus) and carries score/lives forward', () => {
     const s0: GameState = {
       ...surface(),
-      phaseKills: SURFACE_WAVE_QUOTA - 1,
+      phaseKills: towersForWave(1) - 1,
       score: 800,
       lives: 5,
       turrets: [turretAt([0, 0, -100])],
@@ -176,7 +182,7 @@ describe('Wave progression — surface clears to trench', () => {
     }
     const s1 = crossFrom(s0, 'surface')
     expect(s1.phase).toBe('trench')
-    expect(s1.score).toBe(800 + TURRET_SCORE)
+    expect(s1.score).toBe(800 + TURRET_SCORE + SURFACE_CLEAR_BONUS)
     expect(s1.lives).toBe(5)
     expect(s1.phaseKills).toBe(0)
   })
@@ -184,7 +190,7 @@ describe('Wave progression — surface clears to trench', () => {
   it('leaves no turrets standing when the trench opens', () => {
     const s0: GameState = {
       ...surface(),
-      phaseKills: SURFACE_WAVE_QUOTA,
+      phaseKills: towersForWave(1),
       turrets: [turretAt([0, 0, -200]), turretAt([50, 0, -200])],
       enemyShots: [],
     }

@@ -56,7 +56,7 @@ import {
   PROJECTILE_TTL,
   PORT_HIT_RADIUS,
   COCKPIT_HIT_RADIUS,
-  SURFACE_WAVE_QUOTA,
+  towersForWave,
   STARTING_LIVES,
   type GameState,
   type Projectile,
@@ -296,7 +296,7 @@ describe('sw2-4 — the outcome timestamps drive & survive the visual beat', () 
     const surface: GameState = {
       ...initialState(1),
       phase: 'surface',
-      phaseKills: SURFACE_WAVE_QUOTA,
+      phaseKills: towersForWave(1),
       turrets: [],
       enemyShots: [],
       deathStarDestroyedAt: 999,

@@ -63,7 +63,7 @@ import {
   EXHAUST_PORT_DISTANCE,
   TRENCH_SCROLL_SPEED,
   TRENCH_BONUS,
-  SURFACE_WAVE_QUOTA,
+  towersForWave,
   PROJECTILE_TTL,
   type GameState,
   type Projectile,
@@ -131,7 +131,7 @@ describe('Wave 3 — the exhaust port scrolls toward the cockpit', () => {
   })
 
   it('entering the trench from the cleared surface spawns the port far downrange', () => {
-    const s0: GameState = { ...surface(), phaseKills: SURFACE_WAVE_QUOTA, turrets: [], enemyShots: [] }
+    const s0: GameState = { ...surface(), phaseKills: towersForWave(1), turrets: [], enemyShots: [] }
     const s1 = crossFrom(s0, 'surface')
     expect(s1.phase).toBe('trench')
     expect(s1.exhaustPort).not.toBeNull()
