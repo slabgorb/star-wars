@@ -78,6 +78,7 @@ import {
   TRENCH_SQUARE_SCORE,
   OBSTACLE_HIT_RADIUS,
 } from './trench-obstacles'
+import { TRENCH_VIEW_HALF_W, TRENCH_VIEW_FLOOR, TRENCH_VIEW_RATE } from './trench-channel'
 
 const COCKPIT: Vec3 = [0, 0, 0]
 const ZERO: Vec3 = [0, 0, 0]
@@ -475,9 +476,32 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   // `events` carries the prologue's `fire` cue (story 8-7) and accumulates the
   // trench's own moments below; it rides every return path so the channel stays
   // a fresh per-frame list.
+  // Fly the pilotable viewpoint (story sw3-2): the yoke drives the eye each tick,
+  // clamped to the sub_703B band — ±TRENCH_VIEW_HALF_W lateral, TRENCH_VIEW_FLOOR..0
+  // vertical (the eye seats at the trench top and dives DOWN to dodge). Rides
+  // `base`, so it survives even the no-port safe-hold return below (afterObstacles
+  // spreads base); the trench catwalk collision tests the catwalk against it.
+  const trenchView: Vec3 = [
+    Math.max(-TRENCH_VIEW_HALF_W, Math.min(TRENCH_VIEW_HALF_W, state.trenchView[0] + aimX * TRENCH_VIEW_RATE * dt)),
+    Math.max(TRENCH_VIEW_FLOOR, Math.min(0, state.trenchView[1] + aimY * TRENCH_VIEW_RATE * dt)),
+    0,
+  ]
   // The walled channel scrolls toward the cockpit at the SAME rate the port does
   // (story 11-6), so the corridor and the target rush past together — advanced on
   // `base` so it rides every return path (reset to 0 on the next phase entry).
+  // Advance the trench voice-line timer (ROM word_4B0E) one tick and cue any
+  // parity-gated voice line that lands on this tick (story sw3-4). The timer hits
+  // each integer threshold exactly once, so the cue is inherently one-shot — no
+  // re-fire guard needed. Pushed onto the shared `events` list, so the cue rides
+  // every return path below (safe-hold, obstacle crash, or port hit).
+  const trenchTimer = state.trenchTimer + 1
+  const parity: 'even' | 'odd' = state.wave % 2 === 0 ? 'even' : 'odd'
+  for (const cue of TRENCH_VOICE_CUES) {
+    if (cue.timer === trenchTimer && cue.parity === parity) {
+      events.push({ type: 'speech', line: cue.line })
+    }
+  }
+
   const base: GameState = {
     ...state,
     rng,
@@ -488,6 +512,8 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     enemyShots,
     fireCooldown,
     events,
+    trenchView,
+    trenchTimer,
     trenchScrollZ: state.trenchScrollZ + TRENCH_SCROLL_SPEED * dt,
     // Count this frame's fire (if any) toward the "Use the Force" clean-run
     // tell — a clean port kill needs trenchShotsFired <= 1 (fidelity epic,
@@ -515,7 +541,10 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
       // CATWALK_HIT_RADIUS, not COCKPIT_HIT_RADIUS: the catwalk hangs at y=200
       // above the centreline, so an 80-unit cockpit sphere never reached it and
       // the crash was dead code (story 14-7).
-      if (collides(pos, COCKPIT, CATWALK_HIT_RADIUS)) {
+      // Tests against the pilotable `trenchView`, not the fixed COCKPIT (story
+      // sw3-2): an un-piloted eye seats at [0,0,0] (dist 200 < 240 → still bites),
+      // but a dive opens clearance beneath the catwalk so it becomes dodgeable.
+      if (collides(pos, trenchView, CATWALK_HIT_RADIUS)) {
         crashedCatwalk = true
         events.push({ type: 'terrain-crash' })
         continue // crashed through it — removed
@@ -650,6 +679,23 @@ const ENTER_PHASE_SPEECH: Partial<Record<Phase, SpeechLine>> = {
   trench: 'useTheForceLuke', // "Use the Force, Luke"
 }
 
+/** The trench voice lines cued off the timer (`trenchTimer` = ROM `word_4B0E`),
+ * gated by run parity. The 1983 cabinet gates on `byte_4B12` (the trench
+ * section-chain index); until that lands in sw3-7 we source parity from `wave`
+ * (sw3-4 scope decision): EVEN wave → "Luke, trust me" @16 + "Yahoo, you're all
+ * clear kid" @24; ODD wave → "The Force is strong in this one" @22. A line fires
+ * on the single step the timer equals its threshold — one-shot, no re-fire.
+ * (docs/star-wars-1983-source-findings.md, "Voice-line triggers by trench timer".) */
+const TRENCH_VOICE_CUES: ReadonlyArray<{
+  timer: number
+  parity: 'even' | 'odd'
+  line: SpeechLine
+}> = [
+  { timer: 16, parity: 'even', line: 'lukeTrustMe' }, // Sound_18
+  { timer: 24, parity: 'even', line: 'youreAllClearKid' }, // Sound_1A
+  { timer: 22, parity: 'odd', line: 'theForceIsStrongInThisOne' }, // Sound_16
+]
+
 /**
  * Drop the run into the next phase once the current one is cleared. A finished
  * run never advances; phases advance in order, one at a time; score and lives
@@ -695,6 +741,9 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     // re-stamps `forceBonusAwardedAt` after this reset so the banner survives
     // the wave transition.
     trenchShotsFired: 0,
+    // The trench voice-line timer restarts on every phase entry so each fresh
+    // trench run re-arms the parity-gated cues from tick 0 (story sw3-4).
+    trenchTimer: 0,
     forceBonusAwardedAt: null,
     // Outcome-feedback stamps reset on every phase entry, like forceBonusAwardedAt
     // (sw2-4); `clearRun` re-stamps `deathStarDestroyedAt` so the explosion banner
@@ -709,6 +758,10 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     // Likewise the trench channel scroll, so a fresh (or jumped) trench always
     // opens with the corridor anchored at the cockpit (story 11-6).
     trenchScrollZ: 0,
+    // Seat the pilotable viewpoint at the centreline on every phase entry (story
+    // sw3-2), so a fresh trench opens un-dived — the overhead catwalk still bites
+    // until the pilot steers clear.
+    trenchView: [0, 0, 0],
     spawnTimer: phase === 'surface' ? TURRET_SPAWN_INTERVAL : SPAWN_INTERVAL,
     enemyFireCooldown: ENEMY_FIRE_INTERVAL,
   }

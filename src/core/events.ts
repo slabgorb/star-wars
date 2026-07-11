@@ -126,6 +126,10 @@ export type SpeechLine =
   | 'lookAtTheSizeOfThatThing' // entering the Death Star surface
   | 'useTheForceLuke' // entering the trench (was shell-derived before sw2-5)
   | 'greatShotKidThatWasOneInAMillion' // the exhaust-port kill — the winning shot
+  // sw3-4 — trench voice-line timer (ROM word_4B0E), parity-gated by run:
+  | 'lukeTrustMe' // trench timer 16, even run (Sound_18)
+  | 'youreAllClearKid' // trench timer 24, even run (Sound_1A)
+  | 'theForceIsStrongInThisOne' // trench timer 22, odd run (Sound_16)
 
 // A voice line was cued this frame. Speech is DATA like every other event: the
 // core decides WHEN a line plays (deterministic, testable), the shell decides HOW

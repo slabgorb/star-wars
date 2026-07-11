@@ -342,6 +342,13 @@ export interface GameState {
    * read `mod RIB_Z` by the trenchChannel generator and reset to 0 on every phase
    * entry. */
   trenchScrollZ: number
+  /** The pilotable trench viewpoint (Wave 3, story sw3-2) — the ship's eye in the
+   * trench's collision world, flown by the yoke and clamped to the `sub_703B`
+   * band (TRENCH_VIEW_HALF_W lateral, TRENCH_VIEW_FLOOR..0 vertical). Seats at the
+   * centreline origin [0,0,0] on every phase entry (so the overhead catwalk still
+   * bites an un-piloted run); the trench catwalk collision tests against THIS, not
+   * a fixed cockpit, so a dive makes catwalks dodgeable. z is unused (always 0). */
+  trenchView: Vec3
   /** Enemies destroyed in the CURRENT phase; clears the phase at its quota,
    * then resets to 0 on the transition into the next phase. */
   phaseKills: number
@@ -364,6 +371,13 @@ export interface GameState {
    * Counts every `fire` this phase, including the killing torpedo; reset to 0
    * on every phase entry (like `phaseKills`). */
   trenchShotsFired: number
+  /** The trench voice-line timer (Wave 3, story sw3-4) — the ROM's `word_4B0E`.
+   * An integer tick counter that advances by 1 each trench step and resets to 0
+   * on every phase entry; the iconic voice lines fire when it hits their ROM
+   * thresholds (16/22/24), gated by run parity (see TRENCH_VOICE_CUES in sim.ts).
+   * A per-step tick, not dt-scaled, so the authentic thresholds stay reachable in
+   * the ~4.8s trench (docs/star-wars-1983-source-findings.md, trench voice timer). */
+  trenchTimer: number
   /** Sim time (`t`) the FORCE_BONUS was last awarded, or `null` if it hasn't
    * been this run. Stamped by a clean port kill so the shell can show the
    * banner for a few seconds — including across the `clearRun` wave
@@ -421,6 +435,7 @@ export function initialState(seed = 1983): GameState {
     altitude: SKIM_ALTITUDE,
     surfaceScrollZ: 0,
     trenchScrollZ: 0,
+    trenchView: [0, 0, 0],
     phaseKills: 0,
     projectiles: [],
     enemies: [],
@@ -428,6 +443,7 @@ export function initialState(seed = 1983): GameState {
     exhaustPort: null,
     trenchObstacles: [],
     trenchShotsFired: 0,
+    trenchTimer: 0,
     forceBonusAwardedAt: null,
     deathStarDestroyedAt: null,
     exhaustPortMissedAt: null,

@@ -47,6 +47,28 @@ export const RIB_Z = 512
  *  `sub_8735`. Applying that 28:1 ratio to our TRENCH_HALF_W anchor. */
 export const TRENCH_FAR = 7168
 
+// --- sub_703B pilotable viewpoint band (story sw3-2) ------------------------
+//
+// ROM `sub_703B` flies the trench viewpoint within a clamped band — ±511
+// lateral, −257…−3583 vertical — so the pilot can dive under a catwalk instead
+// of eating a guaranteed shield. As with RIB_Z / TRENCH_FAR above, the ROM↔our
+// unit conversion is unresolved, so these are scaled off the TRENCH_HALF_W=256
+// anchor using the ROM's OWN ratios and named PROVISIONAL.
+
+/** Lateral half-travel of the viewpoint about the centreline (±X). ROM clamps to
+ *  ±$1FF (511) ≈ ±$200, i.e. 2× the $100 (256) `Obj_Trench_Squares` ring that
+ *  anchors TRENCH_HALF_W — so 2× our anchor. PROVISIONAL. */
+export const TRENCH_VIEW_HALF_W = 2 * TRENCH_HALF_W // 512
+/** How deep the viewpoint can dive below the centreline (−Y). The eye seats at
+ *  the trench top (y=0, where the overhead catwalk still bites) and dives to this
+ *  floor. ROM's −257…−3583 vertical clamp spans $0D00 (3328) ≈ 13× the $100 (256)
+ *  anchor — so −13× our anchor. PROVISIONAL. */
+export const TRENCH_VIEW_FLOOR = -13 * TRENCH_HALF_W // -3328
+/** Yoke → viewpoint velocity (world units/second). Chosen to sweep the lateral
+ *  band in ~0.4s and bottom out a full dive in ~2.8s — snappy enough to dodge a
+ *  catwalk mid-crossing. No symbolic ROM rate recovered; PROVISIONAL. */
+export const TRENCH_VIEW_RATE = 1200
+
 /**
  * A long walled trench channel on the y=0 floor, scrolled toward the cockpit by
  * `scroll`.

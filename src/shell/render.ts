@@ -58,7 +58,8 @@ const CUBE_GLOW = '#ffd60a' // tower yellow cube top (sw2-3)
 const SURFACE_GLOW = GLOW_FOR['Death Star Surface'] // death star steel (shared)
 const DEATH_STAR_GLOW = GLOW_FOR['Death Star'] // death star body hull (shared)
 const BOLT_GLOW = '#9dff00' // player laser green
-const FIRE_GLOW = '#ffd60a' // enemy fireball amber
+const FIRE_GLOW = '#ffd60a' // enemy muzzle-flash amber (the firing tell)
+const FIREBALL_GLOW = '#ff3b30' // enemy fireball red — VGCRED, the cabinet vector red
 
 /**
  * Trench wireframe glow (fidelity epic, task 5) — findings ## Colors &
@@ -180,7 +181,12 @@ export function deathStarPlacement(state: GameState): { pos: Vec3; scale: number
  */
 export function cameraView(state: GameState): Mat4 {
   if (state.phase === 'surface') return viewMatrix([0, state.altitude, 0], IDENTITY)
-  if (state.phase === 'trench') return viewMatrix([0, TRENCH_SKIM, 0], IDENTITY)
+  // The trench eye rides the fixed skim PLUS the pilotable viewpoint offset (story
+  // sw3-2): steering pans/dives the camera so the dodge the sim computes is what the
+  // player sees. `trenchView` is a collision-world offset (z unused); added onto the
+  // display skim, kept separate from it.
+  if (state.phase === 'trench')
+    return viewMatrix([state.trenchView[0], TRENCH_SKIM + state.trenchView[1], state.trenchView[2]], IDENTITY)
   return IDENTITY // space: the camera sits at the origin looking down −Z
 }
 
@@ -490,48 +496,58 @@ function drawDeathStarBoom(ctx: CanvasRenderingContext2D, progress: number, w: n
   ctx.shadowBlur = 0
 }
 
-// A fireball is drawn as this many-sided ring — enough facets to read as round,
-// not a polygon. Two concentric rings (outer + inner) give it body so it reads as
-// a glowing ball rather than a hollow circle.
-const FIREBALL_FACETS = 14
-const FIREBALL_INNER = 0.55
+// The authentic enemy fireball is a RED radial SPARKLE, not a ring. The ROM's
+// gunshot picture (WSVROM.MAC `GNB0-3`, ".SBTTLE GUNSHOT PICTURES / GUN SHOTS --
+// SPARKLES WITH FUSE BALLS") draws ~8 spikes radiating FROM the centre outward
+// (`CXY 0,0`, then `AON 0,0` → `AON dx,dy`) in the vector-generator red, aspect-
+// rounded, flickering across 4 frames. These are one frame's spike deltas (GNB0),
+// re-expressed in a nominal ±16 space and scaled to the projected body radius;
+// hand-irregular on purpose — an evenly-spaced asterisk reads mechanical, not like
+// a sparkle. (Fuse-ball tips + the 4-frame flicker are eyeball follow-ons, unpinned.)
+const FIREBALL_SPIKES: ReadonlyArray<readonly [number, number]> = [
+  [2, 16],
+  [15, 8],
+  [16, -6],
+  [6, -10],
+  [-6, -16],
+  [-12, -8],
+  [-16, 2],
+  [-6, 8],
+]
+const FIREBALL_SPIKE_NOM = 16 // the ±nominal radius the spike deltas are authored in
 
 /**
- * An enemy fireball as a large, round, glowing amber orb (story sw2-2). A
- * billboarded ring facing the cockpit, sized in WORLD units by the same
+ * An enemy fireball as the authentic RED sparkle (story sw3-9), replacing sw2-2's
+ * amber concentric rings. Billboarded and sized in WORLD units by the same
  * ENEMY_SHOT_HIT_RADIUS the sim uses to shoot it down — what you see is what you
- * shoot. It projects like any 3D body (`camPos` is already view-space), so a near
- * fireball swells and a distant one shrinks, replacing the old fixed 6px '+'
- * spark that read as a HUD tick at any depth.
+ * shoot — so it projects like any 3D body (`camPos` is already view-space): a near
+ * fireball swells, a distant one shrinks.
  *
- * Drawn as CLOSED perimeter polygons — every stroke lies on a ring, none radiate
- * from the centre — so it is never mistaken for the muzzle starburst (story 9-6),
- * whose rays anchor AT the projected point.
+ * The spikes radiate FROM the projected centre (matching the ROM's GNB sparkle),
+ * so — unlike sw2-2's perimeter ring — they overlap the muzzle starburst (story
+ * 9-6). The two are kept apart by COLOUR, not geometry: the fireball is red
+ * (FIREBALL_GLOW / VGCRED), the muzzle flash stays amber (FIRE_GLOW).
  */
 function drawFireball(ctx: CanvasRenderingContext2D, camPos: Vec3, proj: Mat4, w: number, h: number): void {
   const c = project(camPos, proj, w, h)
   if (!c) return
   // Screen radius: project a point one body-radius to the side in view space, so
-  // the orb scales with depth under the same perspective the whole scene uses.
+  // the sparkle scales with depth under the same perspective the whole scene uses.
   const edge = project([camPos[0] + ENEMY_SHOT_HIT_RADIUS, camPos[1], camPos[2]], proj, w, h)
   if (!edge) return
-  const sr = Math.hypot(edge[0] - c[0], edge[1] - c[1])
+  const k = Math.hypot(edge[0] - c[0], edge[1] - c[1]) / FIREBALL_SPIKE_NOM
   ctx.lineWidth = 2
-  ctx.strokeStyle = FIRE_GLOW
-  ctx.shadowColor = FIRE_GLOW
+  ctx.strokeStyle = FIREBALL_GLOW
+  ctx.shadowColor = FIREBALL_GLOW
   ctx.shadowBlur = 12
-  for (const scale of [1, FIREBALL_INNER]) {
-    const r = sr * scale
-    ctx.beginPath()
-    for (let i = 0; i <= FIREBALL_FACETS; i++) {
-      const a = (i / FIREBALL_FACETS) * Math.PI * 2
-      const x = c[0] + r * Math.cos(a)
-      const y = c[1] + r * Math.sin(a)
-      if (i === 0) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
-    }
-    ctx.stroke()
+  ctx.beginPath()
+  for (const [dx, dy] of FIREBALL_SPIKES) {
+    // Radiate FROM the projected centre outward — the mark of the sparkle (a ring
+    // would lie on its perimeter with nothing at the centre).
+    ctx.moveTo(c[0], c[1])
+    ctx.lineTo(c[0] + dx * k, c[1] + dy * k)
   }
+  ctx.stroke()
   ctx.shadowBlur = 0
 }
 
