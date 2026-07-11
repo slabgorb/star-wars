@@ -25,7 +25,8 @@ import {
   DEATH_STAR_SURFACE,
   DEATH_STAR,
   SURFACE_TOWER,
-  TOWER_CUBE,
+  TOWER_CAP,
+  SURFACE_BUNKER,
   EXHAUST_PORT,
   TRENCH_TURRET,
   TRENCH_SQUARE,
@@ -53,8 +54,12 @@ import { glowPolyline } from './glow'
 
 const GLOW = '#00e5ff' // cockpit cyan
 const TIE_GLOW = GLOW_FOR['TIE Fighter'] // enemy green (shared)
-const TURRET_GLOW = GLOW_FOR['Surface Tower'] // surface tower red body (shared)
-const CUBE_GLOW = '#ffd60a' // tower yellow cube top (sw2-3)
+const TURRET_GLOW = GLOW_FOR['Surface Tower'] // vector red (shared) — trench turrets + bunkers
+// The GDVIEW surface palette (sw3-11, WSGRND.MAC): the tower column strokes
+// VGCYLW yellow, its cap/hat "SPECIAL WHITE" (VGCWHT), and lone undamaged
+// bunkers VGCRED — which is exactly the shared 'Surface Tower' red above.
+const TOWER_GLOW = '#ffd60a' // tower yellow column (VGCYLW; the sw2-3 cabinet yellow)
+const CAP_GLOW = '#f4f4ff' // tower white cap (VGCWHT, faint vector-blue cast)
 const SURFACE_GLOW = GLOW_FOR['Death Star Surface'] // death star steel (shared)
 const DEATH_STAR_GLOW = GLOW_FOR['Death Star'] // death star body hull (shared)
 const BOLT_GLOW = '#9dff00' // player laser green
@@ -254,15 +259,20 @@ export function render(
     // camera (lifted to the ship's altitude) is the only transform.
     drawWireframe(ctx, surfaceGrid(state.surfaceScrollZ), view, proj, w, h, SURFACE_GLOW)
     for (const tu of state.turrets) {
-      // Towers stand on the surface at their TRUE world Y (base ≈ 0). The camera
-      // lifts floor and towers together, so they sit ON the floor as the ship
-      // climbs — the per-turret altitude drop (the 8-4 reconcile) is gone, the
-      // camera owns it. The red body carries a yellow CUBE TOP (sw2-3) — the
-      // tower's gun, where its fireballs erupt — so it reads as a tall tower, not
-      // a grounded turret. Both share the tower's placement transform.
+      // Ground objects stand on the surface at their TRUE world Y (base ≈ 0).
+      // The camera lifts floor and objects together, so they sit ON the floor as
+      // the ship climbs — the per-turret altitude drop (the 8-4 reconcile) is
+      // gone, the camera owns it. The GDVIEW palette (sw3-11): towers are the
+      // tall YELLOW column wearing the WHITE cap — the tower's gun, where its
+      // fireballs erupt — and bunker-kind sites are the squat RED shorty.
+      // Column and cap share the tower's placement transform.
       const towerMat = multiply(view, modelMatrix(tu.pos, TOWER_ORIENT))
-      drawWireframe(ctx, SURFACE_TOWER, towerMat, proj, w, h, TURRET_GLOW)
-      drawWireframe(ctx, TOWER_CUBE, towerMat, proj, w, h, CUBE_GLOW)
+      if (tu.kind === 'bunker') {
+        drawWireframe(ctx, SURFACE_BUNKER, towerMat, proj, w, h, TURRET_GLOW)
+      } else {
+        drawWireframe(ctx, SURFACE_TOWER, towerMat, proj, w, h, TOWER_GLOW)
+        drawWireframe(ctx, TOWER_CAP, towerMat, proj, w, h, CAP_GLOW)
+      }
     }
   } else if (state.phase === 'trench') {
     // Story 11-6 — the trench is a procedural WALLED channel (ADR 0002 part B):
