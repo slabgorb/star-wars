@@ -42,6 +42,7 @@ import {
   TURRET_HIT_RADIUS,
   TOWER_HEIGHT,
   TOWER_FIRE_GRACE,
+  BUNKER_SPAWN_CHANCE,
   SPACE_WAVE_QUOTA,
   towersForWave,
   SURFACE_CLEAR_BONUS,
@@ -376,11 +377,12 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     events.push({ type: 'terrain-crash' }) // its own cue, not a player-death
   }
 
-  // --- Turrets: scroll toward the cockpit with the surface, then spawn ------
+  // --- Ground objects: scroll toward the cockpit with the surface, spawn ----
   const turrets = state.turrets
     .map((turret): Turret => {
       const pos: Vec3 = [turret.pos[0], turret.pos[1], turret.pos[2] + TURRET_SCROLL_SPEED * dt]
-      return { pos, age: (turret.age ?? 0) + dt } // age the tower toward its fire grace
+      // age toward fire grace; keep the kind (bunker/tower) riding along
+      return { ...turret, pos, age: (turret.age ?? 0) + dt }
     })
     .filter((turret) => turret.pos[2] < 0) // drop those that have scrolled past
   let spawnTimer = state.spawnTimer - dt
@@ -389,12 +391,17 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     spawnTimer = TURRET_SPAWN_INTERVAL
   }
 
-  // --- A tower lobs a fireball from its cube top on the fire cadence --------
+  // --- A tower lobs a fireball from its white cap on the fire cadence -------
   // Only towers past their fire grace may shoot (Story sw2-3): a freshly-risen
   // tower holds fire for TOWER_FIRE_GRACE so round-1 firing is a readable beat,
-  // not instant. The fireball erupts from the yellow cube up at TOWER_HEIGHT (the
+  // not instant. The fireball erupts from the white cap up at TOWER_HEIGHT (the
   // tower's gun), not from the floor, and heads for the cockpit from there.
-  const armed = turrets.filter((turret) => (turret.age ?? 0) >= TOWER_FIRE_GRACE)
+  // Bunkers don't fire (sw3-11): a shorty lobbing from TOWER_HEIGHT would erupt
+  // from empty air — whether bunkers fire at all (and from where) is an open
+  // ROM question logged in the story's Delivery Findings.
+  const armed = turrets.filter(
+    (turret) => turret.kind !== 'bunker' && (turret.age ?? 0) >= TOWER_FIRE_GRACE,
+  )
   let enemyFireCooldown = state.enemyFireCooldown - dt
   if (enemyFireCooldown <= 0 && armed.length > 0 && enemyShots.length < MAX_FIREBALL_SLOTS) {
     const shooter = armed[nextInt(rng, armed.length)]
@@ -408,8 +415,13 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     events.push({ type: 'enemy-fire', pos: [...muzzle] as Vec3 })
   }
 
-  // --- Player bolts vs turrets: destroy on contact, score per kill ---------
+  // --- Player bolts vs ground objects: destroy on contact, score per kill --
+  // Towers advance phaseKills toward the towersForWave quota; BUNKERS DO NOT
+  // (sw3-11): the ROM's BUNKER maze macro never increments `.TWRS`, so bunkers
+  // are shootable but quota-neutral — a bunker kill can never eat into the
+  // byte_98CB count or trigger the cleared-all bonus.
   let score = state.score
+  let towerKills = 0
   const killed = new Set<number>()
   const spentBolt = new Set<number>()
   for (let ti = 0; ti < turrets.length; ti++) {
@@ -419,6 +431,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
         killed.add(ti)
         spentBolt.add(pi)
         score += TURRET_SCORE
+        if (turrets[ti].kind !== 'bunker') towerKills++
         events.push({ type: 'enemy-death', enemyType: 'turret', pos: [...turrets[ti].pos] as Vec3 })
         break
       }
@@ -453,7 +466,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     surfaceScrollZ: state.surfaceScrollZ + TURRET_SCROLL_SPEED * dt,
     gameOver: lives <= 0,
     mode: lives <= 0 ? 'gameover' : state.mode,
-    phaseKills: state.phaseKills + killed.size,
+    phaseKills: state.phaseKills + towerKills, // towers only — bunkers are quota-neutral
     projectiles: liveBolts,
     turrets: standingTurrets,
     enemyShots: liveShots,
@@ -807,11 +820,14 @@ function clearRun(s: GameState): GameState {
   }
 }
 
-/** A fresh turret: lateral-spread spawn far down −Z, standing on the floor. */
+/** A fresh ground object: lateral-spread spawn far down −Z, on the floor.
+ *  The seeded RNG decides tower vs bunker (sw3-11) — the ROM's fixed per-wave
+ *  mazes mix both at roughly a 1-in-3 bunker rate (see BUNKER_SPAWN_CHANCE). */
 function spawnTurret(rng: Rng): Turret {
   const x = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
   const pos: Vec3 = [x, 0, -SPAWN_DISTANCE]
-  return { pos, age: 0 } // a fresh tower — holds fire for TOWER_FIRE_GRACE
+  const kind = nextFloat(rng) < BUNKER_SPAWN_CHANCE ? 'bunker' : 'tower'
+  return { pos, age: 0, kind } // fresh — a tower holds fire for TOWER_FIRE_GRACE
 }
 
 /** Move bolts by their velocity, age them, and drop the expired. New array. */
