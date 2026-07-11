@@ -67,16 +67,25 @@ export interface Enemy {
   fireCooldown?: number
 }
 
-/** A tall tower standing on the Death Star surface (Wave 2). World space. */
+/** A ground object standing on the Death Star surface (Wave 2). World space.
+ *  Mirrors the ROM's one-table design (WSGRND.MAC mazes: TOWER/BISHOP/BUNKER
+ *  entries share one list, discriminated by a picture-type byte). */
 export interface Turret {
-  /** World-space position of the tower BASE (y ≈ 0, on the floor). The hit-test
-   * reads this; the fireball launches from TOWER_HEIGHT above it (the cube top). */
+  /** World-space position of the object's BASE (y ≈ 0, on the floor). The
+   * hit-test reads this; a tower's fireball launches from TOWER_HEIGHT above it
+   * (the white cap — the tower's gun). */
   pos: Vec3
-  /** Seconds since this tower rose (Story sw2-3). A tower holds its fire for
+  /** Seconds since this object rose (Story sw2-3). A tower holds its fire for
    * TOWER_FIRE_GRACE after it appears so round-1 firing is a readable beat, not
    * instant. Optional — hand-placed `{ pos }` fixtures omit it and are treated as
    * a fresh tower (age 0) via `?? 0`. */
   age?: number
+  /** Ground-object type (sw3-11, the ROM TGD$PC byte). ABSENT means 'tower' —
+   * pre-sw3-11 fixtures and saves stay valid. Bunkers are the squat red
+   * SURFACE_BUNKER shorties: shootable, but quota-NEUTRAL (the ROM's BUNKER
+   * maze macro never increments `.TWRS`, so they never count toward the
+   * towersForWave quota or the cleared-all bonus). */
+  kind?: 'tower' | 'bunker'
 }
 
 /** A trench wall/channel entity: turrets and squares are shootable for score;
@@ -250,11 +259,14 @@ export const TURRET_SPAWN_INTERVAL = 1.5
 export const MAX_TURRETS = 4
 /** Hit sphere around a turret for player bolts. */
 export const TURRET_HIT_RADIUS = 200
-/** Elevation of a tower's yellow cube top above its floor base (Story sw2-3).
- * The tower's gun is the cube on top, so its fireballs launch from world
- * y = TOWER_HEIGHT — not from the y=0 floor like a grounded turret. Matches the
- * SURFACE_TOWER model's peak, so the shot erupts WYSIWYG from the drawn cube. */
-export const TOWER_HEIGHT = 96
+/** Elevation of a tower's gun — the white cap crowning the column (sw3-11,
+ * ex the sw2-3 yellow cube). Fireballs launch from world y = TOWER_HEIGHT, not
+ * from the y=0 floor. This IS the drawn composite peak (SURFACE_TOWER column +
+ * TOWER_CAP top ring: the WSOBJ.MAC `.WP GND` level 58 at the ×4 port scale),
+ * so the shot erupts WYSIWYG from the cap — pinned by
+ * tests/core/surface-tower-geometry.test.ts. At this scale the ship's
+ * SKIM_ALTITUDE (120) sits ≈ mid-tower, the ROM's GD$MDT placement. */
+export const TOWER_HEIGHT = 232
 /** Grace window (seconds) a freshly-risen tower holds fire before its first shot
  * (Story sw2-3). Turns round-1 firing into a readable reaction beat instead of a
  * tower that fires the instant it appears. Kept well under the ~2s a tower dwells
@@ -267,6 +279,11 @@ export const TOWER_FIRE_GRACE = 0.75
 export const ALTITUDE_RATE = 200
 /** How fast the surface scrolls turrets toward the cockpit (units/second). */
 export const TURRET_SCROLL_SPEED = 600
+/** Chance a surface spawn is a red ground BUNKER instead of a tower (sw3-11).
+ * The ROM places both from fixed per-wave mazes (WSGRND.MAC: TDIFF is ~8/28
+ * bunkers, TCLUSTR ~10/26 — roughly a third); the clone approximates that mix
+ * with a seeded-RNG draw until an authentic-maze story lands. */
+export const BUNKER_SPAWN_CHANCE = 0.3
 
 // --- Wave 3 trench constants ------------------------------------------------
 //
@@ -312,8 +329,41 @@ export const PORT_AHEAD_RANGE = 1800 // PROVISIONAL(findings ## HUD & framing)
 
 /** TIEs to destroy to clear the space phase and dive to the Death Star surface. */
 export const SPACE_WAVE_QUOTA = 6
-/** Turrets to destroy to clear the surface phase and drop into the trench. */
-export const SURFACE_WAVE_QUOTA = 4
+
+/**
+ * Towers to destroy to clear the surface phase, scaled by wave — the authentic
+ * ROM `byte_98CB` table (ROM:98CB), indexed by the mission counter `byte_4B13`
+ * (= this clone's 1-based `wave`; the ROM's index-0 `0` is an unused sentinel,
+ * so wave 1 reads index 1). Recovered from
+ * reference/disasm/StarWars_annotated.lst — `sub_A1CE` (ROM:A1EF) reads it into
+ * `byte_4B1A` ("towers left to shoot") at surface init. Values are decimal:
+ *
+ *   wave:   1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18+
+ *   towers:22 22 32 32 32 33 33 39 40 32 32 36 36 36 37 37 49 50
+ *
+ * The cabinet clamps to the table tail (`byte_98DD` = 50) for deep missions and
+ * PRNG-re-rolls the index past mission 18; the pure core cannot carry that
+ * randomness, so `towersForWave` clamps deterministically to 50 (session
+ * deviation). Replaced the flat 4-kill quota (sw3-3).
+ */
+const SURFACE_TOWERS_BY_WAVE: readonly number[] = [
+  0, 22, 22, 32, 32, 32, 33, 33, 39, 40, 32, 32, 36, 36, 36, 37, 37, 49, 50,
+]
+
+/** Towers the player must clear on the surface phase of the given (1-based) wave.
+ * A pure lookup into the ROM `byte_98CB` table above: clamped so wave ≤ 1 reads
+ * the first playable count (22, never the index-0 sentinel) and every wave past
+ * the table tail holds at 50. */
+export function towersForWave(wave: number): number {
+  const i = Math.max(1, Math.min(wave, SURFACE_TOWERS_BY_WAVE.length - 1))
+  return SURFACE_TOWERS_BY_WAVE[i]
+}
+
+/** Score for clearing every tower in the surface phase — the ROM `byte_9862`
+ * "cleared all towers" value (BCD 05,00,00 = 50,000; on-screen banner
+ * "50,000 FOR SHOOTING ALL TOWERS", ROM:E039). Banked ONCE, when the last tower
+ * falls and the run drops into the trench (ROM `sub_973A`). (sw3-3) */
+export const SURFACE_CLEAR_BONUS = 50000
 
 export interface GameState {
   /** Run lifecycle: attract/title, an active run, or the game-over screen. */

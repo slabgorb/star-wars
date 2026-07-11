@@ -39,7 +39,7 @@ import { stepGame, enterPhase } from '../../src/core/sim'
 import {
   initialState,
   SPACE_WAVE_QUOTA,
-  SURFACE_WAVE_QUOTA,
+  towersForWave,
   PROJECTILE_TTL,
   type GameState,
 } from '../../src/core/state'
@@ -97,7 +97,7 @@ describe('MusicEvent — a core GameEvent variant (AC2)', () => {
       ),
       // surface -> trench: trench theme
       ...musicTracks(
-        stepGame(playing({ phase: 'surface', phaseKills: SURFACE_WAVE_QUOTA }), NO_INPUT, DT),
+        stepGame(playing({ phase: 'surface', phaseKills: towersForWave(1) }), NO_INPUT, DT),
       ),
       // trench clear into wave 3 (odd, >=3): Imperial March replaces the space theme
       ...musicTracks(stepGame(portKill(trenchAtWave(1983, 2)), NO_INPUT, DT)),
@@ -145,7 +145,7 @@ describe('music cue — entering the Death Star surface plays the towers theme (
 
 describe('music cue — entering the trench plays the trench theme (AC2)', () => {
   it("swaps to the 'trench' theme on the surface -> trench edge", () => {
-    const out = stepGame(playing({ phase: 'surface', phaseKills: SURFACE_WAVE_QUOTA }), NO_INPUT, DT)
+    const out = stepGame(playing({ phase: 'surface', phaseKills: towersForWave(1) }), NO_INPUT, DT)
     expect(out.phase).toBe('trench') // the transition actually happened
     expect(out.events).toContainEqual({ type: 'level-clear', next: 'trench' })
     expect(out.events).toContainEqual({ type: 'music', track: 'trench' })
@@ -197,7 +197,7 @@ describe('music cue — the Imperial March replaces the space theme at wave>=3 o
     expect(musicTracks(toSurface)).not.toContain('imperialMarch')
 
     const toTrench = stepGame(
-      playing({ phase: 'surface', phaseKills: SURFACE_WAVE_QUOTA, wave: 3 }),
+      playing({ phase: 'surface', phaseKills: towersForWave(3), wave: 3 }),
       NO_INPUT,
       DT,
     )
@@ -209,7 +209,7 @@ describe('music cue — the Imperial March replaces the space theme at wave>=3 o
 
 describe('the cue fires on the EDGE, not every frame (AC1/AC4 — one startLoop per phase, not 60/sec)', () => {
   it('emits exactly one music cue entering the trench, and none on the next trench frame', () => {
-    const entered = stepGame(playing({ phase: 'surface', phaseKills: SURFACE_WAVE_QUOTA }), NO_INPUT, DT)
+    const entered = stepGame(playing({ phase: 'surface', phaseKills: towersForWave(1) }), NO_INPUT, DT)
     expect(entered.phase).toBe('trench')
     expect(musicTracks(entered)).toEqual(['trench']) // exactly one, exactly this track
     // A subsequent frame still in the trench (port far downrange, no hit) must be
@@ -256,7 +256,7 @@ describe('no run-two-silent regression — a later wave still cues its edges (AC
 
   it('a second run (wave 2) still swaps to the trench theme entering the trench', () => {
     const out = stepGame(
-      playing({ phase: 'surface', phaseKills: SURFACE_WAVE_QUOTA, wave: 2 }),
+      playing({ phase: 'surface', phaseKills: towersForWave(2), wave: 2 }),
       NO_INPUT,
       DT,
     )
@@ -280,7 +280,7 @@ describe('music cues are deterministic (AC4 — pure core)', () => {
       let s: GameState = { ...initialState(seed), phase: 'space', phaseKills: SPACE_WAVE_QUOTA }
       const tracks: string[] = []
       for (let f = 0; f < 3; f++) {
-        if (s.phase === 'surface') s = { ...s, phaseKills: SURFACE_WAVE_QUOTA }
+        if (s.phase === 'surface') s = { ...s, phaseKills: towersForWave(s.wave) }
         s = stepGame(s, NO_INPUT, DT)
         tracks.push(...musicTracks(s))
       }
