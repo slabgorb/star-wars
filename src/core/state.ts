@@ -330,8 +330,21 @@ export const EXHAUST_PORT_DISTANCE = 2400
 export const TRENCH_BONUS = 25000
 /** How fast the exhaust port scrolls toward the cockpit (units/second). */
 export const TRENCH_SCROLL_SPEED = 500
-/** Hit sphere around the exhaust port for player bolts (the octagon spans ~64). */
-export const PORT_HIT_RADIUS = 120
+/** Hit sphere around the exhaust port for player bolts. WYSIWYG (sw3-15): the
+ *  visible octagon (models.ts EXHAUST_PORT) reaches ~69.5 units at its farthest
+ *  vertex (hypot(64,27)), so the sphere is pinned at 70 — you may only HIT what
+ *  you can SEE. The old 120 was ~2x the octagon, which forgave any centred bolt
+ *  and made the finish unmissable (findings ## Exhaust port & run outcome). */
+export const PORT_HIT_RADIUS = 70
+/** Near-cockpit approach window (world units, −Z) inside which a player bolt can
+ *  resolve the exhaust-port hit. Outside it — a shot fired far up the trench that
+ *  merely crosses the port mid-channel — cannot detonate it; the port must have
+ *  scrolled to within this band of the cockpit (z=0). This restores the ROM's
+ *  narrow end-wall decision window (WSMAIN.MAC:1896-1917 `SUBD #0800`, one short
+ *  trench-wedge spacing; findings ## Exhaust port & run outcome, the $800 window)
+ *  so the finish demands timing, not just aim (sw3-15). Named authentic-FEEL like
+ *  the other Wave 3 constants — no ROM↔world-unit scale is recovered. */
+export const PORT_APPROACH_WINDOW = 800
 /** Awarded on top of TRENCH_BONUS for a port kill with no prior trench shots —
  *  the arcade's "USE THE FORCE" bonus (findings ## Exhaust port & run outcome:
  *  the type-4 segment's one-shot `byte_4B36` latch fires `sub_97E3`, the

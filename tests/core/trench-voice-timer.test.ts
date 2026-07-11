@@ -259,13 +259,17 @@ describe('a cue rides every return path — coexists with crash / port-kill even
     // port kill runs clearRun -> enterPhase (the most complex return path); the cue,
     // pushed at the TOP of stepTrench, must still ride the frame's events out.
     const trench = enterPhase(initialState(1983), 'trench')
-    const port = trench.exhaustPort!.pos
+    const p = trench.exhaustPort!.pos
+    // sw3-15: seat the port in the near-cockpit approach window so the parked
+    // bolt detonates it this step — the far spawn distance no longer resolves.
+    const port: typeof p = [p[0], p[1], -300]
     const s0: GameState = {
       ...trench,
       mode: 'playing',
       wave: 2,
       trenchTimer: T_LUKE - 1,
       trenchObstacles: [],
+      exhaustPort: { pos: port },
       projectiles: [{ pos: [port[0], port[1], port[2]], vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
     }
     const lines = spokenLines(stepGame(s0, NO_INPUT, DT))
