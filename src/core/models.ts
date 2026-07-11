@@ -548,8 +548,9 @@ export const TRENCH_CATWALK: Model3D = {
  * latitude rings (one EXACTLY on the equator, since STACKS is even — that ring is
  * the iconic equatorial trench line) joined by longitude meridians and capped at
  * the poles — plus a recessed SUPERLASER DISH (an inset rim ring + a focus point,
- * stitched into the shell) seated on the +X axis, i.e. on the y=0 and z=0 planes,
- * so the body keeps its bilateral symmetry. Origin-centred in object space; the
+ * stitched into the shell) seated on the +Z axis (facing the player in the space
+ * phase), i.e. on the x=0 and y=0 planes, so the body keeps its bilateral
+ * symmetry. Origin-centred in object space; the
  * shell seats and scales it (render.ts `deathStarPlacement`). PURE: trig only, no
  * DOM/time/random — deterministic.
  *
@@ -593,19 +594,23 @@ export function buildDeathStar(): Model3D {
     edges.push([north, ringStart[STACKS - 1] + k])
   }
 
-  // Superlaser dish, centred on +X. The rim ring sits ON the shell; the focus is
-  // recessed toward the centre, giving the concave dish. Stitched to the nearest
-  // shell vertices so the dish is part of one connected wireframe, not a floater.
+  // Superlaser dish, centred on +Z — the camera-facing hemisphere in the space
+  // phase (the body is drawn with IDENTITY orientation seated down −Z, so its +Z
+  // face is the one the player sees; render.ts deathStarPlacement/cameraView). The
+  // rim ring sits ON the shell; the focus is recessed toward the centre, giving the
+  // concave dish. Stitched to the nearest shell vertices so the dish is part of one
+  // connected wireframe, not a floater. (sw3-10: the pre-fix +X seat faced sideways,
+  // so the dish was seen edge-on and rendered as an anomalous crossed spike.)
   const sphereCount = vertices.length
   const DISH = 8
   const rd = R * 0.42
-  const xRim = Math.sqrt(R * R - rd * rd)
+  const zRim = Math.sqrt(R * R - rd * rd)
   const dishStart = vertices.length
   for (let m = 0; m < DISH; m++) {
     const psi = (2 * Math.PI * m) / DISH
-    vertices.push([xRim, rd * Math.cos(psi), rd * Math.sin(psi)])
+    vertices.push([rd * Math.cos(psi), rd * Math.sin(psi), zRim])
   }
-  const focus = vertices.push([R * 0.6, 0, 0]) - 1
+  const focus = vertices.push([0, 0, R * 0.6]) - 1
   for (let m = 0; m < DISH; m++) {
     const rim = dishStart + m
     edges.push([rim, dishStart + ((m + 1) % DISH)]) // rim loop
