@@ -67,6 +67,17 @@ export interface Enemy {
   fireCooldown?: number
 }
 
+/** A TIE caught mid-death: it has been shot and is drawn as its exploded wing
+ *  fragments flying apart for a brief beat, instead of vanishing (story sw3-8).
+ *  Purely a render cue — it has no collision and never fires. */
+export interface DyingTie {
+  /** World-space position where the TIE was destroyed (the fragments' origin). */
+  pos: Vec3
+  /** Seconds since the kill; the shell spreads the fragments by this and the sim
+   * drops the entry once it passes TIE_DEATH_SECONDS. */
+  age: number
+}
+
 /** A ground object standing on the Death Star surface (Wave 2). World space.
  *  Mirrors the ROM's one-table design (WSGRND.MAC mazes: TOWER/BISHOP/BUNKER
  *  entries share one list, discriminated by a picture-type byte). */
@@ -175,6 +186,12 @@ export const MAX_FIREBALL_SLOTS = 6
 export const ENEMY_SHOT_HIT_RADIUS = 150
 /** Hit sphere around a TIE for player bolts (covers the model extent). */
 export const TIE_HIT_RADIUS = 250
+/** How long a destroyed TIE's exploded-fragment cue plays before it is dropped
+ *  (story sw3-8). A brief flash — the cabinet's death is quick. Eyeball tunable. */
+export const TIE_DEATH_SECONDS = 0.7
+/** How far (world units) the three wing fragments drift apart over TIE_DEATH_SECONDS
+ *  as the TIE blows apart. A render tunable — the split is an eyeball concern. */
+export const TIE_DEATH_SPREAD = 520
 /** Hit sphere around the cockpit for enemy contact and fire. */
 export const COCKPIT_HIT_RADIUS = 80
 /**
@@ -406,6 +423,9 @@ export interface GameState {
   projectiles: Projectile[]
   /** Live TIE fighters. */
   enemies: Enemy[]
+  /** TIEs destroyed this frame or recently, playing their exploded-fragment death
+   * cue (story sw3-8). Each ages by dt and is dropped past TIE_DEATH_SECONDS. */
+  dyingTies: DyingTie[]
   /** Laser turrets standing on the surface (Wave 2). */
   turrets: Turret[]
   /** The trench run's target (Wave 3): the exhaust port scrolling toward the
@@ -489,6 +509,7 @@ export function initialState(seed = 1983): GameState {
     phaseKills: 0,
     projectiles: [],
     enemies: [],
+    dyingTies: [],
     turrets: [],
     exhaustPort: null,
     trenchObstacles: [],

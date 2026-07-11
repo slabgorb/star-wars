@@ -24,6 +24,9 @@ export const FAR = 9000
 export const GLOW_FOR: Record<string, string> = {
   'TIE Fighter': '#30d158', // enemy green (cabinet colour)
   'Darth Vader TIE': '#30d158', // boss TIE, enemy green (cabinet colour)
+  'TIE Fragment Left Wing': '#30d158', // exploded TIE piece, enemy green
+  'TIE Fragment Right Wing': '#30d158', // exploded TIE piece, enemy green
+  'TIE Fragment Cabin': '#30d158', // exploded TIE piece, enemy green
   'Death Star Surface': '#5a6b8c', // death star steel
   'Death Star': '#8a93a8', // death star body (lighter steel, distant hull)
   'Surface Tower': '#ff3b30', // surface turret red
