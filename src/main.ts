@@ -14,6 +14,8 @@ import {
 } from '@arcade/shared/highscore'
 import { createInputController } from './shell/input'
 import { createLoop } from '@arcade/shared/loop'
+import { INITIAL_PAUSED, isPauseKey, togglePaused, stepUnlessPaused } from '@arcade/shared/pause'
+import { drawEscOverlay } from '@arcade/shared/esc-overlay'
 import { createAudioEngine } from './shell/audio'
 import { render } from './shell/render'
 import { drawDebugOverlay } from './shell/debug-overlay'
@@ -108,10 +110,38 @@ window.addEventListener('keydown', (e: KeyboardEvent) => {
   if (/^[a-zA-Z]$/.test(e.key) || e.key === 'Backspace') state = enterInitial(state, e.key)
 })
 
+// SH2-14: Escape toggles pause via the shared @arcade/shared/pause gate — the
+// cabinet-wide VERB. Edge, not level (guard e.repeat) so a held key can't
+// machine-gun the toggle. The freeze itself is stepUnlessPaused in the loop below.
+let paused = INITIAL_PAUSED
+window.addEventListener('keydown', (e: KeyboardEvent) => {
+  if (!e.repeat && isPauseKey(e.key.toLowerCase())) paused = togglePaused(paused)
+})
+
+// Per-cabinet NUMBERS for the pause card: star-wars' yoke keybinds, its green
+// cockpit-HUD chrome, and the dim alpha. Copy/colour/opacity are playtest-tunable.
+const STAR_WARS_PAUSE = {
+  lines: [
+    'PAUSED',
+    '',
+    'ESC          RESUME',
+    'MOUSE        AIM',
+    'SPACE        FIRE',
+    'ENTER        START',
+  ],
+  color: '#00e600',
+  opacity: 0.72,
+} as const
+
 const loop = createLoop(
   (dt) => {
     const prev = state
-    state = stepGame(state, input.sample(), dt)
+    // SH2-14: the frozen-frame gate. When paused, the thunk never runs (no step,
+    // no input sample) and stepUnlessPaused returns the prior state reference, so
+    // resume is deterministic. A frozen frame skips the event pump + gameover edge
+    // below (they must not re-fire against a stale, un-advanced state).
+    state = stepUnlessPaused(() => stepGame(state, input.sample(), dt), state, paused)
+    if (state === prev) return
     // Play one sound per gameplay event the core emitted this frame. The pump
     // lives here (not loop.ts) because the game state — and its `events` channel
     // — lives here; loop.ts is a generic, state-agnostic driver. play() is a
@@ -233,6 +263,9 @@ const loop = createLoop(
     // drawn only when toggled on. The `import.meta.env.DEV &&` guard lets Vite
     // tree-shake it (and drawDebugOverlay) out of a production build entirely.
     if (import.meta.env.DEV && debugOverlay) drawDebugOverlay(ctx, state, W, H)
+    // SH2-14: the pause overlay dims the frozen cockpit and draws the keybind card
+    // over it — inside the dpr-scaled block so it shares render()'s CSS-pixel space.
+    if (paused) drawEscOverlay(ctx, W, H, STAR_WARS_PAUSE)
     ctx.restore()
   },
 )
