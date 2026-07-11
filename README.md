@@ -5,6 +5,8 @@ the first-person cockpit shooter where you fly the trench run and "use the Force
 
 **▶ Play it live: [star-wars.slabgorb.com](https://star-wars.slabgorb.com)**
 
+![Star Wars gameplay — the Death Star trench run, laser turrets flanking the crosshair, "EXHAUST PORT AHEAD"](https://arcade-assets.slabgorb.com/star-wars/screenshot.png)
+
 Glowing 3D vector lines on black, rendered with HTML5 Canvas 2D. No 3D engine,
 no physics engine, no backend. The game is a **deterministic pure simulation
 core** (its own little "Math Box") wrapped by a thin input/render/audio shell —
