@@ -43,7 +43,8 @@ import {
   TOWER_HEIGHT,
   TOWER_FIRE_GRACE,
   SPACE_WAVE_QUOTA,
-  SURFACE_WAVE_QUOTA,
+  towersForWave,
+  SURFACE_CLEAR_BONUS,
   EXHAUST_PORT_DISTANCE,
   TRENCH_SCROLL_SPEED,
   TRENCH_BONUS,
@@ -662,13 +663,20 @@ const NEXT_PHASE: Record<Phase, Phase | null> = {
   trench: null,
 }
 
-/** Kills that clear a phase. The trench never clears by KILL count — it ends
- * when the exhaust port is destroyed (handled in stepTrench), so its quota is
- * unreachable here. */
-const PHASE_QUOTA: Record<Phase, number> = {
-  space: SPACE_WAVE_QUOTA,
-  surface: SURFACE_WAVE_QUOTA,
-  trench: Infinity,
+/** Kills that clear a phase this frame. Space is a flat quota; the SURFACE is
+ * wave-scaled — the authentic ROM `byte_98CB` tower count (sw3-3), replacing the
+ * old flat 4-kill quota; the trench never clears by KILL count (the exhaust-port
+ * hit in stepTrench ends it), so its quota is unreachable here. Exhaustive over
+ * Phase so a new phase can't silently default to a wrong quota. */
+function phaseQuota(s: GameState): number {
+  switch (s.phase) {
+    case 'space':
+      return SPACE_WAVE_QUOTA
+    case 'surface':
+      return towersForWave(s.wave)
+    case 'trench':
+      return Infinity
+  }
 }
 
 /** The voice line cued when a run ENTERS a phase (sw2-5). Only the surface and
@@ -703,7 +711,7 @@ const TRENCH_VOICE_CUES: ReadonlyArray<{
  */
 function progress(s: GameState): GameState {
   if (s.gameOver) return s
-  if (s.phaseKills < PHASE_QUOTA[s.phase]) return s
+  if (s.phaseKills < phaseQuota(s)) return s
   const next = NEXT_PHASE[s.phase]
   if (next === null) return s
   // The phase cleared — carry the frame's events forward, announce the warp, and
@@ -712,6 +720,12 @@ function progress(s: GameState): GameState {
   const events: GameEvent[] = [...s.events, { type: 'level-clear', next }]
   const line = ENTER_PHASE_SPEECH[next]
   if (line) events.push({ type: 'speech', line })
+  // Clearing every tower on the surface banks the 50,000 "cleared all towers"
+  // bonus and cues its banner — ONCE, on the drop into the trench (sw3-3).
+  if (s.phase === 'surface') {
+    events.push({ type: 'tower-bonus', amount: SURFACE_CLEAR_BONUS })
+    return { ...advanced, score: advanced.score + SURFACE_CLEAR_BONUS, events }
+  }
   return { ...advanced, events }
 }
 

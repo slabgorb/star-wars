@@ -95,6 +95,16 @@ export interface ForceBonusEvent {
   amount: number
 }
 
+// Every tower on the Death Star surface was destroyed — the run banks the 50,000
+// "cleared all towers" bonus (ROM byte_9862; on-screen banner
+// "50,000 FOR SHOOTING ALL TOWERS", ROM:E039) as it drops into the trench
+// (sw3-3). `amount` carries SURFACE_CLEAR_BONUS for the SFX/HUD layer, mirroring
+// how ForceBonusEvent and the other scoring events carry their own payload.
+export interface TowerBonusEvent {
+  type: 'tower-bonus'
+  amount: number
+}
+
 // The winning shot — a player torpedo destroyed the exhaust port and the Death
 // Star blows (sw2-4). Positioned like `enemy-death` / `fireball-destroyed` so the
 // shell can stage the explosion AT the port's world spot; `pos` is the port's
@@ -160,6 +170,7 @@ export type GameEvent =
   | FireballDestroyedEvent
   | TrenchObstacleDestroyedEvent
   | ForceBonusEvent
+  | TowerBonusEvent
   | DeathStarDestroyedEvent
   | ExhaustPortMissedEvent
   | SpeechEvent
