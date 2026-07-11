@@ -35,6 +35,7 @@ import { describe, it, expect } from 'vitest'
 import {
   initialState,
   SPAWN_INTERVAL,
+  ENEMY_SPEED,
   TIE_SCORE,
   type GameState,
   type Enemy,
@@ -124,9 +125,15 @@ function followFirstTie(seed: number, steps: number, dt = 0.05): Sample[] {
   }
   const samples: Sample[] = []
   let last: Vec3 | null = null
+  // A genuine index-0 TIE SWAP is a discontinuity far larger than one frame of
+  // legitimate flight. One frame moves ~ENEMY_SPEED·dt (500u at the restored sw4-1
+  // metric — up from ~65u in the old compressed world), so the swap threshold must
+  // clear a few normal steps or it false-trips on ordinary fast motion and cuts the
+  // track to a single sample.
+  const swapJump = ENEMY_SPEED * dt * 3
   for (let i = 0; i < steps && s.enemies.length > 0; i++) {
     const e = s.enemies[0]
-    if (last && length(sub(e.pos, last)) > 200) break // index-0 changed TIEs
+    if (last && length(sub(e.pos, last)) > swapJump) break // index-0 changed TIEs
     samples.push({ pos: e.pos, orient: e.orient, vel: e.vel })
     last = e.pos
     s = stepGame(s, NO_INPUT, dt)

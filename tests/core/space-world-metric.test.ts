@@ -70,7 +70,7 @@ import {
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
-import { perspective, transform, IDENTITY, type Vec3 } from '@arcade/shared/math3d'
+import { perspective, transform, IDENTITY } from '@arcade/shared/math3d'
 
 // The ROM constants this story restores, named here so the assertions read as the
 // spec's table (and so a reviewer can diff the expectations against WSCPU.MAC).
