@@ -312,8 +312,41 @@ export const PORT_AHEAD_RANGE = 1800 // PROVISIONAL(findings ## HUD & framing)
 
 /** TIEs to destroy to clear the space phase and dive to the Death Star surface. */
 export const SPACE_WAVE_QUOTA = 6
-/** Turrets to destroy to clear the surface phase and drop into the trench. */
-export const SURFACE_WAVE_QUOTA = 4
+
+/**
+ * Towers to destroy to clear the surface phase, scaled by wave — the authentic
+ * ROM `byte_98CB` table (ROM:98CB), indexed by the mission counter `byte_4B13`
+ * (= this clone's 1-based `wave`; the ROM's index-0 `0` is an unused sentinel,
+ * so wave 1 reads index 1). Recovered from
+ * reference/disasm/StarWars_annotated.lst — `sub_A1CE` (ROM:A1EF) reads it into
+ * `byte_4B1A` ("towers left to shoot") at surface init. Values are decimal:
+ *
+ *   wave:   1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18+
+ *   towers:22 22 32 32 32 33 33 39 40 32 32 36 36 36 37 37 49 50
+ *
+ * The cabinet clamps to the table tail (`byte_98DD` = 50) for deep missions and
+ * PRNG-re-rolls the index past mission 18; the pure core cannot carry that
+ * randomness, so `towersForWave` clamps deterministically to 50 (session
+ * deviation). Replaced the flat 4-kill quota (sw3-3).
+ */
+const SURFACE_TOWERS_BY_WAVE: readonly number[] = [
+  0, 22, 22, 32, 32, 32, 33, 33, 39, 40, 32, 32, 36, 36, 36, 37, 37, 49, 50,
+]
+
+/** Towers the player must clear on the surface phase of the given (1-based) wave.
+ * A pure lookup into the ROM `byte_98CB` table above: clamped so wave ≤ 1 reads
+ * the first playable count (22, never the index-0 sentinel) and every wave past
+ * the table tail holds at 50. */
+export function towersForWave(wave: number): number {
+  const i = Math.max(1, Math.min(wave, SURFACE_TOWERS_BY_WAVE.length - 1))
+  return SURFACE_TOWERS_BY_WAVE[i]
+}
+
+/** Score for clearing every tower in the surface phase — the ROM `byte_9862`
+ * "cleared all towers" value (BCD 05,00,00 = 50,000; on-screen banner
+ * "50,000 FOR SHOOTING ALL TOWERS", ROM:E039). Banked ONCE, when the last tower
+ * falls and the run drops into the trench (ROM `sub_973A`). (sw3-3) */
+export const SURFACE_CLEAR_BONUS = 50000
 
 export interface GameState {
   /** Run lifecycle: attract/title, an active run, or the game-over screen. */
