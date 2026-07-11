@@ -12,7 +12,7 @@
 // Nothing here exists yet: `src/shell/audio.ts` is absent, so the value imports
 // below fail to resolve and the whole file is RED today (valid RED).
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { createAudioEngine, SPEECH, type SoundName, type SpeechName } from '../../src/shell/audio'
+import { createAudioEngine, SPEECH, MUSIC, type SoundName, type SpeechName } from '../../src/shell/audio'
 // Read main.ts as text (Vite `?raw`) for the event->sound wiring check below —
 // main.ts bootstraps a canvas, so it cannot be imported in the node test env.
 import mainSrc from '../../src/main.ts?raw'
@@ -24,6 +24,8 @@ import speechDataSrc from '../../tools/speech-bake/speech-data.mjs?raw'
 // star-wars SFX live under their own prefix on the shared arcade assets host
 // (mirrors tempest's '/tempest/sfx/' layout).
 const R2 = 'https://arcade-assets.slabgorb.com/star-wars/sfx/'
+// Looping phase music (sw3-5) eager-loads from its own sibling prefix on resume().
+const MUSIC_R2 = 'https://arcade-assets.slabgorb.com/star-wars/music/'
 
 // The logical sound names the event->sound pump plays. Typed as SoundName[],
 // this is a COMPILE-TIME assertion that the audio manifest declares each key —
@@ -98,21 +100,44 @@ afterEach(() => {
 })
 
 describe('audio engine sample loading (AC3)', () => {
-  it('fetches at least one .wav per required sound, all from the R2 base', () => {
+  it('fetches at least one .wav per required sound from the SFX R2 base', () => {
     createAudioEngine().resume()
-    expect(fetched.length).toBeGreaterThanOrEqual(REQUIRED_SOUNDS.length)
+    // resume() eager-loads the SFX manifest AND the sw3-5 music manifest, each from
+    // its own R2 prefix. The SFX set must all resolve under the SFX base; every fetch
+    // is a `.wav` from one of the two known bases.
+    const sfx = fetched.filter((u) => u.startsWith(R2))
+    expect(sfx.length).toBeGreaterThanOrEqual(REQUIRED_SOUNDS.length)
     for (const url of fetched) {
-      expect(url.startsWith(R2)).toBe(true)
+      expect(url.startsWith(R2) || url.startsWith(MUSIC_R2)).toBe(true)
       expect(url.endsWith('.wav')).toBe(true)
     }
   })
 
-  it('resolves every sample against a custom base URL', () => {
+  it('resolves every SFX sample against a custom base URL', () => {
     createAudioEngine('https://cdn.test/x/').resume()
-    expect(fetched.length).toBeGreaterThan(0)
-    for (const url of fetched) {
+    // The custom base is the SFX base; music keeps its own R2 music prefix, so
+    // exclude it before asserting the SFX samples resolve against the custom base.
+    const sfx = fetched.filter((u) => !u.startsWith(MUSIC_R2))
+    expect(sfx.length).toBeGreaterThan(0)
+    for (const url of sfx) {
       expect(url.startsWith('https://cdn.test/x/')).toBe(true)
       expect(url.endsWith('.wav')).toBe(true)
+    }
+  })
+
+  it('always loads music from the FIXED music R2 base, even under a custom SFX base', () => {
+    // The custom base parameterizes SFX ONLY; the music engine's base is hardwired to
+    // the music R2 prefix. Identify the music fetches by their manifest FILENAMES
+    // (base-independent), then assert each resolved under MUSIC_R2 — not the custom
+    // SFX base. Mutation-proven guard: coupling the music engine's baseUrl to the
+    // custom SFX param would fetch these from https://cdn.test/x/ and fail here.
+    createAudioEngine('https://cdn.test/x/').resume()
+    const musicFiles = new Set<string>(Object.values(MUSIC))
+    const music = fetched.filter((u) => musicFiles.has(u.split('/').pop() ?? ''))
+    expect(music.length).toBe(musicFiles.size) // every track eager-loaded exactly once
+    for (const url of music) {
+      expect(url.startsWith(MUSIC_R2)).toBe(true)
+      expect(url.startsWith('https://cdn.test/x/')).toBe(false)
     }
   })
 
