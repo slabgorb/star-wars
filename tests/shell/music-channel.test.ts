@@ -14,7 +14,7 @@
 // here exists yet: `startLoop`/`stopLoop`/`MUSIC`/`MusicName` are absent, so the
 // value import and the API-surface assertions are RED today (valid RED).
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { createAudioEngine, MUSIC, type MusicName } from '../../src/shell/audio'
+import { createAudioEngine, MUSIC, MUSIC_CHANNELS, type MusicName } from '../../src/shell/audio'
 // Read main.ts as text (Vite `?raw`) for the event->music wiring check — main.ts
 // bootstraps a canvas and cannot be imported in the node test env (as audio.test.ts).
 import mainSrc from '../../src/main.ts?raw'
@@ -51,6 +51,24 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('the music channel is single — exactly one loop rings at a time (AC1)', () => {
+  it('maps every track to ONE shared channel, so a new track voice-steals the old', () => {
+    // AC1's headline guarantee: all tracks share a single logical channel, so
+    // startLoop voice-steals whatever was looping and exactly one music loop plays;
+    // a phase edge swaps it. Give ANY track its own channel and two loops could ring
+    // at once (the mutation-proven regression this pins: e.g. imperialMarch: 'music'
+    // -> 'music-imperial' would let the March play over a phase theme). Read straight
+    // off the production MUSIC_CHANNELS map — not a local fixture.
+    const channels = Object.values(MUSIC_CHANNELS)
+    expect(channels.length).toBe(REQUIRED_MUSIC.length) // one channel mapping per track
+    expect(new Set(channels).size).toBe(1) // ...and they are all the SAME channel
+  })
+
+  it('declares a channel for exactly the four core tracks (no track left unmapped)', () => {
+    expect(new Set(Object.keys(MUSIC_CHANNELS))).toEqual(new Set(REQUIRED_MUSIC))
+  })
 })
 
 describe('audio engine exposes the looping music channel (AC1)', () => {

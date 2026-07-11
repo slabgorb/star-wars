@@ -12,7 +12,7 @@
 // Nothing here exists yet: `src/shell/audio.ts` is absent, so the value imports
 // below fail to resolve and the whole file is RED today (valid RED).
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { createAudioEngine, SPEECH, type SoundName, type SpeechName } from '../../src/shell/audio'
+import { createAudioEngine, SPEECH, MUSIC, type SoundName, type SpeechName } from '../../src/shell/audio'
 // Read main.ts as text (Vite `?raw`) for the event->sound wiring check below —
 // main.ts bootstraps a canvas, so it cannot be imported in the node test env.
 import mainSrc from '../../src/main.ts?raw'
@@ -122,6 +122,22 @@ describe('audio engine sample loading (AC3)', () => {
     for (const url of sfx) {
       expect(url.startsWith('https://cdn.test/x/')).toBe(true)
       expect(url.endsWith('.wav')).toBe(true)
+    }
+  })
+
+  it('always loads music from the FIXED music R2 base, even under a custom SFX base', () => {
+    // The custom base parameterizes SFX ONLY; the music engine's base is hardwired to
+    // the music R2 prefix. Identify the music fetches by their manifest FILENAMES
+    // (base-independent), then assert each resolved under MUSIC_R2 — not the custom
+    // SFX base. Mutation-proven guard: coupling the music engine's baseUrl to the
+    // custom SFX param would fetch these from https://cdn.test/x/ and fail here.
+    createAudioEngine('https://cdn.test/x/').resume()
+    const musicFiles = new Set<string>(Object.values(MUSIC))
+    const music = fetched.filter((u) => musicFiles.has(u.split('/').pop() ?? ''))
+    expect(music.length).toBe(musicFiles.size) // every track eager-loaded exactly once
+    for (const url of music) {
+      expect(url.startsWith(MUSIC_R2)).toBe(true)
+      expect(url.startsWith('https://cdn.test/x/')).toBe(false)
     }
   })
 

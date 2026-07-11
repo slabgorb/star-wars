@@ -74,7 +74,9 @@ export type MusicName = keyof typeof MUSIC
 // Every track shares ONE logical channel, so starting a track voice-steals whatever
 // was looping — exactly one music loop rings at a time and a phase edge swaps it
 // (the looping music channel this story needs, per @arcade/shared/audio SH2-16).
-const MUSIC_CHANNELS: Record<MusicName, string> = {
+// Exported so the single-channel invariant (AC1) can be pinned by a test — giving
+// any track its own channel would let two loops ring at once (AC1 broken).
+export const MUSIC_CHANNELS: Record<MusicName, string> = {
   space: 'music',
   towers: 'music',
   trench: 'music',

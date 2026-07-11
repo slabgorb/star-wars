@@ -34,7 +34,7 @@
 // GREEN, like sw3-4's `trenchTimer`), and `stepGame` emits no `music` events, so
 // every behavioural assertion fails at runtime.
 import { describe, it, expect } from 'vitest'
-import type { GameEvent, MusicTrack } from '../../src/core/events'
+import type { MusicTrack } from '../../src/core/events'
 import { stepGame, enterPhase } from '../../src/core/sim'
 import {
   initialState,
@@ -80,16 +80,29 @@ function musicTracks(s: GameState): string[] {
 const MUSIC_TRACKS: MusicTrack[] = ['space', 'towers', 'trench', 'imperialMarch']
 
 describe('MusicEvent — a core GameEvent variant (AC2)', () => {
-  it('is a discriminated `music` variant carrying a MusicTrack', () => {
-    const events: GameEvent[] = MUSIC_TRACKS.map((track) => ({ type: 'music', track }))
-    for (const e of events) {
-      expect(e.type).toBe('music')
-      if (e.type === 'music') expect(typeof e.track).toBe('string')
-    }
-  })
-
-  it('names four DISTINCT tracks — space, towers, trench, Imperial March', () => {
-    expect(new Set(MUSIC_TRACKS).size).toBe(4)
+  it('emits every MusicTrack the union declares across real phase edges', () => {
+    // Folds the old compile-time "is a `music` variant" / "4 distinct tracks" pins
+    // (which only inspected the local MUSIC_TRACKS fixture, never production) into one
+    // BEHAVIORAL check: every track the union declares must actually be reachable as a
+    // `music` cue — so the union carries no dead member and no edge is missing its
+    // theme. The `MUSIC_TRACKS: MusicTrack[]` annotation still pins the union at
+    // COMPILE time (a renamed/dropped member is a type error here); "4 distinct .wav
+    // files" is pinned against the real MUSIC export in tests/shell/music-channel.
+    const emitted = new Set<string>([
+      // run start -> space theme
+      ...musicTracks(stepGame(playing({ mode: 'attract' }), { ...NO_INPUT, start: true }, DT)),
+      // space -> surface: towers theme
+      ...musicTracks(
+        stepGame(playing({ phase: 'space', phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT),
+      ),
+      // surface -> trench: trench theme
+      ...musicTracks(
+        stepGame(playing({ phase: 'surface', phaseKills: SURFACE_WAVE_QUOTA }), NO_INPUT, DT),
+      ),
+      // trench clear into wave 3 (odd, >=3): Imperial March replaces the space theme
+      ...musicTracks(stepGame(portKill(trenchAtWave(1983, 2)), NO_INPUT, DT)),
+    ])
+    expect(emitted).toEqual(new Set<string>(MUSIC_TRACKS))
   })
 })
 
