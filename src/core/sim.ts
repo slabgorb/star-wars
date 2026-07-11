@@ -12,7 +12,7 @@
 // rule helpers — there is no ad-hoc geometry in here.
 
 import { initialState } from './state'
-import type { GameState, Projectile, Enemy, Turret, Phase, TrenchObstacle } from './state'
+import type { GameState, Projectile, Enemy, Turret, Phase, TrenchObstacle, DyingTie } from './state'
 import {
   PROJECTILE_TTL,
   PROJECTILE_SPEED,
@@ -30,6 +30,7 @@ import {
   TIE_SCORE,
   FIREBALL_SCORE,
   TIE_HIT_RADIUS,
+  TIE_DEATH_SECONDS,
   COCKPIT_HIT_RADIUS,
   CATWALK_HIT_RADIUS,
   SKIM_ALTITUDE,
@@ -220,9 +221,12 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   const enemyFireCooldown = Math.max(0, state.enemyFireCooldown - dt)
 
   // --- Player bolts vs TIEs: destroy on contact, score per kill ------------
+  // A killed TIE also spawns its exploded-fragment death cue (story sw3-8), so it
+  // breaks apart on screen instead of blinking out; older cues age and expire.
   let score = state.score
   const killedTie = new Set<number>()
   const spentBolt = new Set<number>()
+  const spawnedDying: DyingTie[] = []
   for (let ei = 0; ei < enemies.length; ei++) {
     for (let pi = 0; pi < projectiles.length; pi++) {
       if (spentBolt.has(pi)) continue
@@ -231,11 +235,19 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
         spentBolt.add(pi)
         score += TIE_SCORE
         events.push({ type: 'enemy-death', enemyType: 'tie', pos: [...enemies[ei].pos] as Vec3 })
+        spawnedDying.push({ pos: [...enemies[ei].pos] as Vec3, age: 0 })
         break
       }
     }
   }
   const standingEnemies = enemies.filter((_, i) => !killedTie.has(i))
+  // Age existing death cues and drop the finished ones, then add this frame's kills.
+  const dyingTies: DyingTie[] = [
+    ...state.dyingTies
+      .map((d) => ({ pos: d.pos, age: d.age + dt }))
+      .filter((d) => d.age <= TIE_DEATH_SECONDS),
+    ...spawnedDying,
+  ]
 
   // --- Player bolts vs enemy fireballs: shoot incoming fire down (story 8-18) -
   // Mirror the TIE loop: one bolt downs one fireball, sharing `spentBolt` so a
@@ -293,6 +305,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     phaseKills: state.phaseKills + killedTie.size,
     projectiles: liveBolts,
     enemies: liveEnemies,
+    dyingTies,
     enemyShots: liveShots,
     fireCooldown,
     spawnTimer,
@@ -792,6 +805,8 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     phase,
     phaseKills: 0,
     enemies: [],
+    // A leftover death cue never crosses into the next phase (story sw3-8).
+    dyingTies: [],
     turrets: [],
     // The trench opens with its target downrange; other phases carry no port.
     exhaustPort: phase === 'trench' ? spawnPort() : null,

@@ -16,12 +16,17 @@ import {
   STARTING_LIVES,
   PORT_AHEAD_RANGE,
   FORCE_BONUS,
+  TIE_DEATH_SECONDS,
+  TIE_DEATH_SPREAD,
   type GameState,
 } from '../core/state'
 import type { HighScoreTable } from '@arcade/shared/highscore'
 import { formatScore, formatLives, formatWave } from '../core/hud'
 import {
   TIE_FIGHTER,
+  TIE_WING_FRAG_1,
+  TIE_WING_FRAG_2,
+  TIE_WING_FRAG_3,
   DEATH_STAR_SURFACE,
   DEATH_STAR,
   SURFACE_TOWER,
@@ -310,6 +315,19 @@ export function render(
     // => multiply(orient, TIE_ORIENT)), placed in the world by its model matrix.
     for (const e of state.enemies)
       drawWireframe(ctx, TIE_FIGHTER, multiply(view, modelMatrix(e.pos, multiply(e.orient, TIE_ORIENT))), proj, w, h, TIE_GLOW)
+    // A destroyed TIE breaks into its three exploded wing fragments (story sw3-8),
+    // flying apart over TIE_DEATH_SECONDS before the sim drops the cue. The split
+    // direction/scale are a render-only tell (eyeball tunables), oriented like the
+    // fighter (TIE_ORIENT) so the pieces read as the ship coming apart.
+    for (const d of state.dyingTies) {
+      const f = TIE_DEATH_SECONDS > 0 ? Math.min(1, d.age / TIE_DEATH_SECONDS) : 1
+      const s = f * TIE_DEATH_SPREAD
+      const at = (dx: number, dy: number, dz: number): Mat4 =>
+        multiply(view, modelMatrix([d.pos[0] + dx, d.pos[1] + dy, d.pos[2] + dz], TIE_ORIENT))
+      drawWireframe(ctx, TIE_WING_FRAG_1, at(-s, 0, 0), proj, w, h, TIE_GLOW)
+      drawWireframe(ctx, TIE_WING_FRAG_2, at(s, 0, 0), proj, w, h, TIE_GLOW)
+      drawWireframe(ctx, TIE_WING_FRAG_3, at(0, 0, s), proj, w, h, TIE_GLOW)
+    }
   }
   // The player laser is a brief "pew" flash from the cannon tips at the moment of
   // firing — NOT a line that trails the bolt for its whole 2s flight (that builds

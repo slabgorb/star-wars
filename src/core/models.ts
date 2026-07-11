@@ -152,6 +152,88 @@ export const TIE_FIGHTER: Model3D = {
   ],
 }
 
+// The three EXPLODED-TIE death fragments (`Obj_Tie_Wing_Frag_1/2/3`, ROM object
+// labels `TI1`/`TI2`/`TI3`; cabinet source WSOBJ.MAC). A shot TIE breaks into its
+// left wing+strut, its right wing+strut, and its centre cabin. Vertices are the
+// authentic ROM point tables at the same `.S=13.` scale as `TIE_FIGHTER` (each raw
+// coord ×13); edges follow the ROM's shared draw routine (`.WL TI1` / `.WL2 TI2`
+// draw both wings; `.WL TI3` draws the cabin), re-authored here as index pairs.
+//
+// The two wings are the SAME shape on different planes — TI2 is TI1 rigidly turned
+// about the fin axis, (x,y,z) → (x,z,−y) — so they share one edge list. The cabin
+// reuses the TIE fighter's own aft half (its verts 25–52 are byte-identical to
+// TI3), so it is sliced straight off `TIE_FIGHTER` rather than re-transcribed.
+
+/** Shared wing connectivity for both exploded wings: the small fin circle, the
+ *  strut circle, the outer fin hexagon, and the radial "spider" lines joining them
+ *  (ROM `.WL TI1`/`.WL2 TI2`). Same index pairs for TI1 and TI2 (shared routine). */
+const TIE_WING_FRAG_EDGES: ReadonlyArray<readonly [number, number]> = [
+  // small circle on the fin (inner)
+  [6, 7], [7, 8], [8, 9], [9, 10], [10, 11], [11, 6],
+  // strut circle
+  [12, 13], [13, 14], [14, 15], [15, 16], [16, 17], [17, 12],
+  // outer fin hexagon
+  [6, 0], [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0],
+  // spider lines: outer fin → inner circle → strut
+  [1, 7], [7, 13], [14, 8], [8, 2], [3, 9], [9, 15], [16, 10], [10, 4], [5, 11], [11, 17],
+]
+
+/** `Obj_Tie_Wing_Frag_1` (`TI1`) — the exploded TIE's LEFT wing + strut (18 verts). */
+export const TIE_WING_FRAG_1: Model3D = {
+  name: 'TIE Fragment Left Wing',
+  vertices: [
+    // left outer fin (ROM y = −2 plane)
+    [-130, -26, 234], [104, -26, 234], [182, -26, 0], [104, -26, -234], [-130, -26, -234], [-208, -26, 0],
+    // small circle on the fin
+    [-26, -26, 26], [0, -26, 26], [13, -26, 0], [0, -26, -26], [-26, -26, -26], [-39, -26, 0],
+    // inner circle on the strut (ROM y = 10 plane)
+    [-26, 130, 26], [0, 130, 26], [13, 130, 0], [0, 130, -26], [-26, 130, -26], [-39, 130, 0],
+  ],
+  edges: TIE_WING_FRAG_EDGES,
+}
+
+/** `Obj_Tie_Wing_Frag_2` (`TI2`) — the exploded TIE's RIGHT wing + strut (18 verts).
+ *  Same shape as TI1, rotated onto a new plane: (x,y,z) → (x,z,−y). */
+export const TIE_WING_FRAG_2: Model3D = {
+  name: 'TIE Fragment Right Wing',
+  vertices: [
+    // right outer fin (ROM z = 2 plane)
+    [-130, 234, 26], [104, 234, 26], [182, 0, 26], [104, -234, 26], [-130, -234, 26], [-208, 0, 26],
+    // small circle on the fin
+    [-26, 26, 26], [0, 26, 26], [13, 0, 26], [0, -26, 26], [-26, -26, 26], [-39, 0, 26],
+    // inner circle on the strut (ROM z = −10 plane)
+    [-26, 26, -130], [0, 26, -130], [13, 0, -130], [0, -26, -130], [-26, -26, -130], [-39, 0, -130],
+  ],
+  edges: TIE_WING_FRAG_EDGES,
+}
+
+/** `Obj_Tie_Wing_Frag_3` (`TI3`) — the exploded TIE's CENTRE cabin (28 verts). Its
+ *  points are byte-identical to `TIE_FIGHTER`'s aft half (verts 25–52: the two inner
+ *  strut circles + the two cockpit-ball body octagons), so they are sliced off it. */
+export const TIE_WING_FRAG_3: Model3D = {
+  name: 'TIE Fragment Cabin',
+  vertices: TIE_FIGHTER.vertices.slice(-28),
+  edges: [
+    // strut pentagon
+    [0, 1], [1, 2], [2, 3], [3, 4], [4, 0],
+    // strut → body connectors
+    [12, 13], [13, 14], [14, 22],
+    [14, 15], [15, 16], [16, 24],
+    [16, 17], [17, 18], [18, 19], [19, 12],
+    // body octagon (aft ball rim)
+    [20, 21], [21, 22], [22, 23], [23, 24], [24, 25], [25, 26], [26, 27], [27, 20],
+    // second strut hexagon
+    [6, 7], [7, 8], [8, 9], [9, 10], [10, 11], [11, 6],
+    // spider lines binding cabin rings together
+    [7, 21], [21, 13], [13, 1],
+    [2, 15],
+    [23, 8],
+    [9, 25], [25, 17], [17, 3],
+    [4, 18], [18, 26], [26, 10],
+    [11, 27], [27, 19], [19, 5],
+  ],
+}
+
 /** Authentic `Obj_Darth_Tie` geometry from the cabinet disassembly. */
 export const DARTH_TIE: Model3D = {
   name: 'Darth Vader TIE',
@@ -645,6 +727,9 @@ export const DEATH_STAR: Model3D = buildDeathStar()
 export const MODELS: readonly Model3D[] = [
   TIE_FIGHTER,
   DARTH_TIE,
+  TIE_WING_FRAG_1,
+  TIE_WING_FRAG_2,
+  TIE_WING_FRAG_3,
   DEATH_STAR_SURFACE,
   SURFACE_TOWER,
   TOWER_CAP,
