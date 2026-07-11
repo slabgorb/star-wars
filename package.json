@@ -12,7 +12,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@arcade/shared": "github:slabgorb/arcade-shared#v0.11.0"
+    "@arcade/shared": "github:slabgorb/arcade-shared#v0.12.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
