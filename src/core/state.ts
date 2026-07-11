@@ -67,16 +67,36 @@ export interface Enemy {
   fireCooldown?: number
 }
 
-/** A tall tower standing on the Death Star surface (Wave 2). World space. */
-export interface Turret {
-  /** World-space position of the tower BASE (y ≈ 0, on the floor). The hit-test
-   * reads this; the fireball launches from TOWER_HEIGHT above it (the cube top). */
+/** A TIE caught mid-death: it has been shot and is drawn as its exploded wing
+ *  fragments flying apart for a brief beat, instead of vanishing (story sw3-8).
+ *  Purely a render cue — it has no collision and never fires. */
+export interface DyingTie {
+  /** World-space position where the TIE was destroyed (the fragments' origin). */
   pos: Vec3
-  /** Seconds since this tower rose (Story sw2-3). A tower holds its fire for
+  /** Seconds since the kill; the shell spreads the fragments by this and the sim
+   * drops the entry once it passes TIE_DEATH_SECONDS. */
+  age: number
+}
+
+/** A ground object standing on the Death Star surface (Wave 2). World space.
+ *  Mirrors the ROM's one-table design (WSGRND.MAC mazes: TOWER/BISHOP/BUNKER
+ *  entries share one list, discriminated by a picture-type byte). */
+export interface Turret {
+  /** World-space position of the object's BASE (y ≈ 0, on the floor). The
+   * hit-test reads this; a tower's fireball launches from TOWER_HEIGHT above it
+   * (the white cap — the tower's gun). */
+  pos: Vec3
+  /** Seconds since this object rose (Story sw2-3). A tower holds its fire for
    * TOWER_FIRE_GRACE after it appears so round-1 firing is a readable beat, not
    * instant. Optional — hand-placed `{ pos }` fixtures omit it and are treated as
    * a fresh tower (age 0) via `?? 0`. */
   age?: number
+  /** Ground-object type (sw3-11, the ROM TGD$PC byte). ABSENT means 'tower' —
+   * pre-sw3-11 fixtures and saves stay valid. Bunkers are the squat red
+   * SURFACE_BUNKER shorties: shootable, but quota-NEUTRAL (the ROM's BUNKER
+   * maze macro never increments `.TWRS`, so they never count toward the
+   * towersForWave quota or the cleared-all bonus). */
+  kind?: 'tower' | 'bunker'
 }
 
 /** A trench wall/channel entity: turrets and squares are shootable for score;
@@ -166,6 +186,12 @@ export const MAX_FIREBALL_SLOTS = 6
 export const ENEMY_SHOT_HIT_RADIUS = 150
 /** Hit sphere around a TIE for player bolts (covers the model extent). */
 export const TIE_HIT_RADIUS = 250
+/** How long a destroyed TIE's exploded-fragment cue plays before it is dropped
+ *  (story sw3-8). A brief flash — the cabinet's death is quick. Eyeball tunable. */
+export const TIE_DEATH_SECONDS = 0.7
+/** How far (world units) the three wing fragments drift apart over TIE_DEATH_SECONDS
+ *  as the TIE blows apart. A render tunable — the split is an eyeball concern. */
+export const TIE_DEATH_SPREAD = 520
 /** Hit sphere around the cockpit for enemy contact and fire. */
 export const COCKPIT_HIT_RADIUS = 80
 /**
@@ -250,11 +276,14 @@ export const TURRET_SPAWN_INTERVAL = 1.5
 export const MAX_TURRETS = 4
 /** Hit sphere around a turret for player bolts. */
 export const TURRET_HIT_RADIUS = 200
-/** Elevation of a tower's yellow cube top above its floor base (Story sw2-3).
- * The tower's gun is the cube on top, so its fireballs launch from world
- * y = TOWER_HEIGHT — not from the y=0 floor like a grounded turret. Matches the
- * SURFACE_TOWER model's peak, so the shot erupts WYSIWYG from the drawn cube. */
-export const TOWER_HEIGHT = 96
+/** Elevation of a tower's gun — the white cap crowning the column (sw3-11,
+ * ex the sw2-3 yellow cube). Fireballs launch from world y = TOWER_HEIGHT, not
+ * from the y=0 floor. This IS the drawn composite peak (SURFACE_TOWER column +
+ * TOWER_CAP top ring: the WSOBJ.MAC `.WP GND` level 58 at the ×4 port scale),
+ * so the shot erupts WYSIWYG from the cap — pinned by
+ * tests/core/surface-tower-geometry.test.ts. At this scale the ship's
+ * SKIM_ALTITUDE (120) sits ≈ mid-tower, the ROM's GD$MDT placement. */
+export const TOWER_HEIGHT = 232
 /** Grace window (seconds) a freshly-risen tower holds fire before its first shot
  * (Story sw2-3). Turns round-1 firing into a readable reaction beat instead of a
  * tower that fires the instant it appears. Kept well under the ~2s a tower dwells
@@ -267,6 +296,11 @@ export const TOWER_FIRE_GRACE = 0.75
 export const ALTITUDE_RATE = 200
 /** How fast the surface scrolls turrets toward the cockpit (units/second). */
 export const TURRET_SCROLL_SPEED = 600
+/** Chance a surface spawn is a red ground BUNKER instead of a tower (sw3-11).
+ * The ROM places both from fixed per-wave mazes (WSGRND.MAC: TDIFF is ~8/28
+ * bunkers, TCLUSTR ~10/26 — roughly a third); the clone approximates that mix
+ * with a seeded-RNG draw until an authentic-maze story lands. */
+export const BUNKER_SPAWN_CHANCE = 0.3
 
 // --- Wave 3 trench constants ------------------------------------------------
 //
@@ -389,6 +423,9 @@ export interface GameState {
   projectiles: Projectile[]
   /** Live TIE fighters. */
   enemies: Enemy[]
+  /** TIEs destroyed this frame or recently, playing their exploded-fragment death
+   * cue (story sw3-8). Each ages by dt and is dropped past TIE_DEATH_SECONDS. */
+  dyingTies: DyingTie[]
   /** Laser turrets standing on the surface (Wave 2). */
   turrets: Turret[]
   /** The trench run's target (Wave 3): the exhaust port scrolling toward the
@@ -472,6 +509,7 @@ export function initialState(seed = 1983): GameState {
     phaseKills: 0,
     projectiles: [],
     enemies: [],
+    dyingTies: [],
     turrets: [],
     exhaustPort: null,
     trenchObstacles: [],

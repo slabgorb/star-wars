@@ -16,16 +16,22 @@ import {
   STARTING_LIVES,
   PORT_AHEAD_RANGE,
   FORCE_BONUS,
+  TIE_DEATH_SECONDS,
+  TIE_DEATH_SPREAD,
   type GameState,
 } from '../core/state'
 import type { HighScoreTable } from '@arcade/shared/highscore'
 import { formatScore, formatLives, formatWave } from '../core/hud'
 import {
   TIE_FIGHTER,
+  TIE_WING_FRAG_1,
+  TIE_WING_FRAG_2,
+  TIE_WING_FRAG_3,
   DEATH_STAR_SURFACE,
   DEATH_STAR,
   SURFACE_TOWER,
-  TOWER_CUBE,
+  TOWER_CAP,
+  SURFACE_BUNKER,
   EXHAUST_PORT,
   TRENCH_TURRET,
   TRENCH_SQUARE,
@@ -53,8 +59,12 @@ import { glowPolyline } from './glow'
 
 const GLOW = '#00e5ff' // cockpit cyan
 const TIE_GLOW = GLOW_FOR['TIE Fighter'] // enemy green (shared)
-const TURRET_GLOW = GLOW_FOR['Surface Tower'] // surface tower red body (shared)
-const CUBE_GLOW = '#ffd60a' // tower yellow cube top (sw2-3)
+const TURRET_GLOW = GLOW_FOR['Surface Tower'] // vector red (shared) — trench turrets + bunkers
+// The GDVIEW surface palette (sw3-11, WSGRND.MAC): the tower column strokes
+// VGCYLW yellow, its cap/hat "SPECIAL WHITE" (VGCWHT), and lone undamaged
+// bunkers VGCRED — which is exactly the shared 'Surface Tower' red above.
+const TOWER_GLOW = '#ffd60a' // tower yellow column (VGCYLW; the sw2-3 cabinet yellow)
+const CAP_GLOW = '#f4f4ff' // tower white cap (VGCWHT, faint vector-blue cast)
 const SURFACE_GLOW = GLOW_FOR['Death Star Surface'] // death star steel (shared)
 const DEATH_STAR_GLOW = GLOW_FOR['Death Star'] // death star body hull (shared)
 const BOLT_GLOW = '#9dff00' // player laser green
@@ -254,15 +264,20 @@ export function render(
     // camera (lifted to the ship's altitude) is the only transform.
     drawWireframe(ctx, surfaceGrid(state.surfaceScrollZ), view, proj, w, h, SURFACE_GLOW)
     for (const tu of state.turrets) {
-      // Towers stand on the surface at their TRUE world Y (base ≈ 0). The camera
-      // lifts floor and towers together, so they sit ON the floor as the ship
-      // climbs — the per-turret altitude drop (the 8-4 reconcile) is gone, the
-      // camera owns it. The red body carries a yellow CUBE TOP (sw2-3) — the
-      // tower's gun, where its fireballs erupt — so it reads as a tall tower, not
-      // a grounded turret. Both share the tower's placement transform.
+      // Ground objects stand on the surface at their TRUE world Y (base ≈ 0).
+      // The camera lifts floor and objects together, so they sit ON the floor as
+      // the ship climbs — the per-turret altitude drop (the 8-4 reconcile) is
+      // gone, the camera owns it. The GDVIEW palette (sw3-11): towers are the
+      // tall YELLOW column wearing the WHITE cap — the tower's gun, where its
+      // fireballs erupt — and bunker-kind sites are the squat RED shorty.
+      // Column and cap share the tower's placement transform.
       const towerMat = multiply(view, modelMatrix(tu.pos, TOWER_ORIENT))
-      drawWireframe(ctx, SURFACE_TOWER, towerMat, proj, w, h, TURRET_GLOW)
-      drawWireframe(ctx, TOWER_CUBE, towerMat, proj, w, h, CUBE_GLOW)
+      if (tu.kind === 'bunker') {
+        drawWireframe(ctx, SURFACE_BUNKER, towerMat, proj, w, h, TURRET_GLOW)
+      } else {
+        drawWireframe(ctx, SURFACE_TOWER, towerMat, proj, w, h, TOWER_GLOW)
+        drawWireframe(ctx, TOWER_CAP, towerMat, proj, w, h, CAP_GLOW)
+      }
     }
   } else if (state.phase === 'trench') {
     // Story 11-6 — the trench is a procedural WALLED channel (ADR 0002 part B):
@@ -300,6 +315,19 @@ export function render(
     // => multiply(orient, TIE_ORIENT)), placed in the world by its model matrix.
     for (const e of state.enemies)
       drawWireframe(ctx, TIE_FIGHTER, multiply(view, modelMatrix(e.pos, multiply(e.orient, TIE_ORIENT))), proj, w, h, TIE_GLOW)
+    // A destroyed TIE breaks into its three exploded wing fragments (story sw3-8),
+    // flying apart over TIE_DEATH_SECONDS before the sim drops the cue. The split
+    // direction/scale are a render-only tell (eyeball tunables), oriented like the
+    // fighter (TIE_ORIENT) so the pieces read as the ship coming apart.
+    for (const d of state.dyingTies) {
+      const f = TIE_DEATH_SECONDS > 0 ? Math.min(1, d.age / TIE_DEATH_SECONDS) : 1
+      const s = f * TIE_DEATH_SPREAD
+      const at = (dx: number, dy: number, dz: number): Mat4 =>
+        multiply(view, modelMatrix([d.pos[0] + dx, d.pos[1] + dy, d.pos[2] + dz], TIE_ORIENT))
+      drawWireframe(ctx, TIE_WING_FRAG_1, at(-s, 0, 0), proj, w, h, TIE_GLOW)
+      drawWireframe(ctx, TIE_WING_FRAG_2, at(s, 0, 0), proj, w, h, TIE_GLOW)
+      drawWireframe(ctx, TIE_WING_FRAG_3, at(0, 0, s), proj, w, h, TIE_GLOW)
+    }
   }
   // The player laser is a brief "pew" flash from the cannon tips at the moment of
   // firing — NOT a line that trails the bolt for its whole 2s flight (that builds

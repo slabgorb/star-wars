@@ -12,7 +12,7 @@
 // rule helpers — there is no ad-hoc geometry in here.
 
 import { initialState } from './state'
-import type { GameState, Projectile, Enemy, Turret, Phase, TrenchObstacle } from './state'
+import type { GameState, Projectile, Enemy, Turret, Phase, TrenchObstacle, DyingTie } from './state'
 import {
   PROJECTILE_TTL,
   PROJECTILE_SPEED,
@@ -30,6 +30,7 @@ import {
   TIE_SCORE,
   FIREBALL_SCORE,
   TIE_HIT_RADIUS,
+  TIE_DEATH_SECONDS,
   COCKPIT_HIT_RADIUS,
   CATWALK_HIT_RADIUS,
   SKIM_ALTITUDE,
@@ -42,6 +43,7 @@ import {
   TURRET_HIT_RADIUS,
   TOWER_HEIGHT,
   TOWER_FIRE_GRACE,
+  BUNKER_SPAWN_CHANCE,
   SPACE_WAVE_QUOTA,
   towersForWave,
   SURFACE_CLEAR_BONUS,
@@ -57,7 +59,7 @@ import {
   TIE_PEEL_SWEEP,
 } from './state'
 import type { Input } from './input'
-import type { GameEvent, SpeechLine } from './events'
+import type { GameEvent, SpeechLine, MusicTrack } from './events'
 import {
   add,
   scale,
@@ -219,9 +221,12 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   const enemyFireCooldown = Math.max(0, state.enemyFireCooldown - dt)
 
   // --- Player bolts vs TIEs: destroy on contact, score per kill ------------
+  // A killed TIE also spawns its exploded-fragment death cue (story sw3-8), so it
+  // breaks apart on screen instead of blinking out; older cues age and expire.
   let score = state.score
   const killedTie = new Set<number>()
   const spentBolt = new Set<number>()
+  const spawnedDying: DyingTie[] = []
   for (let ei = 0; ei < enemies.length; ei++) {
     for (let pi = 0; pi < projectiles.length; pi++) {
       if (spentBolt.has(pi)) continue
@@ -230,11 +235,19 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
         spentBolt.add(pi)
         score += TIE_SCORE
         events.push({ type: 'enemy-death', enemyType: 'tie', pos: [...enemies[ei].pos] as Vec3 })
+        spawnedDying.push({ pos: [...enemies[ei].pos] as Vec3, age: 0 })
         break
       }
     }
   }
   const standingEnemies = enemies.filter((_, i) => !killedTie.has(i))
+  // Age existing death cues and drop the finished ones, then add this frame's kills.
+  const dyingTies: DyingTie[] = [
+    ...state.dyingTies
+      .map((d) => ({ pos: d.pos, age: d.age + dt }))
+      .filter((d) => d.age <= TIE_DEATH_SECONDS),
+    ...spawnedDying,
+  ]
 
   // --- Player bolts vs enemy fireballs: shoot incoming fire down (story 8-18) -
   // Mirror the TIE loop: one bolt downs one fireball, sharing `spentBolt` so a
@@ -292,6 +305,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     phaseKills: state.phaseKills + killedTie.size,
     projectiles: liveBolts,
     enemies: liveEnemies,
+    dyingTies,
     enemyShots: liveShots,
     fireCooldown,
     spawnTimer,
@@ -310,7 +324,13 @@ function startRun(s: GameState): GameState {
   // Luke reporting in over the comm (sw2-5).
   return {
     ...initialState(s.rng.seed),
-    events: [{ type: 'player-spawn' }, { type: 'speech', line: 'redFiveStandingBy' }],
+    events: [
+      { type: 'player-spawn' },
+      { type: 'speech', line: 'redFiveStandingBy' },
+      // Open the space theme on the run-start edge (sw3-5). Wave 1 is odd but < 3,
+      // so it is never the Imperial March here — musicTrackFor still owns the rule.
+      { type: 'music', track: musicTrackFor('space', 1) },
+    ],
   }
 }
 
@@ -376,11 +396,12 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     events.push({ type: 'terrain-crash' }) // its own cue, not a player-death
   }
 
-  // --- Turrets: scroll toward the cockpit with the surface, then spawn ------
+  // --- Ground objects: scroll toward the cockpit with the surface, spawn ----
   const turrets = state.turrets
     .map((turret): Turret => {
       const pos: Vec3 = [turret.pos[0], turret.pos[1], turret.pos[2] + TURRET_SCROLL_SPEED * dt]
-      return { pos, age: (turret.age ?? 0) + dt } // age the tower toward its fire grace
+      // age toward fire grace; keep the kind (bunker/tower) riding along
+      return { ...turret, pos, age: (turret.age ?? 0) + dt }
     })
     .filter((turret) => turret.pos[2] < 0) // drop those that have scrolled past
   let spawnTimer = state.spawnTimer - dt
@@ -389,12 +410,17 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     spawnTimer = TURRET_SPAWN_INTERVAL
   }
 
-  // --- A tower lobs a fireball from its cube top on the fire cadence --------
+  // --- A tower lobs a fireball from its white cap on the fire cadence -------
   // Only towers past their fire grace may shoot (Story sw2-3): a freshly-risen
   // tower holds fire for TOWER_FIRE_GRACE so round-1 firing is a readable beat,
-  // not instant. The fireball erupts from the yellow cube up at TOWER_HEIGHT (the
+  // not instant. The fireball erupts from the white cap up at TOWER_HEIGHT (the
   // tower's gun), not from the floor, and heads for the cockpit from there.
-  const armed = turrets.filter((turret) => (turret.age ?? 0) >= TOWER_FIRE_GRACE)
+  // Bunkers don't fire (sw3-11): a shorty lobbing from TOWER_HEIGHT would erupt
+  // from empty air — whether bunkers fire at all (and from where) is an open
+  // ROM question logged in the story's Delivery Findings.
+  const armed = turrets.filter(
+    (turret) => turret.kind !== 'bunker' && (turret.age ?? 0) >= TOWER_FIRE_GRACE,
+  )
   let enemyFireCooldown = state.enemyFireCooldown - dt
   if (enemyFireCooldown <= 0 && armed.length > 0 && enemyShots.length < MAX_FIREBALL_SLOTS) {
     const shooter = armed[nextInt(rng, armed.length)]
@@ -408,8 +434,13 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     events.push({ type: 'enemy-fire', pos: [...muzzle] as Vec3 })
   }
 
-  // --- Player bolts vs turrets: destroy on contact, score per kill ---------
+  // --- Player bolts vs ground objects: destroy on contact, score per kill --
+  // Towers advance phaseKills toward the towersForWave quota; BUNKERS DO NOT
+  // (sw3-11): the ROM's BUNKER maze macro never increments `.TWRS`, so bunkers
+  // are shootable but quota-neutral — a bunker kill can never eat into the
+  // byte_98CB count or trigger the cleared-all bonus.
   let score = state.score
+  let towerKills = 0
   const killed = new Set<number>()
   const spentBolt = new Set<number>()
   for (let ti = 0; ti < turrets.length; ti++) {
@@ -419,6 +450,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
         killed.add(ti)
         spentBolt.add(pi)
         score += TURRET_SCORE
+        if (turrets[ti].kind !== 'bunker') towerKills++
         events.push({ type: 'enemy-death', enemyType: 'turret', pos: [...turrets[ti].pos] as Vec3 })
         break
       }
@@ -453,7 +485,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     surfaceScrollZ: state.surfaceScrollZ + TURRET_SCROLL_SPEED * dt,
     gameOver: lives <= 0,
     mode: lives <= 0 ? 'gameover' : state.mode,
-    phaseKills: state.phaseKills + killed.size,
+    phaseKills: state.phaseKills + towerKills, // towers only — bunkers are quota-neutral
     projectiles: liveBolts,
     turrets: standingTurrets,
     enemyShots: liveShots,
@@ -611,6 +643,10 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     // warp / wave-clear cue (8-7), as `clearRun` re-opens 'space'. `clearRun` →
     // `enterPhase` spreads `...s`, so this event rides along.
     events.push({ type: 'level-clear', next: 'space' })
+    // Reopen the space theme for the next wave (sw3-5) — `clearRun` bumps the wave
+    // to `state.wave + 1`, so the Imperial March takes over here at wave>=3 odd
+    // (ROM sub_6838). Rides through `clearRun`->`enterPhase` like the level-clear.
+    events.push({ type: 'music', track: musicTrackFor('space', state.wave + 1) })
     return clearRun({
       ...afterObstacles,
       projectiles: liveBolts,
@@ -679,6 +715,24 @@ function phaseQuota(s: GameState): number {
   }
 }
 
+/** The looping music track a phase opens with (sw3-5). The space wave swaps to the
+ *  Imperial March at wave >= 3 AND odd (ROM `sub_6838`); the towers/trench themes are
+ *  wave-independent. Track names are the ROM sound-board music (findings ## Sound
+ *  hooks) — the surface phase's music is "Towers music", hence 'towers', not
+ *  'surface'. */
+const PHASE_MUSIC: Record<Phase, MusicTrack> = {
+  space: 'space',
+  surface: 'towers',
+  trench: 'trench',
+}
+
+/** Which looping track opens `phase` on the wave `wave`. Only the space wave is
+ *  wave-sensitive (the Imperial March replaces it at wave>=3 odd). */
+function musicTrackFor(phase: Phase, wave: number): MusicTrack {
+  if (phase === 'space' && wave >= 3 && wave % 2 === 1) return 'imperialMarch'
+  return PHASE_MUSIC[phase]
+}
+
 /** The voice line cued when a run ENTERS a phase (sw2-5). Only the surface and
  * trench edges carry a line; a new wave's space phase (reached via clearRun, not
  * progress) has none. A `Partial` map so an unwired phase simply cues nothing. */
@@ -720,6 +774,12 @@ function progress(s: GameState): GameState {
   const events: GameEvent[] = [...s.events, { type: 'level-clear', next }]
   const line = ENTER_PHASE_SPEECH[next]
   if (line) events.push({ type: 'speech', line })
+  // Swap the looping music channel to the entering phase's theme (sw3-5). Fires on
+  // this edge only; `enterPhase` preserves the wave, so surface->'towers' /
+  // trench->'trench' regardless of wave (the Imperial March is a space-only swap).
+  // Pushed BEFORE the tower-bonus early return so the surface->trench edge still
+  // carries its 'trench' music cue.
+  events.push({ type: 'music', track: musicTrackFor(next, advanced.wave) })
   // Clearing every tower on the surface banks the 50,000 "cleared all towers"
   // bonus and cues its banner — ONCE, on the drop into the trench (sw3-3).
   if (s.phase === 'surface') {
@@ -745,6 +805,8 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     phase,
     phaseKills: 0,
     enemies: [],
+    // A leftover death cue never crosses into the next phase (story sw3-8).
+    dyingTies: [],
     turrets: [],
     // The trench opens with its target downrange; other phases carry no port.
     exhaustPort: phase === 'trench' ? spawnPort() : null,
@@ -807,11 +869,14 @@ function clearRun(s: GameState): GameState {
   }
 }
 
-/** A fresh turret: lateral-spread spawn far down −Z, standing on the floor. */
+/** A fresh ground object: lateral-spread spawn far down −Z, on the floor.
+ *  The seeded RNG decides tower vs bunker (sw3-11) — the ROM's fixed per-wave
+ *  mazes mix both at roughly a 1-in-3 bunker rate (see BUNKER_SPAWN_CHANCE). */
 function spawnTurret(rng: Rng): Turret {
   const x = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
   const pos: Vec3 = [x, 0, -SPAWN_DISTANCE]
-  return { pos, age: 0 } // a fresh tower — holds fire for TOWER_FIRE_GRACE
+  const kind = nextFloat(rng) < BUNKER_SPAWN_CHANCE ? 'bunker' : 'tower'
+  return { pos, age: 0, kind } // fresh — a tower holds fire for TOWER_FIRE_GRACE
 }
 
 /** Move bolts by their velocity, age them, and drop the expired. New array. */

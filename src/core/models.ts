@@ -13,13 +13,16 @@
 // which are not recoverable by object name from the disassembly we have. The
 // wireframe is therefore derived from the geometry itself.
 //
-// DEATH_STAR_SURFACE and SURFACE_TOWER edges were RE-AUTHORED from their own ring
-// structure (story 8-4): each coplanar, equal-radius vertex set is closed into a
-// single loop, then joined with radial spokes (rim → hub) and struts (between
-// stacked rings). This replaces the original 8-2 nearest-neighbour heuristic,
-// which was well-formed but rendered as a tangle (rims never closed). The
-// reconstruction is guarded by an induced-single-cycle topology test
-// (tests/core/models.test.ts). TRENCH's floor squares already closed cleanly; story
+// DEATH_STAR_SURFACE edges were RE-AUTHORED from their own ring structure
+// (story 8-4): each coplanar, equal-radius vertex set is closed into a single
+// loop, then joined with radial spokes (rim → hub) and struts (between stacked
+// rings). This replaces the original 8-2 nearest-neighbour heuristic, which was
+// well-formed but rendered as a tangle (rims never closed). The reconstruction
+// is guarded by an induced-single-cycle topology test (tests/core/models.test.ts).
+// SURFACE_TOWER was later re-authored AGAIN from the original Atari source
+// (story sw3-11 — see its doc comment): its vertices AND stroke order are the
+// real WSOBJ.MAC ground-tower data, so its guard is connectivity, not
+// ring-closure (the cabinet never closes the 3-point cross-sections). TRENCH's floor squares already closed cleanly; story
 // 8-5 connected them with catwalk rails and added the ring-based EXHAUST_PORT.
 // TIE_FIGHTER and DARTH_TIE were likewise RE-AUTHORED from their own ring structure
 // (story 8-10), clearing the inherited 8-2 heuristic-edge debt; both are now closed
@@ -146,6 +149,88 @@ export const TIE_FIGHTER: Model3D = {
     // cap -> belt struts: cockpit cap down/up to the ball equator
     [24, 36], [25, 37], [26, 39], [27, 41], [28, 42], [29, 43],
     [30, 44], [31, 45], [32, 47], [33, 49], [34, 50], [35, 51],
+  ],
+}
+
+// The three EXPLODED-TIE death fragments (`Obj_Tie_Wing_Frag_1/2/3`, ROM object
+// labels `TI1`/`TI2`/`TI3`; cabinet source WSOBJ.MAC). A shot TIE breaks into its
+// left wing+strut, its right wing+strut, and its centre cabin. Vertices are the
+// authentic ROM point tables at the same `.S=13.` scale as `TIE_FIGHTER` (each raw
+// coord ×13); edges follow the ROM's shared draw routine (`.WL TI1` / `.WL2 TI2`
+// draw both wings; `.WL TI3` draws the cabin), re-authored here as index pairs.
+//
+// The two wings are the SAME shape on different planes — TI2 is TI1 rigidly turned
+// about the fin axis, (x,y,z) → (x,z,−y) — so they share one edge list. The cabin
+// reuses the TIE fighter's own aft half (its verts 25–52 are byte-identical to
+// TI3), so it is sliced straight off `TIE_FIGHTER` rather than re-transcribed.
+
+/** Shared wing connectivity for both exploded wings: the small fin circle, the
+ *  strut circle, the outer fin hexagon, and the radial "spider" lines joining them
+ *  (ROM `.WL TI1`/`.WL2 TI2`). Same index pairs for TI1 and TI2 (shared routine). */
+const TIE_WING_FRAG_EDGES: ReadonlyArray<readonly [number, number]> = [
+  // small circle on the fin (inner)
+  [6, 7], [7, 8], [8, 9], [9, 10], [10, 11], [11, 6],
+  // strut circle
+  [12, 13], [13, 14], [14, 15], [15, 16], [16, 17], [17, 12],
+  // outer fin hexagon
+  [6, 0], [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0],
+  // spider lines: outer fin → inner circle → strut
+  [1, 7], [7, 13], [14, 8], [8, 2], [3, 9], [9, 15], [16, 10], [10, 4], [5, 11], [11, 17],
+]
+
+/** `Obj_Tie_Wing_Frag_1` (`TI1`) — the exploded TIE's LEFT wing + strut (18 verts). */
+export const TIE_WING_FRAG_1: Model3D = {
+  name: 'TIE Fragment Left Wing',
+  vertices: [
+    // left outer fin (ROM y = −2 plane)
+    [-130, -26, 234], [104, -26, 234], [182, -26, 0], [104, -26, -234], [-130, -26, -234], [-208, -26, 0],
+    // small circle on the fin
+    [-26, -26, 26], [0, -26, 26], [13, -26, 0], [0, -26, -26], [-26, -26, -26], [-39, -26, 0],
+    // inner circle on the strut (ROM y = 10 plane)
+    [-26, 130, 26], [0, 130, 26], [13, 130, 0], [0, 130, -26], [-26, 130, -26], [-39, 130, 0],
+  ],
+  edges: TIE_WING_FRAG_EDGES,
+}
+
+/** `Obj_Tie_Wing_Frag_2` (`TI2`) — the exploded TIE's RIGHT wing + strut (18 verts).
+ *  Same shape as TI1, rotated onto a new plane: (x,y,z) → (x,z,−y). */
+export const TIE_WING_FRAG_2: Model3D = {
+  name: 'TIE Fragment Right Wing',
+  vertices: [
+    // right outer fin (ROM z = 2 plane)
+    [-130, 234, 26], [104, 234, 26], [182, 0, 26], [104, -234, 26], [-130, -234, 26], [-208, 0, 26],
+    // small circle on the fin
+    [-26, 26, 26], [0, 26, 26], [13, 0, 26], [0, -26, 26], [-26, -26, 26], [-39, 0, 26],
+    // inner circle on the strut (ROM z = −10 plane)
+    [-26, 26, -130], [0, 26, -130], [13, 0, -130], [0, -26, -130], [-26, -26, -130], [-39, 0, -130],
+  ],
+  edges: TIE_WING_FRAG_EDGES,
+}
+
+/** `Obj_Tie_Wing_Frag_3` (`TI3`) — the exploded TIE's CENTRE cabin (28 verts). Its
+ *  points are byte-identical to `TIE_FIGHTER`'s aft half (verts 25–52: the two inner
+ *  strut circles + the two cockpit-ball body octagons), so they are sliced off it. */
+export const TIE_WING_FRAG_3: Model3D = {
+  name: 'TIE Fragment Cabin',
+  vertices: TIE_FIGHTER.vertices.slice(-28),
+  edges: [
+    // strut pentagon
+    [0, 1], [1, 2], [2, 3], [3, 4], [4, 0],
+    // strut → body connectors
+    [12, 13], [13, 14], [14, 22],
+    [14, 15], [15, 16], [16, 24],
+    [16, 17], [17, 18], [18, 19], [19, 12],
+    // body octagon (aft ball rim)
+    [20, 21], [21, 22], [22, 23], [23, 24], [24, 25], [25, 26], [26, 27], [27, 20],
+    // second strut hexagon
+    [6, 7], [7, 8], [8, 9], [9, 10], [10, 11], [11, 6],
+    // spider lines binding cabin rings together
+    [7, 21], [21, 13], [13, 1],
+    [2, 15],
+    [23, 8],
+    [9, 25], [25, 17], [17, 3],
+    [4, 18], [18, 26], [26, 10],
+    [11, 27], [27, 19], [19, 5],
   ],
 }
 
@@ -291,71 +376,120 @@ export const DEATH_STAR_SURFACE: Model3D = {
   ],
 }
 
-/** Authentic `Object_10` geometry from the cabinet disassembly. */
+/**
+ * Authentic GROUND LASAR TOWER column (Story sw3-11) — the surface tower body.
+ *
+ * RE-AUTHORED from the original Atari source (historicalsource/star-wars @
+ * 5355b76, "Warp Speed"): WSOBJ.MAC `.WP GND` point table (scale `.S=30.*4`,
+ * heights recentred by GD$MDT — recentring dropped here, base on y=0). The ROM
+ * profile, in .S units, is (h,r) = (0,8) (6,6) (14,5) (52,4) (58,4): a TALL
+ * tapering column, 58 high on a 16-wide footprint (~3.6:1), with 3-point
+ * front/left/right cross-sections — never 4-corner boxes. Ported here at ×4
+ * world units per .S unit, so the composite (column + TOWER_CAP) peaks at
+ * y = 232 ≈ 2× SKIM_ALTITUDE — the ROM's GD$MDT ("PART WAY UP TOWERS") puts the
+ * ship's skim height at about mid-tower, and 120 ≈ 232/2 keeps that feel.
+ *
+ * This model is the STUB portion (WSOBJ `.WGD STB` — the yellow column, levels
+ * 0..52); the white cannon/hat section (52..58) is the separate TOWER_CAP so the
+ * shell can stroke it VGCWHT. EDGES follow the cabinet's `.WGD TWR/STB` draw
+ * code: three vertical profile polylines (right, front, left) meeting at the
+ * base front and the cannon bottom — the cross-section triangles are NEVER
+ * closed (the cabinet strokes no horizontal bands; see the revised 8-4 guard).
+ *
+ * (The model this replaces was local-disasm `Object_10`, misidentified as the
+ * tower — its base rectangle is identical to `Obj_Trench_Squares`' outer floor
+ * square; it is trench furniture, the catwalk brace of the EXHAUST_PORT note.)
+ */
 export const SURFACE_TOWER: Model3D = {
   name: 'Surface Tower',
   vertices: [
-    [-256, 0, 192],
-    [256, 0, 192],
-    [256, 0, -192],
-    [-256, 0, -192],
-    [-96, 96, 64],
-    [96, 32, 64],
-    [96, 32, -64],
-    [-96, 96, -64],
-    [-96, 32, -64],
-    [-96, 32, 64],
-    [-96, 72, 32],
-    [-96, 56, 32],
-    [-96, 72, -32],
-    [-96, 56, -32],
+    // base ring (y = 0, r = 32): front / left / right
+    [-32, 0, 0],
+    [0, 0, 32],
+    [0, 0, -32],
+    // near-bottom ring (y = 24, r = 24)
+    [-24, 24, 0],
+    [0, 24, 24],
+    [0, 24, -24],
+    // midline ring (y = 56, r = 20)
+    [-20, 56, 0],
+    [0, 56, 20],
+    [0, 56, -20],
+    // cannon-bottom ring (y = 208, r = 16) — the cap's seat
+    [-16, 208, 0],
+    [0, 208, 16],
+    [0, 208, -16],
   ],
-  // Two rings — the y=0 base rectangle (0-3) and the y=32 turret-box rectangle
-  // (5,6,8,9) — plus the -X back panel (4,7) up at y=96 and an inner detail
-  // rectangle (10-13). Reconstruction: close both rings, strut the base corners
-  // up to the box, frame the back panel, and anchor the inner detail.
   edges: [
-    // base ring (y = 0)
-    [0, 1], [1, 2], [2, 3], [3, 0],
-    // upper box ring (y = 32)
-    [5, 6], [6, 8], [8, 9], [9, 5],
-    // base → box struts
-    [0, 9], [1, 5], [2, 6], [3, 8],
-    // back panel up to y = 96
-    [4, 7], [4, 9], [7, 8],
-    // inner detail rectangle, anchored to the panel
-    [10, 11], [11, 13], [13, 12], [12, 10], [4, 10], [7, 12],
+    // right profile: base front across to the right corner, then up
+    [0, 2], [2, 5], [5, 8], [8, 11],
+    // front profile: across the cannon bottom, then down the front to the base
+    [11, 9], [9, 6], [6, 3], [3, 0],
+    // left profile: across the base, up the left, closing at the cannon bottom
+    [0, 1], [1, 4], [4, 7], [7, 10], [10, 9],
   ],
 }
 
 /**
- * The tower's yellow CUBE TOP (Story sw2-3). The authentic surface tower is
- * tipped with a bright cube — its gun — from which fireballs erupt. A compact
- * box capping the SURFACE_TOWER peak, centred at y = TOWER_HEIGHT (96); the shell
- * strokes it yellow so the tower reads as a tall tower with a glowing cube top,
- * not an all-red grounded turret. Object-space, sharing the tower's placement
- * transform. Like the Wave-0 placeholder CUBE, this is authored decoration, so it
- * is intentionally NOT in the authentic MODELS registry — it is drawn directly.
+ * The tower's WHITE CAP (Story sw3-11) — the ROM's cannon/hat section, WSOBJ.MAC
+ * `.WP GND` levels 52→58 (r = 4), drawn by `.WGD TWR` in the "special" color:
+ * WSGRND.MAC GDVIEW `VGCWHT` — "SO DRAW IT SPECIAL WHITE". Replaces the sw2-3
+ * authored TOWER_CUBE. A separate model because Canvas strokes one color per
+ * drawWireframe call; it shares the tower's placement transform and seats
+ * exactly on the column's cannon-bottom ring (y = 208), peaking at
+ * y = 232 = TOWER_HEIGHT — the tower's gun, where its fireballs erupt (WYSIWYG).
+ * Edges follow the cabinet's white strokes: up the right and left cap sides,
+ * across the top, and the partial cannon-bottom ring (front→right, front→left).
  */
-export const TOWER_CUBE: Model3D = {
-  name: 'Tower Cube',
+export const TOWER_CAP: Model3D = {
+  name: 'Tower Cap',
   vertices: [
-    [-24, 72, -24],
-    [24, 72, -24],
-    [24, 72, 24],
-    [-24, 72, 24],
-    [-24, 120, -24],
-    [24, 120, -24],
-    [24, 120, 24],
-    [-24, 120, 24],
+    // cannon-bottom ring (y = 208, r = 16): front / left / right
+    [-16, 208, 0],
+    [0, 208, 16],
+    [0, 208, -16],
+    // top-of-tower ring (y = 232, r = 16)
+    [-16, 232, 0],
+    [0, 232, 16],
+    [0, 232, -16],
   ],
   edges: [
-    // bottom ring (y = 72)
-    [0, 1], [1, 2], [2, 3], [3, 0],
-    // top ring (y = 120)
-    [4, 5], [5, 6], [6, 7], [7, 4],
-    // corner pillars
-    [0, 4], [1, 5], [2, 6], [3, 7],
+    // right side up, across the top, down the front
+    [2, 5], [5, 3], [3, 0],
+    // left side up to the top front
+    [1, 4], [4, 3],
+    // partial cannon-bottom ring (the cabinet's BDRAWTO 7,9 / 7,8)
+    [0, 2], [0, 1],
+  ],
+}
+
+/**
+ * Authentic GROUND BUNKER (Story sw3-11) — WSOBJ.MAC `.WGD BNK`, which draws
+ * ONLY the base (r=8) and near-bottom (r=6, h=6) rings of the shared GND point
+ * table: a squat truncated pyramid, the macro's own word — "SHORTY" (6 high on
+ * a 16-wide footprint). Lone undamaged bunkers stroke `VGCRED` (GDVIEW).
+ * Same ×4 scale as SURFACE_TOWER. Quota note for the sim: WSGRND's BUNKER maze
+ * macro never increments `.TWRS` — bunkers do not count toward the tower quota.
+ */
+export const SURFACE_BUNKER: Model3D = {
+  name: 'Surface Bunker',
+  vertices: [
+    // base ring (y = 0, r = 32): front / left / right
+    [-32, 0, 0],
+    [0, 0, 32],
+    [0, 0, -32],
+    // top ring (y = 24, r = 24)
+    [-24, 24, 0],
+    [0, 24, 24],
+    [0, 24, -24],
+  ],
+  edges: [
+    // left face: base front → left corner → up → across to the top front
+    [0, 1], [1, 4], [4, 3], [3, 0],
+    // right face: base front → right corner → up → across to the top front
+    [0, 2], [2, 5], [5, 3],
+    // the top cross-stroke (the cabinet's BDRAWTO 14,15)
+    [4, 5],
   ],
 }
 
@@ -496,8 +630,9 @@ export const TRENCH_CATWALK: Model3D = {
  * latitude rings (one EXACTLY on the equator, since STACKS is even — that ring is
  * the iconic equatorial trench line) joined by longitude meridians and capped at
  * the poles — plus a recessed SUPERLASER DISH (an inset rim ring + a focus point,
- * stitched into the shell) seated on the +X axis, i.e. on the y=0 and z=0 planes,
- * so the body keeps its bilateral symmetry. Origin-centred in object space; the
+ * stitched into the shell) seated on the +Z axis (facing the player in the space
+ * phase), i.e. on the x=0 and y=0 planes, so the body keeps its bilateral
+ * symmetry. Origin-centred in object space; the
  * shell seats and scales it (render.ts `deathStarPlacement`). PURE: trig only, no
  * DOM/time/random — deterministic.
  *
@@ -541,19 +676,23 @@ export function buildDeathStar(): Model3D {
     edges.push([north, ringStart[STACKS - 1] + k])
   }
 
-  // Superlaser dish, centred on +X. The rim ring sits ON the shell; the focus is
-  // recessed toward the centre, giving the concave dish. Stitched to the nearest
-  // shell vertices so the dish is part of one connected wireframe, not a floater.
+  // Superlaser dish, centred on +Z — the camera-facing hemisphere in the space
+  // phase (the body is drawn with IDENTITY orientation seated down −Z, so its +Z
+  // face is the one the player sees; render.ts deathStarPlacement/cameraView). The
+  // rim ring sits ON the shell; the focus is recessed toward the centre, giving the
+  // concave dish. Stitched to the nearest shell vertices so the dish is part of one
+  // connected wireframe, not a floater. (sw3-10: the pre-fix +X seat faced sideways,
+  // so the dish was seen edge-on and rendered as an anomalous crossed spike.)
   const sphereCount = vertices.length
   const DISH = 8
   const rd = R * 0.42
-  const xRim = Math.sqrt(R * R - rd * rd)
+  const zRim = Math.sqrt(R * R - rd * rd)
   const dishStart = vertices.length
   for (let m = 0; m < DISH; m++) {
     const psi = (2 * Math.PI * m) / DISH
-    vertices.push([xRim, rd * Math.cos(psi), rd * Math.sin(psi)])
+    vertices.push([rd * Math.cos(psi), rd * Math.sin(psi), zRim])
   }
-  const focus = vertices.push([R * 0.6, 0, 0]) - 1
+  const focus = vertices.push([0, 0, R * 0.6]) - 1
   for (let m = 0; m < DISH; m++) {
     const rim = dishStart + m
     edges.push([rim, dishStart + ((m + 1) % DISH)]) // rim loop
@@ -588,8 +727,13 @@ export const DEATH_STAR: Model3D = buildDeathStar()
 export const MODELS: readonly Model3D[] = [
   TIE_FIGHTER,
   DARTH_TIE,
+  TIE_WING_FRAG_1,
+  TIE_WING_FRAG_2,
+  TIE_WING_FRAG_3,
   DEATH_STAR_SURFACE,
   SURFACE_TOWER,
+  TOWER_CAP,
+  SURFACE_BUNKER,
   TRENCH,
   EXHAUST_PORT,
   DEATH_STAR,
