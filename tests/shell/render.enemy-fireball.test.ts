@@ -1,33 +1,35 @@
 // tests/shell/render.enemy-fireball.test.ts
 //
-// Story sw2-2 — enemy fireballs render as LARGE, round fireballs (RED phase).
+// Story sw3-9 — the enemy fireball renders as the AUTHENTIC red radial SPARKLE,
+// replacing the amber concentric rings sw2-2 left behind (RED phase).
 //
-// The live-playtest defect: render.ts draws every enemy fireball as a small amber
-// "+" spark — `drawSpark(…, FIRE_GLOW, 6)` — two fixed 6px line segments crossing
-// at the projected point. On a real cabinet these are big, round, glowing
-// fireballs you can see coming and shoot down; the "+" glyph reads as a HUD tick,
-// not ordnance. This story replaces the glyph with a large round fireball body.
+// Authentic shape — recovered from the ORIGINAL Atari source (the local
+// reference/disasm has only the draw routine + a JSRL picture *address*; the AVG
+// picture geometry is not in it). Source: github historicalsource/star-wars
+// ("Warp Speed", commit 5355b76) `WSVROM.MAC`, `.SBTTLE GUNSHOT PICTURES` →
+// `GNB0-3` (base sparkle) + `GNT0-3` (tip fuse-ball), "GUN SHOTS -- SPARKLES
+// WITH FUSE BALLS":
 //
-// The contract (TEA-defined; the sprint YAML carried no acceptance criteria):
+//   * `COLOR VGCRED,0FF`               → the fireball is RED, not our amber.
+//   * `CXY 0,0` then `AON dx,dy` spikes → strokes radiate FROM THE CENTRE outward
+//     (~8 spikes) with `FUSE` ball-dots — a SPARKLE, not a ring.
+//   * `ASPECT`                          → round envelope; 4 frames flicker (anim).
 //
-//   * A fireball is drawn as a ROUND body — more than the two-segment "+" cross
-//     (a stroked ring/polygon, or an arc), not a bare plus.
-//   * It is LARGE — its drawn extent is substantially bigger than the old 6px
-//     spark, so it reads as a fireball rather than a reticle tick.
-//   * It is a real projected 3D BODY, not a fixed-size screen glyph: a nearer
-//     fireball draws LARGER than a distant one (drawSpark's fixed 6 does not).
+// sw2-2 correctly retired the old 6px '+' glyph for "a large, round, 3D-scaled
+// body" — but chose the WRONG body: two concentric amber perimeter rings
+// (`drawFireball`, src/shell/render.ts). This pins the real one. We keep sw2-2's
+// still-true invariant (a depth-scaled 3D body) and add the two things that were
+// wrong: it must be RED, and a centre-anchored SPARKLE (a ring has zero strokes
+// touching its centre).
 //
-// These assert the rendered MECHANISM through a recording canvas stub — the
-// established shell-test idiom (render.enemy-muzzle-flash.test.ts,
-// render.player-laser.test.ts). Exact glow/hex/decay stay an EYEBALL concern per
-// the repo convention; we pin only that the body is round, large, and 3D-scaled.
+// Asserted through the recording-canvas idiom (render.player-laser /
+// enemy-muzzle-flash). Exact hue, spike count, and animation frame stay an
+// EYEBALL concern per repo convention — we pin colour FAMILY (red vs amber) and
+// TOPOLOGY (centre-anchored spikes vs perimeter ring), not pixels.
 //
-// NOTE for GREEN (cross-test constraint): draw the body as a closed ring/polygon
-// whose strokes lie on the PERIMETER — not spokes radiating from the centre. The
-// story-9-6 muzzle-flash test (render.enemy-muzzle-flash.test.ts) classifies any
-// amber segment with one endpoint AT the fireball's projected point as a muzzle
-// "ray"; centre-spoked body strokes would be miscounted as a starburst and fail
-// its "an aged fireball draws no rays" assertion.
+// Cross-test: the amber muzzle starburst (story 9-6) stays amber and is isolated
+// by colour, so a red body sparkle never inflates its ray count. Body tests here
+// use an AGED fireball (past the muzzle window) so no flash is present at all.
 
 import { describe, it, expect } from 'vitest'
 import { render } from '../../src/shell/render'
@@ -41,23 +43,14 @@ interface Seg {
   y2: number
   color: string
 }
-interface Arc {
-  x: number
-  y: number
-  r: number
-  stroke: string
-  fill: string
-}
 
-/** Canvas-context stub recording stroked segments AND arcs with their colours —
- *  extends the shell-test mock idiom to see round bodies, not just line crosses. */
+/** Canvas-context stub recording every stroked segment with its colour. */
 function makeCtx() {
   const segments: Seg[] = []
-  const arcs: Arc[] = []
   let pen: [number, number] = [0, 0]
   let curStroke = ''
-  let curFill = ''
   const ctx = {
+    fillStyle: '',
     shadowColor: '',
     shadowBlur: 0,
     lineWidth: 0,
@@ -72,12 +65,6 @@ function makeCtx() {
     get strokeStyle() {
       return curStroke
     },
-    set fillStyle(v: string) {
-      curFill = v
-    },
-    get fillStyle() {
-      return curFill
-    },
     fillRect() {},
     strokeRect() {},
     beginPath() {},
@@ -88,28 +75,40 @@ function makeCtx() {
       segments.push({ x1: pen[0], y1: pen[1], x2: x, y2: y, color: curStroke })
       pen = [x, y]
     },
-    arc(x: number, y: number, r: number) {
-      arcs.push({ x, y, r, stroke: curStroke, fill: curFill })
-    },
+    arc() {},
     stroke() {},
     fill() {},
     save() {},
     restore() {},
     fillText() {},
   }
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, segments, arcs }
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, segments }
 }
 
 const W = 800
 const H = 600
 const CENTER: [number, number] = [W / 2, H / 2]
-const FIRE_GLOW = '#ffd60a' // enemy fireball amber (render.ts)
+const OLD_AMBER = '#ffd60a' // the wrong sw2-2 fireball colour this story retires
 
 const dist = (ax: number, ay: number, bx: number, by: number) => Math.hypot(ax - bx, ay - by)
 
-/** A "playing" space scene with no enemies/bolts, so the only amber strokes are
- *  the fireball body under test (the cyan crosshair and red/green HUD differ in
- *  colour and are filtered out by FIRE_GLOW). */
+/** Parse #rrggbb → [r,g,b]; non-hex colours read as black (excluded by isRed). */
+function rgb(c: string): [number, number, number] {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c.trim())
+  if (!m) return [0, 0, 0]
+  return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)]
+}
+// A red-dominant vector colour: strong red, weak green+blue. Accepts VGCRED-style
+// reds (#ff0000, cabinet #ff3b30, …) and REJECTS amber #ffd60a (green 214),
+// cyan crosshair #00e5ff (red 0), death-star grey #8a93a8 (green 147), enemy
+// green #30d158 (red 48) — the other ink in a space scene.
+const isRed = (c: string): boolean => {
+  const [r, g, b] = rgb(c)
+  return r >= 150 && g <= 100 && b <= 100
+}
+
+/** A "playing" space scene with nothing but the fireball under test (+ the cyan
+ *  crosshair and the distant grey Death Star, neither of which is red). */
 const scene = (over: Partial<GameState>): GameState => ({
   ...initialState(1983),
   mode: 'playing',
@@ -121,55 +120,64 @@ const scene = (over: Partial<GameState>): GameState => ({
 })
 
 // An enemy fireball PAST its muzzle-flash window (elapsed = ENEMY_SHOT_TTL - ttl
-// well over the 0.1s flash), so the amber strokes are the fireball BODY only —
-// no muzzle starburst inflating the count/extent.
-const fireballAt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, 1], ttl: ENEMY_SHOT_TTL / 2 })
+// ≫ the flash), so the strokes recorded are the fireball BODY only — no muzzle
+// starburst inflating counts.
+const agedFireballAt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, 1], ttl: ENEMY_SHOT_TTL / 2 })
 
-const amberSegs = (segments: ReadonlyArray<Seg>) => segments.filter((s) => s.color === FIRE_GLOW)
-const amberArcs = (arcs: ReadonlyArray<Arc>) =>
-  arcs.filter((a) => a.stroke === FIRE_GLOW || a.fill === FIRE_GLOW)
+const redSegs = (segs: ReadonlyArray<Seg>) => segs.filter((s) => isRed(s.color))
+const amberSegs = (segs: ReadonlyArray<Seg>) => segs.filter((s) => s.color === OLD_AMBER)
+// The fireball projects to a COMPACT region around its screen point; the playing
+// HUD (which also strokes red ink — e.g. the red WAVE number) sits far away at
+// the top. Restrict every red check to this window around the shot so HUD red can
+// never satisfy a fireball assertion (the failure mode that made a whole-screen
+// `some(isRed)` pass vacuously).
+const FIREBALL_WINDOW = 120
+const nearShot = (s: Seg, cx: number, cy: number) =>
+  dist(s.x1, s.y1, cx, cy) <= FIREBALL_WINDOW || dist(s.x2, s.y2, cx, cy) <= FIREBALL_WINDOW
+const redNearShot = (segs: ReadonlyArray<Seg>, cx: number, cy: number) =>
+  redSegs(segs).filter((s) => nearShot(s, cx, cy))
+// Strokes with an endpoint AT the projected centre — the defining mark of a
+// sparkle (`AON 0,0` → `AON dx,dy`). A concentric ring lies on its perimeter and
+// has ZERO such strokes.
+const AT_CENTRE_TOL = 4
+const centreAnchored = (segs: ReadonlyArray<Seg>, cx: number, cy: number) =>
+  segs.filter((s) => dist(s.x1, s.y1, cx, cy) <= AT_CENTRE_TOL || dist(s.x2, s.y2, cx, cy) <= AT_CENTRE_TOL)
+/** Farthest red ink from the shot centre (HUD red excluded) — the sparkle radius. */
+const redRadius = (segs: ReadonlyArray<Seg>, cx: number, cy: number): number =>
+  Math.max(0, ...redNearShot(segs, cx, cy).flatMap((s) => [dist(s.x1, s.y1, cx, cy), dist(s.x2, s.y2, cx, cy)]))
 
-/** The fireball's drawn radius about a projected centre: the farthest amber ink
- *  from that point, whether stroked as a polygon (segment endpoints) or an arc
- *  (centre offset + radius). The old "+" spark yields 6; a large body yields more. */
-function bodyRadius(segments: ReadonlyArray<Seg>, arcs: ReadonlyArray<Arc>, cx: number, cy: number): number {
-  const fromSegs = amberSegs(segments).flatMap((s) => [dist(s.x1, s.y1, cx, cy), dist(s.x2, s.y2, cx, cy)])
-  const fromArcs = amberArcs(arcs).map((a) => dist(a.x, a.y, cx, cy) + a.r)
-  return Math.max(0, ...fromSegs, ...fromArcs)
-}
+describe('sw3-9 — the enemy fireball renders as the authentic red sparkle, not amber rings', () => {
+  it('draws the body in RED (VGCRED), not the old amber', () => {
+    const { ctx, segments } = makeCtx()
+    render(ctx, scene({ enemyShots: [agedFireballAt([0, 0, -1000])] }), W, H)
 
-const OLD_SPARK_HALF = 6 // the fixed half-extent of the "+" spark this story retires
-
-describe('sw2-2 — an enemy fireball renders as a large round body, not a + glyph', () => {
-  it('draws a round body — more than the two-segment "+" cross', () => {
-    const { ctx, segments, arcs } = makeCtx()
-    render(ctx, scene({ enemyShots: [fireballAt([0, 0, -1000])] }), W, H)
-
-    // A "+" is exactly two amber segments. A round fireball is a ring/polygon of
-    // many perimeter strokes, or an arc — either clears the bar; a bare cross does not.
-    const seg = amberSegs(segments)
-    const arc = amberArcs(arcs)
-    expect(seg.length > 2 || arc.length >= 1).toBe(true)
+    // There is red fireball ink at the shot (HUD red at the top is excluded)…
+    expect(redNearShot(segments, CENTER[0], CENTER[1]).length).toBeGreaterThan(0)
+    // …and the body is NOT drawn in the retired amber (no amber near the shot).
+    const amberNearShot = amberSegs(segments).filter(
+      (s) => dist(s.x1, s.y1, ...CENTER) <= 60 || dist(s.x2, s.y2, ...CENTER) <= 60,
+    )
+    expect(amberNearShot).toHaveLength(0)
   })
 
-  it('reads much larger than the old 6px spark', () => {
-    const { ctx, segments, arcs } = makeCtx()
-    render(ctx, scene({ enemyShots: [fireballAt([0, 0, -1000])] }), W, H)
+  it('is a SPARKLE: multiple red strokes anchored at the centre, radiating out (a ring has none)', () => {
+    const { ctx, segments } = makeCtx()
+    render(ctx, scene({ enemyShots: [agedFireballAt([0, 0, -1000])] }), W, H)
 
-    // A large fireball spans well beyond the retired spark's 6px half-extent.
-    expect(bodyRadius(segments, arcs, CENTER[0], CENTER[1])).toBeGreaterThanOrEqual(OLD_SPARK_HALF * 2)
+    // The authentic base sparkle draws ~8 spikes from CXY 0,0; concentric rings
+    // draw zero centre-anchored strokes. Four-plus reads unambiguously as a burst.
+    const spikes = centreAnchored(redSegs(segments), CENTER[0], CENTER[1])
+    expect(spikes.length).toBeGreaterThanOrEqual(4)
   })
 
-  it('is a real 3D body: a near fireball draws larger than a distant one', () => {
-    // The fixed-size "+" spark draws the same 6px at any depth; a projected body
-    // grows as it bears down — the "big fireball swelling toward you" feel.
+  it('is a real 3D body: a near fireball draws larger than a distant one (sw2-2 invariant)', () => {
     const near = makeCtx()
-    render(near.ctx, scene({ enemyShots: [fireballAt([0, 0, -500])] }), W, H)
+    render(near.ctx, scene({ enemyShots: [agedFireballAt([0, 0, -500])] }), W, H)
     const far = makeCtx()
-    render(far.ctx, scene({ enemyShots: [fireballAt([0, 0, -5000])] }), W, H)
+    render(far.ctx, scene({ enemyShots: [agedFireballAt([0, 0, -5000])] }), W, H)
 
-    const nearR = bodyRadius(near.segments, near.arcs, CENTER[0], CENTER[1])
-    const farR = bodyRadius(far.segments, far.arcs, CENTER[0], CENTER[1])
-    expect(nearR).toBeGreaterThan(farR)
+    expect(redRadius(near.segments, CENTER[0], CENTER[1])).toBeGreaterThan(
+      redRadius(far.segments, CENTER[0], CENTER[1]),
+    )
   })
 })
