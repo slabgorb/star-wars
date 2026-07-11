@@ -51,6 +51,7 @@ import {
   TRENCH_SCROLL_SPEED,
   TRENCH_BONUS,
   PORT_HIT_RADIUS,
+  PORT_APPROACH_WINDOW,
   FORCE_BONUS,
   TIE_SWOOP_BIAS,
   TIE_BANK_ANGLE,
@@ -623,7 +624,14 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   // Reads `afterObstacles.projectiles` (post-obstacle bolts), not the raw
   // `projectiles` — a bolt already spent destroying a turret/square this frame
   // cannot also detonate the port.
-  const hitBolt = afterObstacles.projectiles.findIndex((b) => collides(port, b.pos, PORT_HIT_RADIUS))
+  // The hit/miss only resolves once the port has scrolled into the narrow
+  // near-cockpit approach window (sw3-15, the ROM $800 end-wall window). A bolt
+  // that merely crosses the port far up the channel — the entry-shot that used
+  // to win every run — is outside the window and cannot count.
+  const inApproachWindow = port[2] >= -PORT_APPROACH_WINDOW
+  const hitBolt = inApproachWindow
+    ? afterObstacles.projectiles.findIndex((b) => collides(port, b.pos, PORT_HIT_RADIUS))
+    : -1
   if (hitBolt >= 0) {
     const liveBolts = afterObstacles.projectiles.filter((_, i) => i !== hitBolt)
     // "Use the Force": a clean run — no trench shots before the killing torpedo

@@ -48,10 +48,16 @@ function playing(overrides: Partial<GameState> = {}): GameState {
 /** A trench state with a bolt sitting on the exhaust port, primed to detonate it
  *  on the next step (mirrors force-bonus.test.ts's fixture). */
 function portKill(state: GameState): GameState {
-  const port = state.exhaustPort!.pos
+  // sw3-15: a port kill now only resolves once the port has scrolled into the
+  // near-cockpit approach window, so seat the (dead-centre) port in-window
+  // rather than at its far spawn distance — mirrors the sibling force-bonus /
+  // exhaust-port-outcome re-seats — then park a bolt on it.
+  const p = state.exhaustPort!.pos
+  const port: typeof p = [p[0], p[1], -300]
   return {
     ...state,
     mode: 'playing',
+    exhaustPort: { pos: port },
     projectiles: [{ pos: [port[0], port[1], port[2]], vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
   }
 }

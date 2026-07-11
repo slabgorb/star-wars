@@ -347,7 +347,10 @@ describe('sw2-4 — outcome feedback preserves core purity & determinism', () =>
   })
 
   it('the same seed + inputs yields an identical event stream AND terminal state', () => {
-    const mk = (): GameState => trench(portAt([0, 0, -1500]), {}, 7)
+    // sw3-15: re-seated in-window — the hit/miss now resolves only in the ROM's
+    // narrow $800 end-wall window; -1500 is outside it, so a full-trench shot no
+    // longer resolves in a kill. -300 places the port where the run actually wins.
+    const mk = (): GameState => trench(portAt([0, 0, -300]), {}, 7)
     const a = fireAndFollowPort(mk())
     const b = fireAndFollowPort(mk())
     expect(a.events).toEqual(b.events)
