@@ -342,6 +342,13 @@ export interface GameState {
    * read `mod RIB_Z` by the trenchChannel generator and reset to 0 on every phase
    * entry. */
   trenchScrollZ: number
+  /** The pilotable trench viewpoint (Wave 3, story sw3-2) — the ship's eye in the
+   * trench's collision world, flown by the yoke and clamped to the `sub_703B`
+   * band (TRENCH_VIEW_HALF_W lateral, TRENCH_VIEW_FLOOR..0 vertical). Seats at the
+   * centreline origin [0,0,0] on every phase entry (so the overhead catwalk still
+   * bites an un-piloted run); the trench catwalk collision tests against THIS, not
+   * a fixed cockpit, so a dive makes catwalks dodgeable. z is unused (always 0). */
+  trenchView: Vec3
   /** Enemies destroyed in the CURRENT phase; clears the phase at its quota,
    * then resets to 0 on the transition into the next phase. */
   phaseKills: number
@@ -421,6 +428,7 @@ export function initialState(seed = 1983): GameState {
     altitude: SKIM_ALTITUDE,
     surfaceScrollZ: 0,
     trenchScrollZ: 0,
+    trenchView: [0, 0, 0],
     phaseKills: 0,
     projectiles: [],
     enemies: [],

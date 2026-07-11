@@ -37,7 +37,6 @@ import { NO_INPUT, type Input } from '../../src/core/input'
 // Yoke presets. +aimY is UP (input.ts); the catwalk hangs overhead at y=200, so
 // a DIVE (aimY < 0) is the maneuver that opens clearance beneath it.
 const DOWN: Input = { aimX: 0, aimY: -1, fire: false }
-const UP: Input = { aimX: 0, aimY: 1, fire: false }
 const LEFT: Input = { aimX: -1, aimY: 0, fire: false }
 const RIGHT: Input = { aimX: 1, aimY: 0, fire: false }
 

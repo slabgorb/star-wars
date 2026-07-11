@@ -180,7 +180,12 @@ export function deathStarPlacement(state: GameState): { pos: Vec3; scale: number
  */
 export function cameraView(state: GameState): Mat4 {
   if (state.phase === 'surface') return viewMatrix([0, state.altitude, 0], IDENTITY)
-  if (state.phase === 'trench') return viewMatrix([0, TRENCH_SKIM, 0], IDENTITY)
+  // The trench eye rides the fixed skim PLUS the pilotable viewpoint offset (story
+  // sw3-2): steering pans/dives the camera so the dodge the sim computes is what the
+  // player sees. `trenchView` is a collision-world offset (z unused); added onto the
+  // display skim, kept separate from it.
+  if (state.phase === 'trench')
+    return viewMatrix([state.trenchView[0], TRENCH_SKIM + state.trenchView[1], state.trenchView[2]], IDENTITY)
   return IDENTITY // space: the camera sits at the origin looking down −Z
 }
 
