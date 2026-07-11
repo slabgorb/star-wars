@@ -17,6 +17,31 @@ constants, speech tables) and re-express them as our own TypeScript. It is never
 committed or redistributed. This findings doc is the committable, numbers-only
 distillation.
 
+**Original Atari source — the AVG vector *pictures*.** The gitignored
+`reference/disasm/` is a *disassembly* of the two 6809 boards; it does **not**
+contain the AVG (Analog Vector Generator) picture ROM — the actual drawn shapes
+(gunshots, explosions, the "small circle," etc.). Those live in the **preserved
+original Atari source**, GitHub
+[`historicalsource/star-wars`](https://github.com/historicalsource/star-wars)
+(pinned commit `5355b76`). Project codename was **"Warp Speed"**, hence the
+`WS*.MAC` files. Map:
+
+| File | Contents |
+|------|----------|
+| **`WSVROM.MAC`** | ⭐ the vector ROM — object **pictures** (TIE, Death Star, gunshots/fireballs, explosions). This is what the local disasm's `JSRL`/`VR` picture addresses point at. |
+| `WSOBJ.MAC` | object tables · `WSMAIN.MAC` main game · `WSGUNS.MAC` firing ("DO THE FIREBALL") · `WSGAS.MAC` scoring (`;HIT FIREBALL .BYTE 0,0,33`) · `WSLAZR.MAC` lasers · `WSXPLD.MAC` explosions |
+| `AVGROM.MAC` | the AVG **state PROM** (hardware microcode, Halverson/Margolin) — *not* pictures |
+| `VGAN.MAC` | alphanumeric vector subroutines (Ed Logg) · `SWMP.MAC` Math Box micro-program (Margolin) |
+
+Files are tiny (16 KB RAM cabinet) and **CR-terminated, non-UTF8** — fetch raw
+and normalize with `tr '\r' '\n'` before grep. **Worked example — the enemy
+fireball:** it is the `GNB0–3` (base sparkle) + `GNT0–3` (tip fuse-ball) picture
+in `WSVROM.MAC` under `.SBTTLE GUNSHOT PICTURES` ("GUN SHOTS — SPARKLES WITH FUSE
+BALLS"): an **animated red radial sparkle** — `COLOR VGCRED`, ~8 spikes drawn
+from center `(0,0)` outward with `FUSE` balls, cycling 4 frames, `ASPECT` for a
+round envelope. It is emphatically **not** a ring, and **red, not amber** — see
+story **sw3-9**.
+
 **How this was produced:** the annotated listing was read end-to-end by parallel
 extraction agents (one per ~5,000-line range) plus dedicated passes over the
 object/memory/sound files. Each pulled labels, addresses, table bytes, constants,
