@@ -38,15 +38,21 @@ const REQUIRED_SOUNDS: SoundName[] = [
   'terrainCrash',
 ]
 
-// The speech lines the CORE cues (sw2-5 reachable subset). Typed as SpeechName[],
-// this is a COMPILE-TIME assertion that the SPEECH catalogue declares a filename
-// for each core-emittable line — a missing key is a type error, not a silent
-// pass, and the shell pump's `speak(event.line)` type-checks against it.
+// The speech lines the CORE cues (sw2-5 phase-edge subset + sw3-4 trench timer).
+// Typed as SpeechName[], this is a COMPILE-TIME assertion that the SPEECH
+// catalogue declares a filename for each core-emittable line — a missing key is a
+// type error, not a silent pass, and the shell pump's `speak(event.line)`
+// type-checks against it. The event->speak pump is generic, so wiring sw3-4's
+// three trench lines needed no pump change — only their catalogue coverage here.
 const REQUIRED_SPEECH: SpeechName[] = [
   'useTheForceLuke',
   'redFiveStandingBy',
   'lookAtTheSizeOfThatThing',
   'greatShotKidThatWasOneInAMillion',
+  // sw3-4 — trench voice-line timer (word_4B0E, parity-gated by wave)
+  'lukeTrustMe', // trench timer 16, even run
+  'youreAllClearKid', // trench timer 24, even run
+  'theForceIsStrongInThisOne', // trench timer 22, odd run
 ]
 
 // The authentic baked line names (snake_case → `${name}.wav`), scraped from the
