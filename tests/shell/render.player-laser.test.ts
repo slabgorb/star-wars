@@ -12,7 +12,7 @@
 //
 // SCOPE (per the story's scope guardrail): this is the PLAYER-SHOT render only.
 // Enemy fireballs (`state.enemyShots`) are a SEPARATE story (8-18) and MUST stay
-// untouched amber sparks — pinned by the final guard here.
+// untouched — their own red sparkle (sw3-9) — pinned by the final guard here.
 //
 // We assert the MECHANISM (beams originate at the corners and converge on the
 // projected shot, in cyan), mirroring the structural style of
@@ -210,15 +210,19 @@ describe('Story 8-12 — player shots render as cyan converging laser beams', ()
     expect(laserBeams(over.segments)).toHaveLength(0)
   })
 
-  it('leaves enemy fireballs as amber sparks — no cannon-tip beams (scope guard for 8-18)', () => {
+  it('leaves enemy fireballs as their own red sparkle — no cannon-tip beams (scope guard for 8-18)', () => {
     const { ctx, segments } = makeCtx()
     render(ctx, scene({ enemyShots: [shotAt([0, 0, -1000])] }), W, H)
 
     // A fireball must NOT recruit the player's converging beams — that shoot-the-
     // fireball interaction is a separate story (8-18).
     expect(laserBeams(segments)).toHaveLength(0)
-    // …and it still reads as the amber enemy spark near its projected point.
-    const amber = segments.filter((s) => s.color === '#ffd60a')
-    expect(amber.length).toBeGreaterThan(0)
+    // …and it still reads as the enemy fireball's OWN red sparkle (sw3-9) near its
+    // projected point. Isolate to the shot so the HUD's own red ink (far at the
+    // top) can't satisfy this vacuously.
+    const redAtShot = segments.filter(
+      (s) => s.color === '#ff3b30' && (dist(s.x1, s.y1, ...CENTER) <= 60 || dist(s.x2, s.y2, ...CENTER) <= 60),
+    )
+    expect(redAtShot.length).toBeGreaterThan(0)
   })
 })

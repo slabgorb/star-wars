@@ -79,6 +79,16 @@ const FIRE_GLOW = '#ffd60a' // enemy fireball amber (render.ts)
 
 const dist = (ax: number, ay: number, bx: number, by: number) => Math.hypot(ax - bx, ay - by)
 
+/** A red-dominant vector colour — the authentic fireball BODY sparkle (sw3-9):
+ *  strong red, weak green+blue. Excludes the amber muzzle flash (#ffd60a, green
+ *  214) and the cyan crosshair (#00e5ff, red 0), so the two never blur together. */
+function isRed(c: string): boolean {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c.trim())
+  if (!m) return false
+  const [r, g, b] = [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)]
+  return r >= 150 && g <= 100 && b <= 100
+}
+
 // A muzzle-flash ray is an amber segment with exactly ONE endpoint AT the muzzle
 // point (the projected shot) and the other radiating outward. The '+' spark's two
 // segments straddle the muzzle (it is their MIDPOINT, not an endpoint), so they
@@ -124,18 +134,26 @@ describe('Story 9-6 — a TIE fire renders a brief amber starburst at the muzzle
     // muzzle point. Three-plus radiating rays read unambiguously as a burst.
     const rays = muzzleRays(segments, CENTER[0], CENTER[1])
     expect(rays.length).toBeGreaterThanOrEqual(3)
-    // And it stays in the enemy's amber, consistent with the fireball it launches.
+    // The muzzle flash stays AMBER (the firing tell); the fireball BODY it
+    // launches is the authentic red sparkle (sw3-9) — the two are kept distinct
+    // by colour, which is what lets this amber filter isolate the flash cleanly.
     for (const r of rays) expect(r.color).toBe(FIRE_GLOW)
   })
 
-  it('is a transient flash: an aged fireball draws no starburst, only its spark', () => {
+  it('is a transient flash: an aged fireball draws its red sparkle body but no amber starburst', () => {
     const { ctx, segments } = makeCtx()
     // Long past the muzzle window: most of the 6s lifetime already elapsed.
     render(ctx, scene({ enemyShots: [fireballAt([0, 0, -1000], 1)] }), W, H)
 
+    // No amber muzzle rays once the flash window has passed…
     expect(muzzleRays(segments, CENTER[0], CENTER[1])).toHaveLength(0)
-    // …but the fireball itself still reads as the amber spark in flight.
-    expect(segments.some((s) => s.color === FIRE_GLOW)).toBe(true)
+    // …but the fireball itself still reads — now as the authentic RED sparkle
+    // body (sw3-9), not the retired amber spark. Isolate to the shot region so the
+    // HUD's own red ink (far away at the top) can't satisfy this vacuously.
+    const redAtShot = segments.filter(
+      (s) => isRed(s.color) && (dist(s.x1, s.y1, ...CENTER) <= 120 || dist(s.x2, s.y2, ...CENTER) <= 120),
+    )
+    expect(redAtShot.length).toBeGreaterThan(0)
   })
 
   it('tracks the muzzle: an off-centre fireball bursts off-centre, not at a fixed point', () => {
