@@ -113,21 +113,30 @@ export interface TrenchObstacle {
 // Two of these are AUTHENTIC, from Mitchell Gant's "Atari Star Wars Theory of
 // Operation" (wardclan, the origin of the AVG disassembly this epic ports):
 // the cabinet keeps a *maximum of 3 TIE fighter slots* and a *maximum of 6
-// fireball slots* on screen at once. The rest are authentic-FEEL values: the
-// cabinet disassembly (reference/disasm/StarWars.asm) is raw, unlabelled 6809
-// with no symbolic score/shield/timing tables, so those are chosen to play
-// right and named/single-sourced here for easy correction once deeper reverse
-// engineering recovers them (see the Dev deviation + finding in the session).
+// fireball slots* on screen at once. The SCORE values below are now
+// ROM-resolved from the packed-BCD score table recovered by the sw2-6
+// disassembly fidelity audit (docs/sw2-6-disassembly-fidelity-audit.md,
+// ## Scoring values), each cited by its ROM symbol. The remaining shield/timing
+// constants are still authentic-FEEL — chosen to play right and single-sourced
+// here for easy correction once deeper reverse engineering recovers them.
 
 /** Shields the player starts a run with; a hit costs one. */
 export const STARTING_LIVES = 6
-/** Points awarded for destroying a TIE fighter. */
-export const TIE_SCORE = 100
-/** Points awarded for shooting an enemy fireball out of the air (story 8-18).
- * Worth less than a TIE — fireballs are plentiful (6 slots) defensive ordnance,
- * not fighters. Authentic-FEEL like the other Wave-1 scores (StarWars.asm has no
- * symbolic score table); single-sourced here for easy correction. */
-export const FIREBALL_SCORE = 50
+/** Points for destroying a TIE fighter — ROM `byte_984A` = 1,000 (sw3-1, from
+ *  the sw2-6 audit; its load-bearing cross-note settles this at 1,000, "do NOT
+ *  ×10"). Was a 100-point authentic-feel guess. */
+export const TIE_SCORE = 1000
+/** Points for destroying Darth Vader's ship — ROM `byte_984D` = 2,000 (sw3-1).
+ *  Baked as a single-sourced constant: the sim has no distinct Vader enemy yet
+ *  (`Enemy.kind` is `'tie'` only; Vader exists only as a render model), so
+ *  nothing awards this today. A future Vader-enemy story wires it to the kill
+ *  (see the Delivery Findings in the sw3-1 session). */
+export const VADER_SCORE = 2000
+/** Points for shooting an enemy fireball out of the air (story 8-18) — ROM
+ *  `byte_985C` = 33 (sw3-1, from the sw2-6 audit). The cheapest kill on the
+ *  board: fireballs are plentiful (6 slots) defensive ordnance, not fighters.
+ *  Was a 50-point authentic-feel guess. */
+export const FIREBALL_SCORE = 33
 /** Player bolt lifetime (seconds) before it fizzles out. */
 export const PROJECTILE_TTL = 2
 /** Minimum seconds between player shots (trigger fire rate). */
@@ -313,8 +322,12 @@ export const BUNKER_SPAWN_CHANCE = 0.3
 
 /** Distance ahead (−Z) at which the exhaust port appears when the trench opens. */
 export const EXHAUST_PORT_DISTANCE = 2400
-/** Points awarded for destroying the exhaust port — the run's big payoff. */
-export const TRENCH_BONUS = 1000
+/** Points for destroying the exhaust port — the run's big payoff. ROM
+ *  `byte_985F` = 25,000 (sw3-1, from the sw2-6 audit; the load-bearing
+ *  cross-note settles this at 25,000, "do NOT ×10"). Was a 1,000-point
+ *  authentic-feel guess. The clean-run "Use the Force" bonus (FORCE_BONUS,
+ *  5,000) still lands on top of this. */
+export const TRENCH_BONUS = 25000
 /** How fast the exhaust port scrolls toward the cockpit (units/second). */
 export const TRENCH_SCROLL_SPEED = 500
 /** Hit sphere around the exhaust port for player bolts (the octagon spans ~64). */
