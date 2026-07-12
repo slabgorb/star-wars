@@ -8,7 +8,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Entries describe what changed
 for the player. Purely internal work is summarised under *Internal*.
 
-## [Unreleased]
+## [0.0.12] - 2026-07-12
+
+No player-visible changes. Documentation only.
+
+## [0.0.11] - 2026-07-12
+
+### Added
+- **Your best score now shows on Star Wars' tile in the arcade lobby.** The game publishes
+  its top score where the lobby can read it, across subdomains (ADR-0004).
+
+## [0.0.10] - 2026-07-12
+
+### Internal
+- A ROM-versus-port model contact sheet, for checking the ported vector models against
+  what the 1983 cabinet actually drew.
+
+## [0.0.9] - 2026-07-12
 
 ### Added
 - **The Death Star surface is now a maze.** The surface field is authored from the original
