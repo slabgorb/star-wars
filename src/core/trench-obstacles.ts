@@ -9,6 +9,7 @@
 
 import type { TrenchObstacle } from './state'
 import { TRENCH_HALF_W } from './trench-channel'
+import { createRng, nextInt, type Rng } from '@arcade/shared/rng'
 
 // --- Scores: TRUED against ## Scoring tables --------------------------------
 //
@@ -69,7 +70,44 @@ export const TRENCH_OBSTACLE_STATIONS: readonly TrenchObstacle[] = [
   { kind: 'turret', pos: [W, 60, -3300] }, //  ...left+right at the same station
 ]
 
-/** Fresh per-run copies (positions mutate as they scroll — never share). */
-export function spawnTrenchObstacles(): TrenchObstacle[] {
-  return TRENCH_OBSTACLE_STATIONS.map((o) => ({ kind: o.kind, pos: [...o.pos] as TrenchObstacle['pos'] }))
+/**
+ * Per-run variation (sw3-7). The cabinet builds each trench from a PRNG
+ * **fixed-head + picked-tail** "pie" (ROM `sub_83A4` "Called when starting
+ * trench" → copy a fixed skeleton from `off_7C7E`, then overwrite tail slots
+ * with random picks from `off_7C9E`; WSBASE.MAC `GNBASE` "GEN A NEW BASE PIE"
+ * fills each wedge slot via `LDB P.RND1; MUL`). We port that shape: the leading
+ * TRENCH_HEAD_COUNT stations are the fixed skeleton (a stable trench entrance,
+ * incl. the catwalk divider), and each tail station keeps its fixed downrange
+ * position but has its KIND picked from TRENCH_TAIL_POOL by the seeded RNG. So
+ * runs DIFFER instead of being byte-identical, while the chain LENGTH stays
+ * fixed (the ROM's fixed-size RPIE — only the contents vary).
+ */
+
+/** Leading stations copied verbatim every run — the fixed pie skeleton (ROM
+ *  `off_7C7E` / `PIEXX` divider format). Includes the catwalk (a structural
+ *  "DIVIDER W/ CATWALK"), so every run opens with the same stable entrance and
+ *  always carries the catwalk hazard. */
+export const TRENCH_HEAD_COUNT = 4
+
+/** Kinds the picked tail draws from — the ROM's random WEDGE pool (`off_7C9E` /
+ *  `TWDGXX` "list of wedges to use"): a wall-mounted turret or square. Catwalks
+ *  are structural dividers (fixed head), never a randomly-picked wedge. */
+const TRENCH_TAIL_POOL: readonly TrenchObstacle['kind'][] = ['turret', 'square']
+
+/** Seed for the no-arg (static) spawn used by scene presets and the
+ *  catwalk/viewpoint fixtures — a deterministic representative run. */
+const TRENCH_DEFAULT_SEED = 1983
+
+/**
+ * Fresh per-run copies (positions mutate as they scroll — never share). Pass the
+ * run's `Rng` to seed the picked tail; the no-arg form yields a deterministic
+ * default run. Callers thread a LOCAL cursor (`createRng(state.rng.seed)`) so the
+ * run RNG is never mutated (core purity).
+ */
+export function spawnTrenchObstacles(rng?: Rng): TrenchObstacle[] {
+  const gen = rng ?? createRng(TRENCH_DEFAULT_SEED)
+  return TRENCH_OBSTACLE_STATIONS.map((o, i) => {
+    const kind = i < TRENCH_HEAD_COUNT ? o.kind : TRENCH_TAIL_POOL[nextInt(gen, TRENCH_TAIL_POOL.length)]
+    return { kind, pos: [...o.pos] as TrenchObstacle['pos'] }
+  })
 }
