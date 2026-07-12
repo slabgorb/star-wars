@@ -115,9 +115,11 @@ describe('Wave 1 — intercepting a fireball (story 8-18)', () => {
     const s1 = stepGame(s0, NO_INPUT, TICK)
     const cue = s1.events.find((e): e is FireballDestroyedEvent => e.type === 'fireball-destroyed')
     expect(cue).toBeDefined()
-    // Carries the fireball's OWN world-space position (≈ DOWNRANGE, not the
-    // cockpit origin) for Wave-5 particle/SFX placement.
-    expect(cue?.pos[2]).toBeCloseTo(-400, 0)
+    // Carries the fireball's OWN world-space position — downrange near its launch
+    // (~-400, less one homing tick's inward decay; sw4-2 fireballs decay toward the
+    // cockpit each step), not the cockpit origin — for Wave-5 particle/SFX placement.
+    expect(cue?.pos[2]).toBeLessThan(-350)
+    expect(cue?.pos[2]).toBeGreaterThan(-401)
   })
 
   it('exposes a positive named hit radius for fireballs', () => {

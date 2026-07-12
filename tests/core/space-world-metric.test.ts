@@ -102,9 +102,12 @@ interface Spawn {
 /** Step a fresh space wave forward `steps` frames at `dt`, capturing every TIE on
  * the frame it spawns (z exactly at the spawn plane). Player fires nothing
  * (NO_INPUT), so TIEs cycle spawn → approach → peel → exit → respawn, giving many
- * samples across the table. */
+ * samples across the table. Lives are parked high so the sample window runs to its
+ * end: sw4-2's HOMING enemy fireballs converge on the idle cockpit and would
+ * otherwise end the run (gameOver halts spawning) long before the table is sampled —
+ * an incidental interaction orthogonal to the spawn GEOMETRY this helper observes. */
 function collectSpawns(dt: number, steps: number, seed = 4041): Spawn[] {
-  let s = initialState(seed)
+  let s: GameState = { ...initialState(seed), lives: 1e9 }
   const out: Spawn[] = []
   for (let i = 0; i < steps; i++) {
     s = stepGame(s, NO_INPUT, dt)

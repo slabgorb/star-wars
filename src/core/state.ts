@@ -113,21 +113,45 @@ export interface TrenchObstacle {
 // Two of these are AUTHENTIC, from Mitchell Gant's "Atari Star Wars Theory of
 // Operation" (wardclan, the origin of the AVG disassembly this epic ports):
 // the cabinet keeps a *maximum of 3 TIE fighter slots* and a *maximum of 6
-// fireball slots* on screen at once. The rest are authentic-FEEL values: the
-// cabinet disassembly (reference/disasm/StarWars.asm) is raw, unlabelled 6809
-// with no symbolic score/shield/timing tables, so those are chosen to play
-// right and named/single-sourced here for easy correction once deeper reverse
-// engineering recovers them (see the Dev deviation + finding in the session).
+// fireball slots* on screen at once. The SCORE values below are now
+// ROM-resolved from the packed-BCD score table recovered by the sw2-6
+// disassembly fidelity audit (docs/sw2-6-disassembly-fidelity-audit.md,
+// ## Scoring values), each cited by its ROM symbol. The remaining shield/timing
+// constants are still authentic-FEEL — chosen to play right and single-sourced
+// here for easy correction once deeper reverse engineering recovers them.
 
 /** Shields the player starts a run with; a hit costs one. */
 export const STARTING_LIVES = 6
-/** Points awarded for destroying a TIE fighter. */
-export const TIE_SCORE = 100
-/** Points awarded for shooting an enemy fireball out of the air (story 8-18).
- * Worth less than a TIE — fireballs are plentiful (6 slots) defensive ordnance,
- * not fighters. Authentic-FEEL like the other Wave-1 scores (StarWars.asm has no
- * symbolic score table); single-sourced here for easy correction. */
-export const FIREBALL_SCORE = 50
+/** Cumulative-score thresholds that each award one bonus shield/life, the first
+ *  time the score reaches them (sw3-6). ROM: the extra-life text `a40000`/`a80000`
+ *  (docs/star-wars-1983-source-findings.md ~442-449) = **400,000 / 800,000**. The
+ *  doc's load-bearing cross-note warns against reading these as 4M/8M or 250k/500k —
+ *  "do NOT ×10". Each fires once; a single score delta that vaults past both grants
+ *  both (see `awardExtraLives` in sim.ts). */
+export const EXTRA_LIFE_THRESHOLDS: readonly number[] = [400_000, 800_000]
+/** The bonus/extra-life HUD flash (`bonusFlash`) re-arms to this on any score
+ *  change, then decays by BONUS_FLASH_DECAY per tick toward 0 — the ROM `byte_4B2C`
+ *  "score changed, redraw HUD" counter (`lda #$FF` on every score change; `sub_761D`
+ *  drains it under the score). Modeled as a normalized [0,1] intensity; the exact
+ *  −8/refresh rate is a cosmetic detail, so BONUS_FLASH_DECAY is an authentic-FEEL
+ *  tunable (~1s flash at 60fps), not a test-pinned value. */
+export const BONUS_FLASH_MAX = 1
+export const BONUS_FLASH_DECAY = 1 / 60
+/** Points for destroying a TIE fighter — ROM `byte_984A` = 1,000 (sw3-1, from
+ *  the sw2-6 audit; its load-bearing cross-note settles this at 1,000, "do NOT
+ *  ×10"). Was a 100-point authentic-feel guess. */
+export const TIE_SCORE = 1000
+/** Points for destroying Darth Vader's ship — ROM `byte_984D` = 2,000 (sw3-1).
+ *  Baked as a single-sourced constant: the sim has no distinct Vader enemy yet
+ *  (`Enemy.kind` is `'tie'` only; Vader exists only as a render model), so
+ *  nothing awards this today. A future Vader-enemy story wires it to the kill
+ *  (see the Delivery Findings in the sw3-1 session). */
+export const VADER_SCORE = 2000
+/** Points for shooting an enemy fireball out of the air (story 8-18) — ROM
+ *  `byte_985C` = 33 (sw3-1, from the sw2-6 audit). The cheapest kill on the
+ *  board: fireballs are plentiful (6 slots) defensive ordnance, not fighters.
+ *  Was a 50-point authentic-feel guess. */
+export const FIREBALL_SCORE = 33
 /** Player bolt lifetime (seconds) before it fizzles out. Restored world (sw4-1):
  * paired with PROJECTILE_SPEED so a bolt's REACH (speed × ttl) clears the far plane
  * — see PROJECTILE_SPEED for why the reach is split 12000 × 3 rather than a single
@@ -176,17 +200,34 @@ export const TIE_SPAWN_DISTANCE = 0x7c00 // 31744 — WSCPU STARTING LOCATIONS d
  * {0, ±1024, ±2048} (see SPAWN_LATERALS in sim.ts), not a continuous ±spread. */
 export const SPAWN_SPREAD = 350
 /** TIE approach speed (units/second). PROVISIONAL (sw4-1, spec §A): the cabinet
- * advances the range by $200/tick, but the cabinet tick rate is unpinned
- * (docs/tie-flight-ai-model.md porting caveat — the clone assumes ~60 fps), so this
- * is NOT a source-true figure. It is tuned to the spec's design target — a playable
- * ~2.5–4 s spawn→near-bound transit across the restored world: (31744 − 2048) /
- * 10000 ≈ 3.0 s. Retune in playtest; the 8-6 difficulty ramp still rides this as
- * the wave-1 base. */
+ * advances the range by $200/tick, but that per-tick delta is NOT pinned to a
+ * source-true units/second figure (docs/tie-flight-ai-model.md porting caveat).
+ * This is applied as a units/second rate — moveEnemy (sim.ts) steps pos by
+ * ENEMY_SPEED × dt — so it is frame-rate independent of TICK_HZ (30). It is tuned
+ * to the spec's design target — a playable ~2.5–4 s spawn→near-bound transit across
+ * the restored world: (31744 − 2048) / 10000 ≈ 3.0 s. Retune in playtest; the 8-6
+ * difficulty ramp still rides this as the wave-1 base. */
 export const ENEMY_SPEED = 10000
-/** Enemy fireball speed (units/second). */
+/** Cabinet simulation-tick rate (Hz) — the shared basis for frame-rate-independent
+ *  ROM rates ported from the 1983 source, which counts in cabinet ticks/frames
+ *  (fireball life `5,u = $40` = 64 ticks; docs/tie-flight-ai-model.md §6). The real
+ *  cabinet's rate is self-timed by vector-list length and is NOT pinned by the
+ *  disassembly, so this is PROVISIONAL — playtest-tuned, not unit-tested (design
+ *  spec §B/§D "PROVISIONAL feel items"). 30 lands the homing fireball's arrival at
+ *  ~0.8–1.5 s across the 2,048–31,744 launch range (spec §B "~1–2 s") and its
+ *  64-tick life at ~2.1 s. Shared with sw4-1 (its speeds derive from the same
+ *  TICK_HZ); define it ONCE here (epic sw4 guardrail). */
+export const TICK_HZ = 30
+/** Surface tower/turret fireball speed (units/second, straight-line). Space TIE
+ *  fireballs no longer use it — they home via the ROM decay law (story sw4-2, spec
+ *  §B); surface fire stays straight-line (out of sw4-2's scope). */
 export const ENEMY_SHOT_SPEED = 300
-/** Enemy fireball lifetime (seconds). */
-export const ENEMY_SHOT_TTL = 6
+/** Enemy fireball lifetime: the ROM's 64-tick fireball life (`5,u = $40`,
+ *  docs/tie-flight-ai-model.md §6) expressed in seconds via TICK_HZ. A homing space
+ *  fireball (story sw4-2) reaches the cockpit well inside this, so the TTL is a
+ *  cleanup cap, not the balance lever. PROVISIONAL — derived from the unpinned
+ *  TICK_HZ (design spec §B). */
+export const ENEMY_SHOT_TTL = 64 / TICK_HZ
 /** Seconds between enemy fireballs (whole formation). */
 export const ENEMY_FIRE_INTERVAL = 1
 /** Maximum enemy fireballs on screen at once — authentic "6 fireball slots". */
@@ -273,15 +314,6 @@ export const TIE_NEAR_BOUND = 0x800 // 2048 — WSCPU "not too close" fire/peel 
  * bound and well inside the 31744 spawn depth. Tuning latitude (spec §A). */
 export const TIE_EXIT_RANGE = 8000
 
-/** Cabinet game-tick rate (Hz) — the rate at which the 1983 ROM's per-tick deltas
- * were applied. PROVISIONAL (sw4-1, spec §A): the real cabinet tick is unpinned
- * (docs/tie-flight-ai-model.md porting caveat), so the clone assumes the ~60 fps
- * this constant names; it is NOT a source-true figure and may be retuned in
- * playtest. Defined here ONCE so sw4-2's homing-fireball decay (pow(7/8, dt ×
- * TICK_HZ)) inherits the same constant instead of forking a second — hence it is
- * intentionally UNUSED in sw4-1's own code (see the epic's "define once, shared"
- * guardrail). */
-export const TICK_HZ = 60
 /** How hard a peeling TIE sweeps sideways as it departs — the tangential blend
  * against the straight-outward radial. 0 = straight back out; 1 ≈ a 45° peel-off
  * to the side (the banking fly-past look). */
@@ -343,12 +375,29 @@ export const BUNKER_SPAWN_CHANCE = 0.3
 
 /** Distance ahead (−Z) at which the exhaust port appears when the trench opens. */
 export const EXHAUST_PORT_DISTANCE = 2400
-/** Points awarded for destroying the exhaust port — the run's big payoff. */
-export const TRENCH_BONUS = 1000
+/** Points for destroying the exhaust port — the run's big payoff. ROM
+ *  `byte_985F` = 25,000 (sw3-1, from the sw2-6 audit; the load-bearing
+ *  cross-note settles this at 25,000, "do NOT ×10"). Was a 1,000-point
+ *  authentic-feel guess. The clean-run "Use the Force" bonus (FORCE_BONUS,
+ *  5,000) still lands on top of this. */
+export const TRENCH_BONUS = 25000
 /** How fast the exhaust port scrolls toward the cockpit (units/second). */
 export const TRENCH_SCROLL_SPEED = 500
-/** Hit sphere around the exhaust port for player bolts (the octagon spans ~64). */
-export const PORT_HIT_RADIUS = 120
+/** Hit sphere around the exhaust port for player bolts. WYSIWYG (sw3-15): the
+ *  visible octagon (models.ts EXHAUST_PORT) reaches ~69.5 units at its farthest
+ *  vertex (hypot(64,27)), so the sphere is pinned at 70 — you may only HIT what
+ *  you can SEE. The old 120 was ~2x the octagon, which forgave any centred bolt
+ *  and made the finish unmissable (findings ## Exhaust port & run outcome). */
+export const PORT_HIT_RADIUS = 70
+/** Near-cockpit approach window (world units, −Z) inside which a player bolt can
+ *  resolve the exhaust-port hit. Outside it — a shot fired far up the trench that
+ *  merely crosses the port mid-channel — cannot detonate it; the port must have
+ *  scrolled to within this band of the cockpit (z=0). This restores the ROM's
+ *  narrow end-wall decision window (WSMAIN.MAC:1896-1917 `SUBD #0800`, one short
+ *  trench-wedge spacing; findings ## Exhaust port & run outcome, the $800 window)
+ *  so the finish demands timing, not just aim (sw3-15). Named authentic-FEEL like
+ *  the other Wave 3 constants — no ROM↔world-unit scale is recovered. */
+export const PORT_APPROACH_WINDOW = 800
 /** Awarded on top of TRENCH_BONUS for a port kill with no prior trench shots —
  *  the arcade's "USE THE FORCE" bonus (findings ## Exhaust port & run outcome:
  *  the type-4 segment's one-shot `byte_4B36` latch fires `sub_97E3`, the
@@ -426,6 +475,13 @@ export interface GameState {
   t: number
   score: number
   lives: number
+  /** The flashing bonus/extra-life HUD counter under the score — the ROM
+   *  `byte_4B2C` analog (sw3-6). A normalized [0,1] flash intensity: re-armed to
+   *  BONUS_FLASH_MAX on any score change, decayed by BONUS_FLASH_DECAY each tick
+   *  toward 0. The shell draws the amber row beneath the score only while this is
+   *  > 0 (render.ts); when it reaches 0 the row is absent. Owned by the core tick
+   *  (`finalizeScore` in sim.ts); the shell only reads it. */
+  bonusFlash: number
   /** Player height above the y=0 surface (Wave 2 terrain skim). */
   altitude: number
   /** How far the Death Star surface ground grid has scrolled toward the cockpit
@@ -538,6 +594,7 @@ export function initialState(seed = 1983): GameState {
     t: 0,
     score: 0,
     lives: STARTING_LIVES,
+    bonusFlash: 0,
     altitude: SKIM_ALTITUDE,
     surfaceScrollZ: 0,
     trenchScrollZ: 0,
