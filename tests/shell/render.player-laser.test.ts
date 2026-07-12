@@ -21,7 +21,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { render } from '../../src/shell/render'
-import { initialState, type GameState, type Projectile } from '../../src/core/state'
+import { initialState, PROJECTILE_TTL, type GameState, type Projectile } from '../../src/core/state'
 import type { Vec3 } from '@arcade/shared/math3d'
 
 interface Seg {
@@ -129,8 +129,12 @@ const scene = (over: Partial<GameState>): GameState => ({
   ...over,
 })
 
-/** A player bolt at a world position. vel/ttl are irrelevant to the render. */
-const shotAt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, 0], ttl: 2 })
+/** A FRESHLY-fired player bolt at a world position. The cannon-tip laser flash is
+ *  a brief "pew" gated on elapsed flight (render.ts: PROJECTILE_TTL − ttl ≤
+ *  LASER_FLASH_SECONDS), so a fresh bolt carries ttl = PROJECTILE_TTL (elapsed 0)
+ *  to sit inside that window — not a hardcoded lifetime that silently ages out when
+ *  the constant moves (sw4-1 restored PROJECTILE_TTL to 3). vel is irrelevant here. */
+const shotAt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, 0], ttl: PROJECTILE_TTL })
 
 describe('Story 8-12 — player shots render as cyan converging laser beams', () => {
   it('fires a beam from each of the four cannon-tip corners when a shot is in flight', () => {

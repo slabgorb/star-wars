@@ -114,8 +114,12 @@ describe('Story 9-4 — fire is per-TIE, not a whole-formation timer (AC1)', () 
     // (sw4-2) now converge on the cockpit and are removed as they ARRIVE, so the
     // count at the window's END understates the fire that went up — track the PEAK
     // simultaneously aloft instead, the true "more fire in the sky" measure.
+    // Positioned in the RESTORED approach band (sw4-1): |pos| ~3800–4000 sits past the
+    // restored TIE_NEAR_BOUND (2048) fire floor, so all three are genuinely in-window.
+    // (The pre-sw4-1 ~900-unit placement now falls INSIDE the near-bound and would
+    // peel immediately — no fire — so it was moved out into the approach band.)
     let s = fireReady(
-      [tieToward([250, 0, -900]), tieToward([-200, 150, -850]), tieToward([0, -220, -880])],
+      [tieToward([250, 0, -4000]), tieToward([-200, 150, -3800]), tieToward([0, -220, -3900])],
       1983,
       7,
     )
@@ -156,9 +160,9 @@ describe('Story 9-4 — fire is per-TIE, not a whole-formation timer (AC1)', () 
 describe('Story 9-4 — fireball source & aim track the firing TIE (AC1, AC3)', () => {
   it('a fireball launches from a firing TIE’s position, aimed at the cockpit', () => {
     let s = fireReady([
-      tieToward([250, 0, -900]),
-      tieToward([-200, 150, -850]),
-      tieToward([0, -220, -880]),
+      tieToward([250, 0, -4000]),
+      tieToward([-200, 150, -3800]),
+      tieToward([0, -220, -3900]),
     ])
     let shot: Projectile | undefined
     for (let i = 0; i < 200 && shot === undefined; i++) {
@@ -193,9 +197,9 @@ describe('Story 9-4 — invariants preserved under per-TIE fire (AC2, AC3, AC4)'
     // seconds: without the slot cap the sky would overflow well past six. lives is
     // parked high so a stray ram never ends the run mid-measurement.
     let s: GameState = { ...fireReady([
-      tieToward([250, 60, -800]),
-      tieToward([-220, -40, -700]),
-      tieToward([40, 200, -600]),
+      tieToward([250, 60, -4000]),
+      tieToward([-220, -40, -3800]),
+      tieToward([40, 200, -3900]),
     ]), lives: 999 }
     for (let i = 0; i < 120; i++) {
       s = stepGame(s, NO_INPUT, DT)
@@ -222,7 +226,7 @@ describe('Story 9-4 — invariants preserved under per-TIE fire (AC2, AC3, AC4)'
     const run = (): Projectile[] =>
       stepN(
         fireReady(
-          [tieToward([250, 0, -900]), tieToward([-200, 150, -850]), tieToward([0, -220, -880])],
+          [tieToward([250, 0, -4000]), tieToward([-200, 150, -3800]), tieToward([0, -220, -3900])],
           4242,
         ),
         TWO_INTERVALS,
@@ -231,7 +235,7 @@ describe('Story 9-4 — invariants preserved under per-TIE fire (AC2, AC3, AC4)'
   })
 
   it('firing does not mutate the input enemyShots array in place', () => {
-    let s = fireReady([tieToward([250, 0, -900])])
+    let s = fireReady([tieToward([250, 0, -4000])])
     for (let i = 0; i < 200 && s.enemyShots.length === 0; i++) s = stepGame(s, NO_INPUT, DT)
     expect(s.enemyShots.length).toBeGreaterThan(0)
     const before = s.enemyShots

@@ -191,8 +191,12 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     .map((e) => moveEnemy(e, dt))
     .filter((e) => !(e.peeling && length(e.pos) > TIE_EXIT_RANGE))
   let spawnTimer = state.spawnTimer - dt
+  let spawnCount = state.spawnCount
   if (spawnTimer <= 0 && movedEnemies.length < WAVE_SIZE) {
-    movedEnemies.push(spawnTie(rng, params.enemySpeed))
+    // Walk the authentic TBG lateral table in order (sw4-1) — the spawn counter is
+    // the deterministic per-slot index, advanced only when a fighter actually spawns.
+    movedEnemies.push(spawnTie(rng, params.enemySpeed, spawnCount))
+    spawnCount += 1
     spawnTimer = params.spawnInterval
   }
 
@@ -324,6 +328,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       enemyShots: liveShots,
       fireCooldown,
       spawnTimer,
+      spawnCount,
       enemyFireCooldown,
       events,
     }),
@@ -1031,12 +1036,42 @@ function moveEnemy(e: Enemy, dt: number): Enemy {
   return { ...e, pos, vel, orient }
 }
 
-/** A fresh TIE: lateral-spread spawn far down −Z, aimed at the cockpit at the
- * wave's approach speed (gameRules.waveParams), with a seeded swoop direction so
- * each fighter banks into its own arc on the way in (story 9-2). */
-function spawnTie(rng: Rng, speed: number): Enemy {
-  const x = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
-  const y = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
+/**
+ * The authentic TIE spawn LATERAL table — the 1983 ROM's STARTING LOCATIONS
+ * (sw4-1, spec §A). Decoded from WSCPU.MAC `.SBTTL STARTING LOCATIONS`
+ * (historicalsource/star-wars @ 5355b76): the `.WB name,_,a,b` macro emits
+ * `(.WORD $7C00 ; .WORD a×$400 ; .WORD b×$400)`, so depth is always $7C00
+ * (TIE_SPAWN_DISTANCE) and the two lateral words are `a×1024` (our X) and `b×1024`
+ * (our Y). The 12 entries, "FRONT TO BACK, LEFT TO RIGHT, TOP TO BOTTOM":
+ *   1A/1B/1C groups: (0,1) (−1,0) (1,0)      → laterals {0, ±1024}
+ *   1D group:        (−2,0) (2,0) (0,2)      → the ±2048 corners
+ * Every entry displaces EXACTLY ONE lateral axis; ±2048 lives only in the D-group.
+ * A monotonic spawn counter (GameState.spawnCount) walks this in order — pure and
+ * deterministic (NOT the RNG), so a run cycles the full authentic set. */
+const ROM_LATERAL_UNIT = 0x400 // 1024 — the ×$400 STARTING-LOCATION lateral step
+const SPAWN_LATERALS: ReadonlyArray<readonly [number, number]> = [
+  [0, ROM_LATERAL_UNIT], // 1A1
+  [-ROM_LATERAL_UNIT, 0], // 1A2
+  [ROM_LATERAL_UNIT, 0], // 1A3
+  [0, ROM_LATERAL_UNIT], // 1B1
+  [-ROM_LATERAL_UNIT, 0], // 1B2
+  [ROM_LATERAL_UNIT, 0], // 1B3
+  [0, ROM_LATERAL_UNIT], // 1C1
+  [-ROM_LATERAL_UNIT, 0], // 1C2
+  [ROM_LATERAL_UNIT, 0], // 1C3
+  [-2 * ROM_LATERAL_UNIT, 0], // 1D1
+  [2 * ROM_LATERAL_UNIT, 0], // 1D2
+  [0, 2 * ROM_LATERAL_UNIT], // 1D3
+]
+
+/** A fresh TIE spawned far down −Z at the authentic depth, aimed at the cockpit at
+ * the wave's approach speed (gameRules.waveParams), with a seeded swoop direction so
+ * each fighter banks into its own arc on the way in (story 9-2). The LATERAL comes
+ * from the ROM TBG table walked in order by `spawnIndex` (sw4-1, spec §A) — no
+ * longer a continuous RNG spread — so every fighter appears on one of the authentic
+ * {0, ±1024, ±2048} starting slots. The RNG still seeds only the swoop bank. */
+function spawnTie(rng: Rng, speed: number, spawnIndex: number): Enemy {
+  const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]
   const pos: Vec3 = [x, y, -TIE_SPAWN_DISTANCE]
   const dir = toCockpit(pos)
   const bank = (nextFloat(rng) < 0.5 ? 1 : -1) * TIE_SWOOP_BIAS
