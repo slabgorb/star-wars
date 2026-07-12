@@ -63,9 +63,14 @@ function trenchAtWave(seed: number, wave: number): GameState {
 /** Park a bolt on the exhaust port so the NEXT step destroys it — driving the
  *  trench->next-wave-space `clearRun` edge (mirrors speech-cues.test.ts). */
 function portKill(state: GameState): GameState {
-  const port = state.exhaustPort!.pos
+  // sw3-15: a port kill now only resolves in the near-cockpit approach window,
+  // so seat the (dead-centre) port in-window rather than at its far spawn
+  // distance, then park a bolt on it (mirrors speech-cues / force-bonus).
+  const p = state.exhaustPort!.pos
+  const port: typeof p = [p[0], p[1], -300]
   return {
     ...state,
+    exhaustPort: { pos: port },
     projectiles: [{ pos: [port[0], port[1], port[2]], vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
   }
 }

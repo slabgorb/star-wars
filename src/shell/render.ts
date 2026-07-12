@@ -16,12 +16,17 @@ import {
   STARTING_LIVES,
   PORT_AHEAD_RANGE,
   FORCE_BONUS,
+  TIE_DEATH_SECONDS,
+  TIE_DEATH_SPREAD,
   type GameState,
 } from '../core/state'
 import type { HighScoreTable } from '@arcade/shared/highscore'
 import { formatScore, formatLives, formatWave } from '../core/hud'
 import {
   TIE_FIGHTER,
+  TIE_WING_FRAG_1,
+  TIE_WING_FRAG_2,
+  TIE_WING_FRAG_3,
   DEATH_STAR_SURFACE,
   DEATH_STAR,
   SURFACE_TOWER,
@@ -310,6 +315,19 @@ export function render(
     // => multiply(orient, TIE_ORIENT)), placed in the world by its model matrix.
     for (const e of state.enemies)
       drawWireframe(ctx, TIE_FIGHTER, multiply(view, modelMatrix(e.pos, multiply(e.orient, TIE_ORIENT))), proj, w, h, TIE_GLOW)
+    // A destroyed TIE breaks into its three exploded wing fragments (story sw3-8),
+    // flying apart over TIE_DEATH_SECONDS before the sim drops the cue. The split
+    // direction/scale are a render-only tell (eyeball tunables), oriented like the
+    // fighter (TIE_ORIENT) so the pieces read as the ship coming apart.
+    for (const d of state.dyingTies) {
+      const f = TIE_DEATH_SECONDS > 0 ? Math.min(1, d.age / TIE_DEATH_SECONDS) : 1
+      const s = f * TIE_DEATH_SPREAD
+      const at = (dx: number, dy: number, dz: number): Mat4 =>
+        multiply(view, modelMatrix([d.pos[0] + dx, d.pos[1] + dy, d.pos[2] + dz], TIE_ORIENT))
+      drawWireframe(ctx, TIE_WING_FRAG_1, at(-s, 0, 0), proj, w, h, TIE_GLOW)
+      drawWireframe(ctx, TIE_WING_FRAG_2, at(s, 0, 0), proj, w, h, TIE_GLOW)
+      drawWireframe(ctx, TIE_WING_FRAG_3, at(0, 0, s), proj, w, h, TIE_GLOW)
+    }
   }
   // The player laser is a brief "pew" flash from the cannon tips at the moment of
   // firing — NOT a line that trails the bolt for its whole 2s flight (that builds
@@ -664,6 +682,7 @@ function drawCrosshair(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
 const HUD_MARGIN_FRAC = 0.025 // side inset as a fraction of width
 const HUD_ROW1_Y = 34 // SCORE label / WAVE row baseline (top row)
 const HUD_ROW2_Y = 58 // SCORE value baseline (second left-column row)
+const HUD_ROW3_Y = 80 // bonus/extra-life flash row baseline (beneath the score value)
 const HUD_METER_Y = 42 // shield-gauge top
 const HUD_METER_H = 24 // shield-gauge frame height
 const HUD_FRAME_TOP_Y = 10 // top bracket line, clear above the text row
@@ -683,6 +702,9 @@ const HUD_FRAME_BOTTOM_Y = 112 // bottom bracket line, clear below the shield ga
  */
 const HUD_LABEL_COLOR = '#ff2222' // PROVISIONAL — hex matched to a cabinet screenshot; register not identified in findings
 const HUD_VALUE_COLOR = '#22e600' // PROVISIONAL(findings ## HUD & framing, ## Colors & intensities) — register pinned, hex matched to a cabinet screenshot
+// The flashing bonus/extra-life row (byte_4B2C, sw3-6) — the amber/yellow the
+// cabinet screenshot shows directly under the score value. PROVISIONAL hex.
+const HUD_BONUS_COLOR = '#ffcc00'
 
 /**
  * Shield-gauge colour — findings ## HUD & framing: `word_96B6` "Shield colour
@@ -715,6 +737,14 @@ function drawHudHeader(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
   // Left: SCORE label (red) over the value (green) — two short lines.
   glowText(ctx, 'SCORE', margin, HUD_ROW1_Y, HUD_TEXT_PX, 'left', HUD_LABEL_COLOR, 10)
   glowText(ctx, formatScore(state.score), margin, HUD_ROW2_Y, HUD_TEXT_PX, 'left', HUD_VALUE_COLOR, 10)
+
+  // Bonus/extra-life flash row (byte_4B2C, sw3-6): while the core's `bonusFlash`
+  // is live (re-armed on any score change, decaying to 0), echo the score in amber
+  // directly beneath it — the cabinet's "score changed, redraw HUD" flash. Absent
+  // once the flash has fully decayed.
+  if (state.bonusFlash > 0) {
+    glowText(ctx, formatScore(state.score), margin, HUD_ROW3_Y, HUD_TEXT_PX, 'left', HUD_BONUS_COLOR, 10)
+  }
 
   // Right: WAVE — one line, value then label, each its own colour (a real
   // cabinet screenshot shows this asymmetric layout: SCORE stacks label over

@@ -34,7 +34,7 @@ import {
   STARTING_LIVES,
   ENEMY_SPEED,
   COCKPIT_HIT_RADIUS,
-  SPAWN_DISTANCE,
+  TIE_SPAWN_DISTANCE,
   TIE_NEAR_BOUND,
   type GameState,
   type Enemy,
@@ -114,7 +114,7 @@ describe('Story 9-3 — un-killed TIEs peel away and exit, not ram (AC1)', () =>
     // Today: this TIE homes straight down the line to the origin, passes through
     // the cockpit sphere (~range 80), costs a shield, and is removed — so `lives`
     // drops and the only way it leaves is by ramming. RED.
-    const t = runSolo(soloState(tieToward([400, 0, -600])))
+    const t = runSolo(soloState(tieToward([400, 0, -5000])))
     expect(t.despawned).toBe(true) // it left the play volume (slot freed)
     // Not one frame of damage: a clean pass costs no shield (it peeled, didn't ram).
     expect(t.final.lives).toBe(STARTING_LIVES)
@@ -125,7 +125,7 @@ describe('Story 9-3 — un-killed TIEs peel away and exit, not ram (AC1)', () =>
     // A ram is a monotonic close to ~0; a peel-away has a closest-approach minimum
     // and then the TIE recedes and leaves. Today the range only ever decreases
     // until the TIE is removed at the cockpit, so there is no later, larger sample. RED.
-    const t = runSolo(soloState(tieToward([350, 120, -650])))
+    const t = runSolo(soloState(tieToward([350, 120, -5000])))
     expect(t.ranges.length).toBeGreaterThan(5)
     const minRange = Math.min(...t.ranges)
     const lastRange = t.ranges[t.ranges.length - 1]
@@ -138,7 +138,7 @@ describe('Story 9-3 — on-screen TIE scale is bounded (AC2, near-bound)', () =>
   it('a peeling TIE never closes inside the near-bound while in front of the camera', () => {
     // The "full-frame wall" is a tiny range while the TIE is still in front of the
     // camera (z < 0). The near-bound caps that. Today min in-front range ~80. RED.
-    const t = runSolo(soloState(tieToward([400, 0, -600])))
+    const t = runSolo(soloState(tieToward([400, 0, -5000])))
     const inFront = t.ranges.filter((_, i) => t.zs[i] < 0)
     expect(inFront.length).toBeGreaterThan(5)
     // 10% slack absorbs one-step discretization at the trigger crossing.
@@ -149,7 +149,7 @@ describe('Story 9-3 — on-screen TIE scale is bounded (AC2, near-bound)', () =>
     // Drives the new single-sourced constant. Undefined until Dev adds it → RED
     // with a clear "expected undefined to be greater than 80" message.
     expect(TIE_NEAR_BOUND).toBeGreaterThan(COCKPIT_HIT_RADIUS)
-    expect(TIE_NEAR_BOUND).toBeLessThan(SPAWN_DISTANCE)
+    expect(TIE_NEAR_BOUND).toBeLessThan(TIE_SPAWN_DISTANCE)
   })
 })
 
@@ -159,7 +159,15 @@ describe('Story 9-3 — genuine collision/strafe hits still cost a shield (AC3 g
     // offset, bank 0 — the falsy-but-valid case the `??`-vs-`||` trap, lang-review
     // TS check #4, must respect) has nothing to veer around and still clips the
     // cockpit sphere. Guards against an over-correction that makes ALL TIEs harmless.
-    const before = soloState(tieToward([0, 0, -100]))
+    // Approaches at a DELIBERATELY slow speed: at the restored ENEMY_SPEED (10000)
+    // one 0.05 s step is 500u, wider than the 160u cockpit sphere diameter, so a
+    // point-sphere collision would tunnel straight through on a hand-placed
+    // dead-center fixture. A real spawn can never sit dead-center (the TBG table
+    // always displaces one lateral axis, so every fighter peels off-center), so this
+    // synthetic guard just needs a step small enough (< sphere diameter) to register
+    // the head-on it is asserting. (Point-sphere tunneling is logged as a Delivery
+    // Finding for a future swept-collision story.)
+    const before = soloState(tieToward([0, 0, -100], 2000))
     const t = runSolo(before)
     expect(t.despawned).toBe(true)
     expect(t.final.lives).toBe(STARTING_LIVES - 1)
@@ -181,7 +189,7 @@ describe('Story 9-3 — deterministic & pure (AC4)', () => {
   it('stepping does not mutate the input enemies in place while a TIE is peeling', () => {
     // Advance a fixture to within the near-bound (where peel-away is active), then
     // assert one more step leaves the INPUT array and its positions untouched.
-    let s = soloState(tieToward([400, 0, -600]))
+    let s = soloState(tieToward([400, 0, -5000]))
     for (let i = 0; i < 80 && s.enemies.length > 0 && range(s.enemies[0].pos) > TIE_NEAR_BOUND; i++) {
       s = stepGame(s, NO_INPUT, DT)
     }

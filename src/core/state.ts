@@ -67,6 +67,17 @@ export interface Enemy {
   fireCooldown?: number
 }
 
+/** A TIE caught mid-death: it has been shot and is drawn as its exploded wing
+ *  fragments flying apart for a brief beat, instead of vanishing (story sw3-8).
+ *  Purely a render cue — it has no collision and never fires. */
+export interface DyingTie {
+  /** World-space position where the TIE was destroyed (the fragments' origin). */
+  pos: Vec3
+  /** Seconds since the kill; the shell spreads the fragments by this and the sim
+   * drops the entry once it passes TIE_DEATH_SECONDS. */
+  age: number
+}
+
 /** A ground object standing on the Death Star surface (Wave 2). World space.
  *  Mirrors the ROM's one-table design (WSGRND.MAC mazes: TOWER/BISHOP/BUNKER
  *  entries share one list, discriminated by a picture-type byte). */
@@ -102,23 +113,50 @@ export interface TrenchObstacle {
 // Two of these are AUTHENTIC, from Mitchell Gant's "Atari Star Wars Theory of
 // Operation" (wardclan, the origin of the AVG disassembly this epic ports):
 // the cabinet keeps a *maximum of 3 TIE fighter slots* and a *maximum of 6
-// fireball slots* on screen at once. The rest are authentic-FEEL values: the
-// cabinet disassembly (reference/disasm/StarWars.asm) is raw, unlabelled 6809
-// with no symbolic score/shield/timing tables, so those are chosen to play
-// right and named/single-sourced here for easy correction once deeper reverse
-// engineering recovers them (see the Dev deviation + finding in the session).
+// fireball slots* on screen at once. The SCORE values below are now
+// ROM-resolved from the packed-BCD score table recovered by the sw2-6
+// disassembly fidelity audit (docs/sw2-6-disassembly-fidelity-audit.md,
+// ## Scoring values), each cited by its ROM symbol. The remaining shield/timing
+// constants are still authentic-FEEL — chosen to play right and single-sourced
+// here for easy correction once deeper reverse engineering recovers them.
 
 /** Shields the player starts a run with; a hit costs one. */
 export const STARTING_LIVES = 6
-/** Points awarded for destroying a TIE fighter. */
-export const TIE_SCORE = 100
-/** Points awarded for shooting an enemy fireball out of the air (story 8-18).
- * Worth less than a TIE — fireballs are plentiful (6 slots) defensive ordnance,
- * not fighters. Authentic-FEEL like the other Wave-1 scores (StarWars.asm has no
- * symbolic score table); single-sourced here for easy correction. */
-export const FIREBALL_SCORE = 50
-/** Player bolt lifetime (seconds) before it fizzles out. */
-export const PROJECTILE_TTL = 2
+/** Cumulative-score thresholds that each award one bonus shield/life, the first
+ *  time the score reaches them (sw3-6). ROM: the extra-life text `a40000`/`a80000`
+ *  (docs/star-wars-1983-source-findings.md ~442-449) = **400,000 / 800,000**. The
+ *  doc's load-bearing cross-note warns against reading these as 4M/8M or 250k/500k —
+ *  "do NOT ×10". Each fires once; a single score delta that vaults past both grants
+ *  both (see `awardExtraLives` in sim.ts). */
+export const EXTRA_LIFE_THRESHOLDS: readonly number[] = [400_000, 800_000]
+/** The bonus/extra-life HUD flash (`bonusFlash`) re-arms to this on any score
+ *  change, then decays by BONUS_FLASH_DECAY per tick toward 0 — the ROM `byte_4B2C`
+ *  "score changed, redraw HUD" counter (`lda #$FF` on every score change; `sub_761D`
+ *  drains it under the score). Modeled as a normalized [0,1] intensity; the exact
+ *  −8/refresh rate is a cosmetic detail, so BONUS_FLASH_DECAY is an authentic-FEEL
+ *  tunable (~1s flash at 60fps), not a test-pinned value. */
+export const BONUS_FLASH_MAX = 1
+export const BONUS_FLASH_DECAY = 1 / 60
+/** Points for destroying a TIE fighter — ROM `byte_984A` = 1,000 (sw3-1, from
+ *  the sw2-6 audit; its load-bearing cross-note settles this at 1,000, "do NOT
+ *  ×10"). Was a 100-point authentic-feel guess. */
+export const TIE_SCORE = 1000
+/** Points for destroying Darth Vader's ship — ROM `byte_984D` = 2,000 (sw3-1).
+ *  Baked as a single-sourced constant: the sim has no distinct Vader enemy yet
+ *  (`Enemy.kind` is `'tie'` only; Vader exists only as a render model), so
+ *  nothing awards this today. A future Vader-enemy story wires it to the kill
+ *  (see the Delivery Findings in the sw3-1 session). */
+export const VADER_SCORE = 2000
+/** Points for shooting an enemy fireball out of the air (story 8-18) — ROM
+ *  `byte_985C` = 33 (sw3-1, from the sw2-6 audit). The cheapest kill on the
+ *  board: fireballs are plentiful (6 slots) defensive ordnance, not fighters.
+ *  Was a 50-point authentic-feel guess. */
+export const FIREBALL_SCORE = 33
+/** Player bolt lifetime (seconds) before it fizzles out. Restored world (sw4-1):
+ * paired with PROJECTILE_SPEED so a bolt's REACH (speed × ttl) clears the far plane
+ * — see PROJECTILE_SPEED for why the reach is split 12000 × 3 rather than a single
+ * fast bolt. */
+export const PROJECTILE_TTL = 3
 /** Minimum seconds between player shots (trigger fire rate). */
 export const FIRE_INTERVAL = 0.25
 /** Seconds between TIE spawns into a free slot. */
@@ -130,37 +168,66 @@ export const WAVE_SIZE = 3
 // space-combat magic numbers live in one place the reviewer can scan).
 
 /** Player bolt speed (units/second), fired down the aim direction. A bolt's REACH
- * is PROJECTILE_SPEED × PROJECTILE_TTL, and it must clear the whole TIE approach
- * volume: fighters spawn at TIE_SPAWN_DISTANCE (8000, corner ~8015 with
- * SPAWN_SPREAD) and bear in, so a bolt that dies short leaves inbound TIEs
- * unhittable until they close to point-blank — the sw2-1 defect. At 5000 the reach
- * is 10000 (≥ the 8015 worst-case spawn with margin), so the player can engage a
- * TIE the moment it appears. It also restores a faithful FEEL: the old 900 was
- * slower than the 1300-unit TIE approach — a laser the fighters outran. */
-export const PROJECTILE_SPEED = 5000
+ * is PROJECTILE_SPEED × PROJECTILE_TTL, and it must clear the whole restored TIE
+ * approach volume (sw4-1, spec §A): fighters spawn at TIE_SPAWN_DISTANCE (31744)
+ * with laterals out to ±2048, so the worst-case spawn corner is ~31876 units away,
+ * and a bolt that dies short leaves inbound TIEs unhittable until point-blank — the
+ * sw2-1 defect, now at 1983-world scale. 12000 × 3 = 36000 clears that corner with
+ * margin. The reach is split (12000 × 3) rather than a single 16000 × 2 bolt on
+ * purpose: at 60 fps a 16000-u/s bolt steps ~267 u/frame, wider than the exhaust
+ * port's 240-u hit diameter (2 × PORT_HIT_RADIUS), so it would tunnel straight
+ * through the port between frames (the sw2-1/sw2-4 tunneling finding). At 12000 the
+ * step is ~200 u/frame — inside every shootable target's diameter — and the bolt
+ * still outruns the 10000-u/s TIE approach, so the fighters never outrun their own
+ * doom. */
+export const PROJECTILE_SPEED = 12000
 /** Distance ahead (−Z) at which surface turrets appear, and the anchor the Death
  * Star surface is placed against. NOTE: TIEs no longer use this — they spawn at
  * TIE_SPAWN_DISTANCE (story 9-7). Kept at the original value so the surface phase
  * is unchanged. */
 export const SPAWN_DISTANCE = 1200
-/** Distance ahead (−Z) at which TIEs appear. Far enough that a freshly spawned
- * fighter subtends only a small fraction of the viewport and then grows
- * dramatically as it bears down — the cabinet "speck swoops into a ship" feel
- * (story 9-7). The authentic TIE model is large (bounding radius ~334), so this
- * sits well beyond the old shared 1200, which read as a half-screen wall at spawn.
- * Tuned out further (5000→8000) so a fresh TIE reads as a small distant speck. */
-export const TIE_SPAWN_DISTANCE = 8000
-/** Half-width of the lateral box TIEs spawn within. */
+/** Distance ahead (−Z) at which TIEs appear — the RESTORED 1983 world metric
+ * (sw4-1, spec §A). The authentic ROM spawns fighters at depth $7C00 = 31744
+ * (WSCPU.MAC `.SBTTL STARTING LOCATIONS`, the depth word of every TBG entry), and
+ * because models.ts is already authored in raw ROM units the distance ports in
+ * UNSCALED. This replaces the compressed 8000 the clone was carrying (~4× too
+ * close), which — with the large authentic TIE (bounding radius ~334) — made a
+ * fresh fighter read as a screen-filling wall and the whole wave a turkey shoot.
+ * At 31744 a spawn is a distant speck that swoops in and grows dramatically. */
+export const TIE_SPAWN_DISTANCE = 0x7c00 // 31744 — WSCPU STARTING LOCATIONS depth word
+/** Half-width of the lateral box SURFACE TURRETS spawn within (spawnTurret). TIEs
+ * no longer use this — since sw4-1 they spawn on the authentic TBG lateral table
+ * {0, ±1024, ±2048} (see SPAWN_LATERALS in sim.ts), not a continuous ±spread. */
 export const SPAWN_SPREAD = 350
-/** TIE approach speed (units/second). Scaled up alongside TIE_SPAWN_DISTANCE
- * (story 9-7) so the longer approach resolves snappily (~5.9s from the 8000-unit
- * spawn, not a slow crawl); the 8-6 difficulty ramp still rides this as the
- * wave-1 base. */
-export const ENEMY_SPEED = 1300
-/** Enemy fireball speed (units/second). */
+/** TIE approach speed (units/second). PROVISIONAL (sw4-1, spec §A): the cabinet
+ * advances the range by $200/tick, but that per-tick delta is NOT pinned to a
+ * source-true units/second figure (docs/tie-flight-ai-model.md porting caveat).
+ * This is applied as a units/second rate — moveEnemy (sim.ts) steps pos by
+ * ENEMY_SPEED × dt — so it is frame-rate independent of TICK_HZ (30). It is tuned
+ * to the spec's design target — a playable ~2.5–4 s spawn→near-bound transit across
+ * the restored world: (31744 − 2048) / 10000 ≈ 3.0 s. Retune in playtest; the 8-6
+ * difficulty ramp still rides this as the wave-1 base. */
+export const ENEMY_SPEED = 10000
+/** Cabinet simulation-tick rate (Hz) — the shared basis for frame-rate-independent
+ *  ROM rates ported from the 1983 source, which counts in cabinet ticks/frames
+ *  (fireball life `5,u = $40` = 64 ticks; docs/tie-flight-ai-model.md §6). The real
+ *  cabinet's rate is self-timed by vector-list length and is NOT pinned by the
+ *  disassembly, so this is PROVISIONAL — playtest-tuned, not unit-tested (design
+ *  spec §B/§D "PROVISIONAL feel items"). 30 lands the homing fireball's arrival at
+ *  ~0.8–1.5 s across the 2,048–31,744 launch range (spec §B "~1–2 s") and its
+ *  64-tick life at ~2.1 s. Shared with sw4-1 (its speeds derive from the same
+ *  TICK_HZ); define it ONCE here (epic sw4 guardrail). */
+export const TICK_HZ = 30
+/** Surface tower/turret fireball speed (units/second, straight-line). Space TIE
+ *  fireballs no longer use it — they home via the ROM decay law (story sw4-2, spec
+ *  §B); surface fire stays straight-line (out of sw4-2's scope). */
 export const ENEMY_SHOT_SPEED = 300
-/** Enemy fireball lifetime (seconds). */
-export const ENEMY_SHOT_TTL = 6
+/** Enemy fireball lifetime: the ROM's 64-tick fireball life (`5,u = $40`,
+ *  docs/tie-flight-ai-model.md §6) expressed in seconds via TICK_HZ. A homing space
+ *  fireball (story sw4-2) reaches the cockpit well inside this, so the TTL is a
+ *  cleanup cap, not the balance lever. PROVISIONAL — derived from the unpinned
+ *  TICK_HZ (design spec §B). */
+export const ENEMY_SHOT_TTL = 64 / TICK_HZ
 /** Seconds between enemy fireballs (whole formation). */
 export const ENEMY_FIRE_INTERVAL = 1
 /** Maximum enemy fireballs on screen at once — authentic "6 fireball slots". */
@@ -175,6 +242,12 @@ export const MAX_FIREBALL_SLOTS = 6
 export const ENEMY_SHOT_HIT_RADIUS = 150
 /** Hit sphere around a TIE for player bolts (covers the model extent). */
 export const TIE_HIT_RADIUS = 250
+/** How long a destroyed TIE's exploded-fragment cue plays before it is dropped
+ *  (story sw3-8). A brief flash — the cabinet's death is quick. Eyeball tunable. */
+export const TIE_DEATH_SECONDS = 0.7
+/** How far (world units) the three wing fragments drift apart over TIE_DEATH_SECONDS
+ *  as the TIE blows apart. A render tunable — the split is an eyeball concern. */
+export const TIE_DEATH_SPREAD = 520
 /** Hit sphere around the cockpit for enemy contact and fire. */
 export const COCKPIT_HIT_RADIUS = 80
 /**
@@ -224,17 +297,23 @@ export const TIE_BANK_ANGLE = 0.6
 // deviations). Authentic-FEEL values, single-sourced here like the rest of the
 // Wave-1 constants.
 
-/** Range at which an un-killed TIE stops homing and peels away. It bounds the
- * nearest a peeling fighter ever gets, so no TIE renders as a full-frame wall
- * (the AC#2 near-bound). Sits well outside the cockpit hit sphere and well inside
- * the spawn distance. */
-export const TIE_NEAR_BOUND = 350
+/** Range at which an un-killed TIE stops homing and peels away — the RESTORED ROM
+ * fire/peel floor (sw4-1, spec §A). The authentic cabinet's "not too close" gate is
+ * $800 = 2048 (WSCPU.MAC): a fighter that closes inside it has finished its pass and
+ * stops both homing and strafing. It doubles as the strafe fire floor (sim.ts
+ * inPassWindow) and bounds the nearest a peeling fighter ever gets, so no TIE renders
+ * as a full-frame wall. Sits well outside the cockpit hit sphere and far inside the
+ * spawn distance (31744). Replaces the compressed 350 the clone was carrying. */
+export const TIE_NEAR_BOUND = 0x800 // 2048 — WSCPU "not too close" fire/peel floor
 /** Once a PEELING TIE has receded past this range it has left the play volume and
  * its slot is freed. Only peeling fighters are culled (the cull is gated on the
  * peel latch), so this sits well outside the peel trigger (TIE_NEAR_BOUND) — it
  * bounds the recession, not the spawn. Fresh, still-approaching TIEs spawn far
- * beyond it (at TIE_SPAWN_DISTANCE) and are never culled on arrival. */
-export const TIE_EXIT_RANGE = 1800
+ * beyond it (at TIE_SPAWN_DISTANCE = 31744) and are never culled on arrival.
+ * Rescaled to the restored world (sw4-1): ~8000, comfortably above the 2048 near
+ * bound and well inside the 31744 spawn depth. Tuning latitude (spec §A). */
+export const TIE_EXIT_RANGE = 8000
+
 /** How hard a peeling TIE sweeps sideways as it departs — the tangential blend
  * against the straight-outward radial. 0 = straight back out; 1 ≈ a 45° peel-off
  * to the side (the banking fly-past look). */
@@ -296,12 +375,29 @@ export const BUNKER_SPAWN_CHANCE = 0.3
 
 /** Distance ahead (−Z) at which the exhaust port appears when the trench opens. */
 export const EXHAUST_PORT_DISTANCE = 2400
-/** Points awarded for destroying the exhaust port — the run's big payoff. */
-export const TRENCH_BONUS = 1000
+/** Points for destroying the exhaust port — the run's big payoff. ROM
+ *  `byte_985F` = 25,000 (sw3-1, from the sw2-6 audit; the load-bearing
+ *  cross-note settles this at 25,000, "do NOT ×10"). Was a 1,000-point
+ *  authentic-feel guess. The clean-run "Use the Force" bonus (FORCE_BONUS,
+ *  5,000) still lands on top of this. */
+export const TRENCH_BONUS = 25000
 /** How fast the exhaust port scrolls toward the cockpit (units/second). */
 export const TRENCH_SCROLL_SPEED = 500
-/** Hit sphere around the exhaust port for player bolts (the octagon spans ~64). */
-export const PORT_HIT_RADIUS = 120
+/** Hit sphere around the exhaust port for player bolts. WYSIWYG (sw3-15): the
+ *  visible octagon (models.ts EXHAUST_PORT) reaches ~69.5 units at its farthest
+ *  vertex (hypot(64,27)), so the sphere is pinned at 70 — you may only HIT what
+ *  you can SEE. The old 120 was ~2x the octagon, which forgave any centred bolt
+ *  and made the finish unmissable (findings ## Exhaust port & run outcome). */
+export const PORT_HIT_RADIUS = 70
+/** Near-cockpit approach window (world units, −Z) inside which a player bolt can
+ *  resolve the exhaust-port hit. Outside it — a shot fired far up the trench that
+ *  merely crosses the port mid-channel — cannot detonate it; the port must have
+ *  scrolled to within this band of the cockpit (z=0). This restores the ROM's
+ *  narrow end-wall decision window (WSMAIN.MAC:1896-1917 `SUBD #0800`, one short
+ *  trench-wedge spacing; findings ## Exhaust port & run outcome, the $800 window)
+ *  so the finish demands timing, not just aim (sw3-15). Named authentic-FEEL like
+ *  the other Wave 3 constants — no ROM↔world-unit scale is recovered. */
+export const PORT_APPROACH_WINDOW = 800
 /** Awarded on top of TRENCH_BONUS for a port kill with no prior trench shots —
  *  the arcade's "USE THE FORCE" bonus (findings ## Exhaust port & run outcome:
  *  the type-4 segment's one-shot `byte_4B36` latch fires `sub_97E3`, the
@@ -379,6 +475,13 @@ export interface GameState {
   t: number
   score: number
   lives: number
+  /** The flashing bonus/extra-life HUD counter under the score — the ROM
+   *  `byte_4B2C` analog (sw3-6). A normalized [0,1] flash intensity: re-armed to
+   *  BONUS_FLASH_MAX on any score change, decayed by BONUS_FLASH_DECAY each tick
+   *  toward 0. The shell draws the amber row beneath the score only while this is
+   *  > 0 (render.ts); when it reaches 0 the row is absent. Owned by the core tick
+   *  (`finalizeScore` in sim.ts); the shell only reads it. */
+  bonusFlash: number
   /** Player height above the y=0 surface (Wave 2 terrain skim). */
   altitude: number
   /** How far the Death Star surface ground grid has scrolled toward the cockpit
@@ -406,6 +509,9 @@ export interface GameState {
   projectiles: Projectile[]
   /** Live TIE fighters. */
   enemies: Enemy[]
+  /** TIEs destroyed this frame or recently, playing their exploded-fragment death
+   * cue (story sw3-8). Each ages by dt and is dropped past TIE_DEATH_SECONDS. */
+  dyingTies: DyingTie[]
   /** Laser turrets standing on the surface (Wave 2). */
   turrets: Turret[]
   /** The trench run's target (Wave 3): the exhaust port scrolling toward the
@@ -463,6 +569,12 @@ export interface GameState {
   fireCooldown: number
   /** Seconds until the next TIE spawns into a free slot. */
   spawnTimer: number
+  /** Count of TIEs spawned so far — a monotonic, deterministic index into the
+   * authentic TBG lateral table (sim.ts SPAWN_LATERALS), advanced by one on every
+   * TIE spawn (sw4-1, spec §A "per-slot in TBG order"). Pure state, NOT the RNG: the
+   * spawn LATERAL walks the ROM STARTING-LOCATIONS table in order, so a run cycles
+   * through the full {0, ±1024, ±2048} set deterministically. */
+  spawnCount: number
   /** Seconds until the formation fires its next bolt. */
   enemyFireCooldown: number
   /** Gameplay moments emitted THIS frame for the shell's SFX engine to react
@@ -482,6 +594,7 @@ export function initialState(seed = 1983): GameState {
     t: 0,
     score: 0,
     lives: STARTING_LIVES,
+    bonusFlash: 0,
     altitude: SKIM_ALTITUDE,
     surfaceScrollZ: 0,
     trenchScrollZ: 0,
@@ -489,6 +602,7 @@ export function initialState(seed = 1983): GameState {
     phaseKills: 0,
     projectiles: [],
     enemies: [],
+    dyingTies: [],
     turrets: [],
     exhaustPort: null,
     trenchObstacles: [],
@@ -503,6 +617,7 @@ export function initialState(seed = 1983): GameState {
     startPrev: false,
     fireCooldown: 0,
     spawnTimer: SPAWN_INTERVAL,
+    spawnCount: 0,
     enemyFireCooldown: ENEMY_FIRE_INTERVAL,
     events: [],
   }

@@ -190,12 +190,15 @@ describe('event emission — space phase gameplay moments (AC1)', () => {
   })
 
   it("emits 'enemy-fire' carrying the bolt's spawn position when the formation fires", () => {
-    const tie: Enemy = { pos: [100, 0, -500], vel: [0, 0, 0], kind: 'tie', orient: IDENTITY }
+    // In its pass window: range > TIE_NEAR_BOUND (2048, the restored fire floor,
+    // sw4-1) so the fighter is "not too close" and strafes. A stationary fixture
+    // (vel 0) holds station, so the shot launches from its exact spot.
+    const tie: Enemy = { pos: [100, 0, -3000], vel: [0, 0, 0], kind: 'tie', orient: IDENTITY }
     const out = stepGame(playing({ enemies: [tie], enemyFireCooldown: 0 }), NO_INPUT, DT)
     const fire = out.events.find((e) => e.type === 'enemy-fire')
     expect(fire).toBeDefined()
     // pos is a world-space Vec3 (for future panning); here it is the shooter's.
-    expect(fire).toMatchObject({ type: 'enemy-fire', pos: [100, 0, -500] })
+    expect(fire).toMatchObject({ type: 'enemy-fire', pos: [100, 0, -3000] })
   })
 
   it("emits 'player-death' (cause 'enemy') and spends a shield when a TIE reaches the cockpit", () => {

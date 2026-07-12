@@ -75,11 +75,13 @@ const tieToward = (pos: Vec3, speed = ENEMY_SPEED): Enemy => ({
   bank: 0,
 })
 
-/** Three fighters spread across the sky, all in their pass window. */
+/** Three fighters spread across the sky, all in their pass window — range beyond
+ * the restored TIE_NEAR_BOUND (2048, sw4-1) so they are "not too close" and strafe.
+ * They sit in the 3000–8000 approach band, a live-fire moment of the restored world. */
 const threeStrafers = (): Enemy[] => [
-  tieToward([250, 0, -900]),
-  tieToward([-200, 150, -850]),
-  tieToward([0, -220, -880]),
+  tieToward([250, 0, -4000]),
+  tieToward([-200, 150, -3800]),
+  tieToward([0, -220, -3900]),
 ]
 
 /** A playing state at `wave` with the squad fire-clock READY (so the only thing

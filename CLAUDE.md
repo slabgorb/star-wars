@@ -95,6 +95,44 @@ disassembly of the original cabinet under `reference/` (gitignored). See
 `reference/README.md`. `Object_3D_Data.asm` holds the real vertex/line-segment
 tables; the sound disassembly and the linked audio repo hold the SFX/speech data.
 
+### The original 1983 Atari source (preferred over the disasm)
+
+The **complete original MACRO-11 source** (project codename "Warp Speed") is
+cloned locally — strictly richer than `reference/disasm/`: it has the original
+comments, labels, and the AVG picture data the disasm lacks. Prefer it for any
+fidelity question.
+
+- **Pristine clone:** `~/Projects/star-wars-1983-source`
+  (github `historicalsource/star-wars`, commit `5355b76`)
+- **Greppable copy:** `~/Projects/star-wars-1983-source-text` — same filenames,
+  LF-normalized plain ASCII. **Use this one for grep/read**; the originals are
+  CR-terminated non-UTF8 (grep flags them binary; needs `tr '\r' '\n'` + `grep -a`).
+- Both are machine-local (not in any repo). Re-create with:
+  `git clone https://github.com/historicalsource/star-wars.git` + per-file
+  `perl -0777 -i -pe 's/\r\n/\n/g; s/\r/\n/g; s/\x0c/\n/g; s/[^\x09\x0a\x20-\x7e]//g'`.
+
+**Key modules** (each `.MAC` has a `.TITLE`; sections under `.SBTTL`):
+
+| File | Contents |
+|------|----------|
+| `WSGLOB.MAC` | Global equates, RAM layout — where named constants live |
+| `WSCPU.MAC` | **TIE AI**: "ALIEN CONTROL AND CHOREOGRAPHY" — `STARTING LOCATIONS` (`TBG*` tables: depth `$7C00`, lateral offsets ×`$400`), `WAVE DATA` (`TSPWAV` space-wave sets, Darth ordering), `CHOREOGRAPHY TABLES` (behavior scripts), `COLLISION` |
+| `WSGRND.MAC` | **Surface phase**: `TOWER MAZES` — hand-authored per-wave maps of `TOWER`/`BUNKER`/`BISHOP` at explicit hex coords (top view, X ±right, Y forward, out to `$7C00`); `TTWRS` per-maze tower counts; turret fire |
+| `WSBASE.MAC` | Death Star framework | 
+| `WSPANL.MAC` | Trench wall panels / catwalks |
+| `WSOBJ.MAC` | 3D object vertex tables + draw routines. Objects are authored as small ints × a per-object scale (`.S=13.` for the TIE) → **raw ROM units; our `models.ts` vertices are these units 1:1** |
+| `WSVROM.MAC` | AVG vector **pictures** (2D shapes: `GNB/GNT` gunshot sparkles, explosions). `AVGROM.MAC` is the AVG state PROM (hardware, not pictures) |
+| `WSGUNS.MAC` / `WSLAZR.MAC` / `WSXPLD.MAC` | Guns / lasers / explosions |
+| `WSGLOW.MAC` / `WSGAS.MAC` | Glow + shields / score |
+| `WSMAIN.MAC` / `WSMATH.MAC` / `SWMP.MAC` | Main game play / math + common routines / Math Box micro-program (`SWMP.DOC` is its doc) |
+| `WSSITE.MAC` / `WSSTAR.MAC` | Site handling / starfield |
+
+**World metric:** coordinates are 16-bit raw ROM units, `$4000` = 1.0 fixed
+point; play cube clamps at ±`$7CFF`; TIE spawn depth `$7C00` (= 31,744). Since
+`models.ts` is already in raw ROM units, ROM distances port into the sim
+**unscaled**. Cross-reference: `reference/disasm/` labels (`sub_8xxx`…) are the
+compiled form of these files; `docs/tie-flight-ai-model.md` maps the TIE AI.
+
 ## Git Workflow
 
 - **Default branch:** `develop` (gitflow). PRs target `develop`.

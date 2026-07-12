@@ -12,7 +12,7 @@
 // rule helpers — there is no ad-hoc geometry in here.
 
 import { initialState } from './state'
-import type { GameState, Projectile, Enemy, Turret, Phase, TrenchObstacle } from './state'
+import type { GameState, Projectile, Enemy, Turret, Phase, TrenchObstacle, DyingTie } from './state'
 import {
   PROJECTILE_TTL,
   PROJECTILE_SPEED,
@@ -24,12 +24,14 @@ import {
   ENEMY_SHOT_SPEED,
   ENEMY_SHOT_TTL,
   ENEMY_SHOT_HIT_RADIUS,
+  TICK_HZ,
   ENEMY_FIRE_INTERVAL,
   WAVE_SIZE,
   MAX_FIREBALL_SLOTS,
   TIE_SCORE,
   FIREBALL_SCORE,
   TIE_HIT_RADIUS,
+  TIE_DEATH_SECONDS,
   COCKPIT_HIT_RADIUS,
   CATWALK_HIT_RADIUS,
   SKIM_ALTITUDE,
@@ -50,12 +52,16 @@ import {
   TRENCH_SCROLL_SPEED,
   TRENCH_BONUS,
   PORT_HIT_RADIUS,
+  PORT_APPROACH_WINDOW,
   FORCE_BONUS,
   TIE_SWOOP_BIAS,
   TIE_BANK_ANGLE,
   TIE_NEAR_BOUND,
   TIE_EXIT_RANGE,
   TIE_PEEL_SWEEP,
+  EXTRA_LIFE_THRESHOLDS,
+  BONUS_FLASH_MAX,
+  BONUS_FLASH_DECAY,
 } from './state'
 import type { Input } from './input'
 import type { GameEvent, SpeechLine, MusicTrack } from './events'
@@ -71,7 +77,7 @@ import {
   lookRotation,
   type Vec3,
 } from '@arcade/shared/math3d'
-import { aimDirection, collides, waveParams } from './gameRules'
+import { aimDirection, collides, sweptCollides, waveParams } from './gameRules'
 import { nextFloat, nextInt, type Rng } from '@arcade/shared/rng'
 import { stepNameEntry } from '@arcade/shared/name-entry'
 import {
@@ -154,16 +160,22 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     events.push({ type: 'fire' })
   }
 
-  // Enemy/turret fire advances & expires the same way in every phase.
-  const enemyShots = advance(state.enemyShots, dt)
+  // Enemy fire advances & expires each step. SPACE-phase TIE fireballs HOME on the
+  // cockpit (ROM sub_A875, story sw4-2 / spec §B): their position decays 7/8 per
+  // cabinet tick toward the origin, so an un-shot shot ALWAYS arrives. Surface/trench
+  // fire still flies straight (out of sw4-2's scope; the trench carries no fire).
+  const enemyShots =
+    state.phase === 'space'
+      ? homeShots(state.enemyShots, dt)
+      : advance(state.enemyShots, dt)
 
   const common: StepCommon = { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots, events }
 
   // Each phase runs its own combat, then `progress` checks the kill quota and
   // drops the run into the next phase once the wave is cleared. The trench is
   // terminal here — its gameplay is story 8-5; for now it just holds safely.
-  if (state.phase === 'surface') return progress(stepSurface(state, input, dt, common))
-  if (state.phase === 'trench') return stepTrench(state, common, dt)
+  if (state.phase === 'surface') return finalizeScore(state, progress(stepSurface(state, input, dt, common)))
+  if (state.phase === 'trench') return finalizeScore(state, stepTrench(state, common, dt))
 
   // The wave's difficulty knobs: later waves spawn TIEs sooner, send them in
   // faster, and lob fireballs more often (gameRules.waveParams; wave 1 is today's
@@ -179,8 +191,12 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     .map((e) => moveEnemy(e, dt))
     .filter((e) => !(e.peeling && length(e.pos) > TIE_EXIT_RANGE))
   let spawnTimer = state.spawnTimer - dt
+  let spawnCount = state.spawnCount
   if (spawnTimer <= 0 && movedEnemies.length < WAVE_SIZE) {
-    movedEnemies.push(spawnTie(rng, params.enemySpeed))
+    // Walk the authentic TBG lateral table in order (sw4-1) — the spawn counter is
+    // the deterministic per-slot index, advanced only when a fighter actually spawns.
+    movedEnemies.push(spawnTie(rng, params.enemySpeed, spawnCount))
+    spawnCount += 1
     spawnTimer = params.spawnInterval
   }
 
@@ -204,8 +220,10 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     const inPassWindow = !e.peeling && length(e.pos) > TIE_NEAR_BOUND
     if (inPassWindow && cooldown <= 0 && enemyShots.length < params.maxConcurrentShots) {
       enemyShots.push({
+        // The homing law (homeShots) drives the fireball by decaying this position
+        // toward the cockpit — it carries no straight-line velocity (sw4-2, spec §B).
         pos: [...e.pos] as Vec3,
-        vel: scale(toCockpit(e.pos), ENEMY_SHOT_SPEED),
+        vel: [0, 0, 0],
         ttl: ENEMY_SHOT_TTL,
       })
       events.push({ type: 'enemy-fire', pos: [...e.pos] as Vec3 })
@@ -220,9 +238,12 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   const enemyFireCooldown = Math.max(0, state.enemyFireCooldown - dt)
 
   // --- Player bolts vs TIEs: destroy on contact, score per kill ------------
+  // A killed TIE also spawns its exploded-fragment death cue (story sw3-8), so it
+  // breaks apart on screen instead of blinking out; older cues age and expire.
   let score = state.score
   const killedTie = new Set<number>()
   const spentBolt = new Set<number>()
+  const spawnedDying: DyingTie[] = []
   for (let ei = 0; ei < enemies.length; ei++) {
     for (let pi = 0; pi < projectiles.length; pi++) {
       if (spentBolt.has(pi)) continue
@@ -231,11 +252,19 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
         spentBolt.add(pi)
         score += TIE_SCORE
         events.push({ type: 'enemy-death', enemyType: 'tie', pos: [...enemies[ei].pos] as Vec3 })
+        spawnedDying.push({ pos: [...enemies[ei].pos] as Vec3, age: 0 })
         break
       }
     }
   }
   const standingEnemies = enemies.filter((_, i) => !killedTie.has(i))
+  // Age existing death cues and drop the finished ones, then add this frame's kills.
+  const dyingTies: DyingTie[] = [
+    ...state.dyingTies
+      .map((d) => ({ pos: d.pos, age: d.age + dt }))
+      .filter((d) => d.age <= TIE_DEATH_SECONDS),
+    ...spawnedDying,
+  ]
 
   // --- Player bolts vs enemy fireballs: shoot incoming fire down (story 8-18) -
   // Mirror the TIE loop: one bolt downs one fireball, sharing `spentBolt` so a
@@ -280,25 +309,58 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
 
   const lives = Math.max(0, state.lives - damage)
 
-  return progress({
-    ...state,
-    rng,
-    t,
-    aimX,
-    aimY,
-    score,
-    lives,
-    gameOver: lives <= 0,
-    mode: lives <= 0 ? 'gameover' : state.mode,
-    phaseKills: state.phaseKills + killedTie.size,
-    projectiles: liveBolts,
-    enemies: liveEnemies,
-    enemyShots: liveShots,
-    fireCooldown,
-    spawnTimer,
-    enemyFireCooldown,
-    events,
-  })
+  return finalizeScore(
+    state,
+    progress({
+      ...state,
+      rng,
+      t,
+      aimX,
+      aimY,
+      score,
+      lives,
+      gameOver: lives <= 0,
+      mode: lives <= 0 ? 'gameover' : state.mode,
+      phaseKills: state.phaseKills + killedTie.size,
+      projectiles: liveBolts,
+      enemies: liveEnemies,
+      dyingTies,
+      enemyShots: liveShots,
+      fireCooldown,
+      spawnTimer,
+      spawnCount,
+      enemyFireCooldown,
+      events,
+    }),
+  )
+}
+
+/**
+ * Fold the frame's SCORE change into its lives + HUD flash (sw3-6). Runs once at
+ * every active-play return, so it catches score from any phase (TIE/fireball,
+ * turrets, trench obstacles, the exhaust-port + Force bonus, the cleared-all-towers
+ * bonus) uniformly:
+ *
+ * - Awards one bonus shield per EXTRA_LIFE_THRESHOLDS entry (400,000 / 800,000)
+ *   the first time the score reaches it — a loop over prev-vs-new score, so a
+ *   single frame's delta can cross both and grant both (do NOT ×10 the thresholds).
+ * - Arms `bonusFlash` to full on any score change, else decays it toward 0 — the
+ *   ROM `byte_4B2C` "score changed, redraw HUD" flash. Clamped at 0 so it lands
+ *   exactly on rest, never negative.
+ *
+ * `prev` is the frame's input state (its `score`/`bonusFlash` are the pre-step
+ * values); `next` is the fully-stepped state whose `score` is final.
+ */
+function finalizeScore(prev: GameState, next: GameState): GameState {
+  const scoreChanged = next.score !== prev.score
+  let lives = next.lives
+  for (const threshold of EXTRA_LIFE_THRESHOLDS) {
+    if (prev.score < threshold && next.score >= threshold) lives += 1
+  }
+  const bonusFlash = scoreChanged
+    ? BONUS_FLASH_MAX
+    : Math.max(0, prev.bonusFlash - BONUS_FLASH_DECAY)
+  return { ...next, lives, bonusFlash }
 }
 
 /**
@@ -610,7 +672,23 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   // Reads `afterObstacles.projectiles` (post-obstacle bolts), not the raw
   // `projectiles` — a bolt already spent destroying a turret/square this frame
   // cannot also detonate the port.
-  const hitBolt = afterObstacles.projectiles.findIndex((b) => collides(port, b.pos, PORT_HIT_RADIUS))
+  // The hit/miss only resolves once the port has scrolled into the narrow
+  // near-cockpit approach window (sw3-15, the ROM $800 end-wall window). A bolt
+  // that merely crosses the port far up the channel — the entry-shot that used
+  // to win every run — is outside the window and cannot count.
+  const inApproachWindow = port[2] >= -PORT_APPROACH_WINDOW
+  const hitBolt = inApproachWindow
+    ? afterObstacles.projectiles.findIndex((b) =>
+        // Swept, not snapshot: test the bolt's whole path THIS frame — from the
+        // pre-advance start (`pos − vel·dt`) to its current `pos` — against the
+        // fixed 70u port sphere. `advance` (above) has already moved the bolt
+        // this tick, so a point-in-sphere check on `pos` alone tunnels: sw4-1's
+        // restored 12,000 u/s bolt steps 200u/frame, clean over the 140u sphere,
+        // hitting nothing. The segment test catches the crossing WITHOUT widening
+        // PORT_HIT_RADIUS and stays inside the same $800 approach-window gate (sw4-4).
+        sweptCollides(port, sub(b.pos, scale(b.vel ?? ZERO, dt)), b.pos, PORT_HIT_RADIUS),
+      )
+    : -1
   if (hitBolt >= 0) {
     const liveBolts = afterObstacles.projectiles.filter((_, i) => i !== hitBolt)
     // "Use the Force": a clean run — no trench shots before the killing torpedo
@@ -792,6 +870,8 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     phase,
     phaseKills: 0,
     enemies: [],
+    // A leftover death cue never crosses into the next phase (story sw3-8).
+    dyingTies: [],
     turrets: [],
     // The trench opens with its target downrange; other phases carry no port.
     exhaustPort: phase === 'trench' ? spawnPort() : null,
@@ -876,6 +956,28 @@ function advance(bolts: readonly Projectile[], dt: number): Projectile[] {
 }
 
 /**
+ * Advance enemy fireballs by the ROM homing law (`sub_A875`,
+ * docs/tie-flight-ai-model.md §6): the shot's position decays 7/8 per cabinet tick
+ * toward the cockpit at the origin, so it homes along its launch line and ALWAYS
+ * arrives — the sole space damage source (story sw4-2, spec §B). Frame-rate
+ * independent: the per-tick 7/8 is raised to `dt × TICK_HZ`, so 30/60/144 Hz stepping
+ * traces the same trajectory (`pow` composes: `pow(r, a)·pow(r, b) = pow(r, a+b)`).
+ * Ages ttl (the 64-tick life) and drops the expired. New array — never mutates the
+ * input, keeping the step pure. Velocity is unused (the shot has none); it is
+ * carried through untouched so the Projectile shape stays intact.
+ */
+function homeShots(shots: readonly Projectile[], dt: number): Projectile[] {
+  const decay = Math.pow(7 / 8, dt * TICK_HZ)
+  const out: Projectile[] = []
+  for (const s of shots) {
+    const ttl = s.ttl - dt
+    if (ttl <= 0) continue
+    out.push({ pos: scale(s.pos, decay), vel: s.vel, ttl })
+  }
+  return out
+}
+
+/**
  * Advance a TIE one step. Two phases (story 9-3 adds the second):
  *
  *  - APPROACH (story 9-2, docs/tie-flight-ai-model.md §5): the TIE thrusts along a
@@ -934,12 +1036,42 @@ function moveEnemy(e: Enemy, dt: number): Enemy {
   return { ...e, pos, vel, orient }
 }
 
-/** A fresh TIE: lateral-spread spawn far down −Z, aimed at the cockpit at the
- * wave's approach speed (gameRules.waveParams), with a seeded swoop direction so
- * each fighter banks into its own arc on the way in (story 9-2). */
-function spawnTie(rng: Rng, speed: number): Enemy {
-  const x = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
-  const y = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
+/**
+ * The authentic TIE spawn LATERAL table — the 1983 ROM's STARTING LOCATIONS
+ * (sw4-1, spec §A). Decoded from WSCPU.MAC `.SBTTL STARTING LOCATIONS`
+ * (historicalsource/star-wars @ 5355b76): the `.WB name,_,a,b` macro emits
+ * `(.WORD $7C00 ; .WORD a×$400 ; .WORD b×$400)`, so depth is always $7C00
+ * (TIE_SPAWN_DISTANCE) and the two lateral words are `a×1024` (our X) and `b×1024`
+ * (our Y). The 12 entries, "FRONT TO BACK, LEFT TO RIGHT, TOP TO BOTTOM":
+ *   1A/1B/1C groups: (0,1) (−1,0) (1,0)      → laterals {0, ±1024}
+ *   1D group:        (−2,0) (2,0) (0,2)      → the ±2048 corners
+ * Every entry displaces EXACTLY ONE lateral axis; ±2048 lives only in the D-group.
+ * A monotonic spawn counter (GameState.spawnCount) walks this in order — pure and
+ * deterministic (NOT the RNG), so a run cycles the full authentic set. */
+const ROM_LATERAL_UNIT = 0x400 // 1024 — the ×$400 STARTING-LOCATION lateral step
+const SPAWN_LATERALS: ReadonlyArray<readonly [number, number]> = [
+  [0, ROM_LATERAL_UNIT], // 1A1
+  [-ROM_LATERAL_UNIT, 0], // 1A2
+  [ROM_LATERAL_UNIT, 0], // 1A3
+  [0, ROM_LATERAL_UNIT], // 1B1
+  [-ROM_LATERAL_UNIT, 0], // 1B2
+  [ROM_LATERAL_UNIT, 0], // 1B3
+  [0, ROM_LATERAL_UNIT], // 1C1
+  [-ROM_LATERAL_UNIT, 0], // 1C2
+  [ROM_LATERAL_UNIT, 0], // 1C3
+  [-2 * ROM_LATERAL_UNIT, 0], // 1D1
+  [2 * ROM_LATERAL_UNIT, 0], // 1D2
+  [0, 2 * ROM_LATERAL_UNIT], // 1D3
+]
+
+/** A fresh TIE spawned far down −Z at the authentic depth, aimed at the cockpit at
+ * the wave's approach speed (gameRules.waveParams), with a seeded swoop direction so
+ * each fighter banks into its own arc on the way in (story 9-2). The LATERAL comes
+ * from the ROM TBG table walked in order by `spawnIndex` (sw4-1, spec §A) — no
+ * longer a continuous RNG spread — so every fighter appears on one of the authentic
+ * {0, ±1024, ±2048} starting slots. The RNG still seeds only the swoop bank. */
+function spawnTie(rng: Rng, speed: number, spawnIndex: number): Enemy {
+  const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]
   const pos: Vec3 = [x, y, -TIE_SPAWN_DISTANCE]
   const dir = toCockpit(pos)
   const bank = (nextFloat(rng) < 0.5 ? 1 : -1) * TIE_SWOOP_BIAS

@@ -42,7 +42,7 @@ import {
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
-import { dot, sub, type Vec3 } from '@arcade/shared/math3d'
+import { length, type Vec3 } from '@arcade/shared/math3d'
 
 /** Trigger held, yoke centred. */
 const FIRE: Input = { aimX: 0, aimY: 0, fire: true }
@@ -159,9 +159,19 @@ describe('Wave 1 — enemy spawning & movement', () => {
       if (s.enemyShots && s.enemyShots.length > 0) armed = true
     }
     expect(armed).toBe(true)
-    // Each enemy bolt's velocity points back toward the cockpit at the origin.
+    // Every fireball homes at the cockpit: isolate each and confirm a step pulls
+    // it inward toward the origin (the sw4-2 ROM homing law replaced the old
+    // straight-line velocity this once read off `shot.vel`). Green under either
+    // law — both move the shot toward the cockpit; homing just decays it there.
     for (const shot of s.enemyShots) {
-      expect(dot(shot.vel, sub([0, 0, 0], shot.pos))).toBeGreaterThan(0)
+      const isolated: GameState = {
+        ...wave(),
+        enemies: [],
+        enemyShots: [{ ...shot, pos: [...shot.pos] as Vec3 }],
+        spawnTimer: 1e9,
+      }
+      const homed = stepGame(isolated, NO_INPUT, 0.02).enemyShots[0]
+      expect(length(homed.pos)).toBeLessThan(length(shot.pos))
     }
   })
 })
