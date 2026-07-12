@@ -58,6 +58,9 @@ import {
   TIE_NEAR_BOUND,
   TIE_EXIT_RANGE,
   TIE_PEEL_SWEEP,
+  EXTRA_LIFE_THRESHOLDS,
+  BONUS_FLASH_MAX,
+  BONUS_FLASH_DECAY,
 } from './state'
 import type { Input } from './input'
 import type { GameEvent, SpeechLine, MusicTrack } from './events'
@@ -164,8 +167,8 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // Each phase runs its own combat, then `progress` checks the kill quota and
   // drops the run into the next phase once the wave is cleared. The trench is
   // terminal here — its gameplay is story 8-5; for now it just holds safely.
-  if (state.phase === 'surface') return progress(stepSurface(state, input, dt, common))
-  if (state.phase === 'trench') return stepTrench(state, common, dt)
+  if (state.phase === 'surface') return finalizeScore(state, progress(stepSurface(state, input, dt, common)))
+  if (state.phase === 'trench') return finalizeScore(state, stepTrench(state, common, dt))
 
   // The wave's difficulty knobs: later waves spawn TIEs sooner, send them in
   // faster, and lob fireballs more often (gameRules.waveParams; wave 1 is today's
@@ -293,26 +296,57 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
 
   const lives = Math.max(0, state.lives - damage)
 
-  return progress({
-    ...state,
-    rng,
-    t,
-    aimX,
-    aimY,
-    score,
-    lives,
-    gameOver: lives <= 0,
-    mode: lives <= 0 ? 'gameover' : state.mode,
-    phaseKills: state.phaseKills + killedTie.size,
-    projectiles: liveBolts,
-    enemies: liveEnemies,
-    dyingTies,
-    enemyShots: liveShots,
-    fireCooldown,
-    spawnTimer,
-    enemyFireCooldown,
-    events,
-  })
+  return finalizeScore(
+    state,
+    progress({
+      ...state,
+      rng,
+      t,
+      aimX,
+      aimY,
+      score,
+      lives,
+      gameOver: lives <= 0,
+      mode: lives <= 0 ? 'gameover' : state.mode,
+      phaseKills: state.phaseKills + killedTie.size,
+      projectiles: liveBolts,
+      enemies: liveEnemies,
+      dyingTies,
+      enemyShots: liveShots,
+      fireCooldown,
+      spawnTimer,
+      enemyFireCooldown,
+      events,
+    }),
+  )
+}
+
+/**
+ * Fold the frame's SCORE change into its lives + HUD flash (sw3-6). Runs once at
+ * every active-play return, so it catches score from any phase (TIE/fireball,
+ * turrets, trench obstacles, the exhaust-port + Force bonus, the cleared-all-towers
+ * bonus) uniformly:
+ *
+ * - Awards one bonus shield per EXTRA_LIFE_THRESHOLDS entry (400,000 / 800,000)
+ *   the first time the score reaches it — a loop over prev-vs-new score, so a
+ *   single frame's delta can cross both and grant both (do NOT ×10 the thresholds).
+ * - Arms `bonusFlash` to full on any score change, else decays it toward 0 — the
+ *   ROM `byte_4B2C` "score changed, redraw HUD" flash. Clamped at 0 so it lands
+ *   exactly on rest, never negative.
+ *
+ * `prev` is the frame's input state (its `score`/`bonusFlash` are the pre-step
+ * values); `next` is the fully-stepped state whose `score` is final.
+ */
+function finalizeScore(prev: GameState, next: GameState): GameState {
+  const scoreChanged = next.score !== prev.score
+  let lives = next.lives
+  for (const threshold of EXTRA_LIFE_THRESHOLDS) {
+    if (prev.score < threshold && next.score >= threshold) lives += 1
+  }
+  const bonusFlash = scoreChanged
+    ? BONUS_FLASH_MAX
+    : Math.max(0, prev.bonusFlash - BONUS_FLASH_DECAY)
+  return { ...next, lives, bonusFlash }
 }
 
 /**
