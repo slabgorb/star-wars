@@ -242,7 +242,11 @@ const WRAP_START = 13 // MAZE_ORDER index of 3WEDGE (WSGRND MAP$RPT)
 const WRAP_COUNT = 6
 
 export function mazeForWave(wave: number): SurfaceMaze {
-  const w = wave < 1 ? 1 : Math.floor(wave)
+  // Clamp to a real wave: a fractional wave floors, and anything below 1 — or a
+  // non-finite `wave` (NaN/Infinity, e.g. from a future deserialized save) — falls
+  // back to wave 1 rather than indexing out of the table and returning `undefined`
+  // through a `SurfaceMaze` return type that promises otherwise.
+  const w = Number.isFinite(wave) && wave >= 1 ? Math.floor(wave) : 1
   let idx: number
   if (w === 1) idx = MAZE_ORDER.indexOf('SQUARE') // clone intro (no ROM wave-1 ground)
   else if (w <= 20) idx = w - 2 // ROM wave numbering: wave 2 -> index 0 (BUNK)
