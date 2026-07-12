@@ -2,18 +2,38 @@
 // Re-generate with: just bake-models star-wars
 //
 // The authentic vertex geometry from the original 1983 Atari source
-// (WSOBJ.MAC): vertices from the .WP/.P/.PH tables. Where a `.WL` draw list
-// exists (hasDrawList: true), `edges` are walked from it — genuine ROM
-// connectivity, unlike src/core/models.ts, whose edges were reconstructed by
-// heuristic because the disassembly held no draw lists.
+// (WSOBJ.MAC): vertices from the .WP/.P/.PH tables. `edges` are walked from
+// the object's own ROM draw routine — genuine ROM connectivity, unlike
+// src/core/models.ts, whose edges were reconstructed by heuristic because the
+// disassembly held no draw lists.
 //
-// IMPORTANT — `hasDrawList: false` (10 of 24 objects: GND, TWR, BNK, STB,
-// WPN, WGA, WGB, WFF, WFG, PORT) does NOT mean the ROM draws these objects
-// with no connecting lines. It means this parser could not recover edge
-// connectivity for them from WSOBJ.MAC's .WL tables — they are drawn by
-// hand-coded PLOT/DRAWTO routines elsewhere in the assembly that this tool
-// does not parse. For these objects only VERTICES are authoritative; do not
-// treat edges: [] as evidence the shipped game rendered a blank object.
+// ALL 24 objects now carry real edges. Two kinds of draw routine exist and both
+// are parsed: the interpretable `.WL` point-index list, and the ten ground
+// objects' (GND, TWR, BNK, STB, WPN, WGA, WGB, WFF, WFG, PORT) direct-executing
+// `.WGD` PLOT/DRAWTO/BDRAWTO routines. An earlier version of this artifact
+// carried `hasDrawList: false` for those ten and warned that their edges were
+// unrecoverable; that was wrong — the routines are pure macro calls over the
+// same point tables, and they are read now.
+//
+// ⚠ THE ROM'S OWN OUT-OF-RANGE STROKE — WFG. WSOBJ.MAC:1844 draws `DRAWTO 6,3`,
+// but WFG shares WFF's SIX-point table (indices 0..5): point 6 does not exist.
+// On the real cabinet that reads a stale slot of the transform scratch page —
+// an out-of-bounds read in the 1983 ROM, not a transcription error.
+//
+// What proves it is the ROM's bug and not our index rebase: across the other
+// nine ground objects the lowest index used is exactly 0 and the highest is
+// exactly `vertices.length - 1`. A rebase off by one in either direction breaks
+// that immediately — too few and the minimum goes negative, too many and the
+// maximum overruns. (The indices are not dense: BNK touches only 6 of its 15
+// points. It is the ENDPOINTS that pin the rebase, not coverage.) WFF draws this
+// very same six-point table and tops out at 5; only WFG reaches 6.
+//
+// It is transcribed verbatim rather than clamped, because this artifact is the
+// audit record. So WFG's `edges` contain [5,6] and [6,3], whose index 6 is NOT a
+// valid subscript of its `vertices`.
+// ANY CONSUMER THAT WALKS `edges` INTO `vertices[i]` MUST SKIP EDGES WHOSE
+// INDEX IS >= vertices.length — exactly as it must skip degenerate self-edges
+// (below). Rendering one unfiltered strokes to `undefined`.
 //
 // NOTE — `edges` is a faithful transcription of the ROM's beam path and may
 // contain degenerate self-edges (`[n, n]`) where the draw list repeats an
@@ -75,72 +95,72 @@ export const ROM_MODELS: readonly RomModel[] = [
   {
     name: 'GND',
     scale: 120,
-    hasDrawList: false,
+    hasDrawList: true,
     vertices: [[-960, 0, -3840], [0, 960, -3840], [0, -960, -3840], [-480, 0, 6720], [0, 480, 6720], [0, -480, 6720], [-480, 0, 6000], [0, 480, 6000], [0, -480, 6000], [-600, 0, -1440], [0, 600, -1440], [0, -600, -1440], [-720, 0, -3120], [0, 720, -3120], [0, -720, -3120]],
-    edges: [],
+    edges: [[0, 2], [2, 14], [14, 11], [11, 8], [8, 5], [5, 3], [3, 6], [6, 9], [9, 12], [12, 0], [0, 1], [1, 13], [13, 10], [10, 7], [7, 4], [4, 3], [6, 8], [6, 7]],
   },
   {
     name: 'TWR',
     scale: 120,
-    hasDrawList: false,
+    hasDrawList: true,
     vertices: [[-960, 0, -3840], [0, 960, -3840], [0, -960, -3840], [-480, 0, 6720], [0, 480, 6720], [0, -480, 6720], [-480, 0, 6000], [0, 480, 6000], [0, -480, 6000], [-600, 0, -1440], [0, 600, -1440], [0, -600, -1440], [-720, 0, -3120], [0, 720, -3120], [0, -720, -3120]],
-    edges: [],
+    edges: [[0, 2], [2, 14], [14, 11], [11, 8], [8, 5], [5, 3], [3, 6], [6, 9], [9, 12], [12, 0], [0, 1], [1, 13], [13, 10], [10, 7], [7, 4], [4, 3], [6, 8], [6, 7]],
   },
   {
     name: 'BNK',
     scale: 120,
-    hasDrawList: false,
+    hasDrawList: true,
     vertices: [[-960, 0, -3840], [0, 960, -3840], [0, -960, -3840], [-480, 0, 6720], [0, 480, 6720], [0, -480, 6720], [-480, 0, 6000], [0, 480, 6000], [0, -480, 6000], [-600, 0, -1440], [0, 600, -1440], [0, -600, -1440], [-720, 0, -3120], [0, 720, -3120], [0, -720, -3120]],
-    edges: [],
+    edges: [[0, 1], [1, 13], [13, 12], [12, 0], [0, 2], [2, 14], [14, 12], [13, 14]],
   },
   {
     name: 'STB',
     scale: 120,
-    hasDrawList: false,
+    hasDrawList: true,
     vertices: [[-960, 0, -3840], [0, 960, -3840], [0, -960, -3840], [-480, 0, 6720], [0, 480, 6720], [0, -480, 6720], [-480, 0, 6000], [0, 480, 6000], [0, -480, 6000], [-600, 0, -1440], [0, 600, -1440], [0, -600, -1440], [-720, 0, -3120], [0, 720, -3120], [0, -720, -3120]],
-    edges: [],
+    edges: [[0, 2], [2, 14], [14, 11], [11, 8], [8, 6], [6, 9], [9, 12], [12, 0], [0, 1], [1, 13], [13, 10], [10, 7], [7, 6]],
   },
   {
     name: 'WPN',
     scale: 8,
-    hasDrawList: false,
+    hasDrawList: true,
     vertices: [[-256, 0, -192], [-256, 0, 192], [256, 0, 192], [256, 0, -192], [-128, 0, -64], [-128, 0, 64], [128, 0, 64], [128, 0, -64]],
-    edges: [],
+    edges: [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4]],
   },
   {
     name: 'WGA',
     scale: 8,
-    hasDrawList: false,
+    hasDrawList: true,
     vertices: [[-256, 0, 192], [256, 0, 192], [256, 0, -192], [-256, 0, -192], [-96, 96, 64], [96, 32, 64], [96, 32, -64], [-96, 96, -64], [-96, 32, -64], [-96, 32, 64], [-96, 72, 32], [-96, 56, 32], [-96, 72, -32], [-96, 56, -32]],
-    edges: [],
+    edges: [[3, 2], [2, 1], [1, 0], [0, 3], [3, 8], [8, 9], [9, 0], [9, 5], [5, 1], [2, 6], [6, 5], [5, 4], [4, 7], [7, 6], [6, 8], [8, 7], [7, 12], [12, 13], [13, 8], [13, 11], [11, 9], [9, 4], [4, 10], [10, 11], [10, 12]],
   },
   {
     name: 'WGB',
     scale: 8,
-    hasDrawList: false,
+    hasDrawList: true,
     vertices: [[-256, 0, 192], [256, 0, 192], [256, 0, -192], [-256, 0, -192], [-96, 96, 64], [96, 32, 64], [96, 32, -64], [-96, 96, -64], [-96, 32, -64], [-96, 32, 64], [-96, 72, 32], [-96, 56, 32], [-96, 72, -32], [-96, 56, -32]],
-    edges: [],
+    edges: [[3, 2], [2, 1], [1, 0], [0, 3], [3, 8], [8, 9], [9, 0], [9, 5], [5, 1], [2, 6], [6, 5], [5, 4], [4, 7], [7, 6], [6, 8], [8, 7], [7, 12], [12, 13], [13, 8], [13, 11], [11, 9], [9, 4], [4, 10], [10, 11], [10, 12]],
   },
   {
     name: 'WFF',
     scale: 8,
-    hasDrawList: false,
+    hasDrawList: true,
     vertices: [[-256, 0, 0], [-256, 512, 0], [0, 0, -256], [0, 512, -256], [0, 0, 256], [0, 512, 256]],
-    edges: [],
+    edges: [[1, 0], [0, 2], [2, 3], [3, 1], [1, 5], [5, 4], [4, 0]],
   },
   {
     name: 'WFG',
     scale: 8,
-    hasDrawList: false,
+    hasDrawList: true,
     vertices: [[-256, 0, 0], [-256, 512, 0], [0, 0, -256], [0, 512, -256], [0, 0, 256], [0, 512, 256]],
-    edges: [],
+    edges: [[1, 0], [0, 2], [2, 3], [3, 1], [1, 5], [5, 6], [6, 3], [5, 4], [4, 0]],
   },
   {
     name: 'PORT',
     scale: 8,
-    hasDrawList: false,
+    hasDrawList: true,
     vertices: [[96, 96, 0], [96, -96, 0], [-96, 96, 0], [-96, -96, 0], [160, 160, 0], [160, -160, 0], [-160, 160, 0], [-160, -160, 0], [256, 256, 0], [256, -256, 0], [-256, 256, 0], [-256, -256, 0]],
-    edges: [],
+    edges: [[5, 9], [9, 8], [8, 4], [6, 10], [10, 11], [11, 7], [7, 6], [6, 2], [6, 4], [4, 0], [4, 5], [5, 1], [5, 7], [7, 3], [3, 2], [2, 0], [0, 1], [1, 3]],
   },
   {
     name: 'TW1',
