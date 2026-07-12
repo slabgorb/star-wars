@@ -115,16 +115,16 @@ describe('pairModels', () => {
     expect(pairs.find((p) => p.romName === 'YW')).toBeUndefined()
   })
 
-  it('declines to claim edges for every hasDrawList:false object that is mapped', () => {
-    // STB/BNK/PORT are `.WGD`-style ground objects — direct-executing
-    // PLOT/DRAWTO assembly, not an interpretable point list. Vertices are
-    // authoritative; edges are not ours to assert, for ANY of them, not just
-    // PORT.
-    const mappedVerticesOnly = pairs.filter((p) => p.rom && !p.rom.hasDrawList && ROM_TO_PORT[p.romName])
-    expect(mappedVerticesOnly.map((p) => p.romName).sort()).toEqual(['BNK', 'PORT', 'STB'])
-    for (const p of mappedVerticesOnly) {
-      expect(p.onlyInRom, p.romName).toEqual([])
-      expect(p.onlyInPort, p.romName).toEqual([])
+  // Was: "declines to claim edges for every hasDrawList:false object that is
+  // mapped" — pinning STB/BNK/PORT as vertices-only. sw5-1 recovers their
+  // `.WGD` draw routines, so that set is now EMPTY and the old assertion has
+  // become vacuous. The intent survives, inverted: every object we compare
+  // against the port now has real ROM connectivity behind it.
+  it('every mapped ROM object now has a recovered draw list — none is vertices-only', () => {
+    const mapped = pairs.filter((p) => p.rom && ROM_TO_PORT[p.romName])
+    expect(mapped.length).toBe(8)
+    for (const p of mapped) {
+      expect(p.rom!.hasDrawList, `${p.romName} must have ROM edges now`).toBe(true)
     }
   })
 
@@ -177,6 +177,81 @@ describe('the punch-list (regression pin)', () => {
 
   it('RTH -> Darth Vader TIE', () => {
     expect(punchList('RTH')).toEqual({ onlyInRom: 12, onlyInPort: 44 })
+  })
+
+  // sw5-1 takes the pin from 5 compared pairs to 8, gaining the three suspect
+  // ground objects. But it does NOT yet yield an edge drift count for them —
+  // and pretending otherwise would be the exact dishonesty this tool exists to
+  // prevent. Their PORT-side VERTICES are still wrong (the ROM exhaust port is
+  // 12 points in three concentric squares; ours is an 8-point octagon), so
+  // `pairOne`'s vertex-mismatch guard correctly refuses to diff edges: indices
+  // into two different vertex arrays cannot be compared. A `{0, 0}` here would
+  // read as "no drift — all good" when the truth is "not comparable yet".
+  //
+  // sw5-4 (PORT) and sw5-5 (STB/BNK) fix the vertices. THEY are what turn these
+  // three into real edge diffs; this pin must then be updated to the drift
+  // counts, and its failure at that moment is the point.
+  const verdict = (romName: string) => verdictFor(pairs.find((p) => p.romName === romName)!)
+
+  it.each(['PORT', 'STB', 'BNK'])(
+    '%s: now has ROM edges, but the diff stays blocked on the port\'s wrong vertices',
+    (romName) => {
+      const p = pairs.find((pair) => pair.romName === romName)!
+      expect(p.rom!.hasDrawList, 'sw5-1 recovered its .WGD draw list').toBe(true)
+      expect(p.rom!.edges.length, 'and that draw list is not empty').toBeGreaterThan(0)
+
+      expect(p.verticesMatch, 'but the port vertices still disagree with the ROM').toBe(false)
+      expect(verdict(romName).text).toBe('vertices differ — edge diff not meaningful')
+      expect(verdict(romName).text).not.toBe('✓ edges match')
+      expect(punchList(romName)).toEqual({ onlyInRom: 0, onlyInPort: 0 })
+    },
+  )
+
+  it('pins 8 compared pairs, not 5', () => {
+    const compared = pairs.filter((p) => p.rom?.hasDrawList && p.port)
+    expect(compared.map((p) => p.romName).sort()).toEqual(
+      ['BNK', 'PORT', 'RTH', 'STB', 'TI1', 'TI2', 'TI3', 'TIE'],
+    )
+  })
+})
+
+// The ROM's own out-of-bounds stroke. WSOBJ.MAC:1844 has WFG `DRAWTO 6,3` into
+// a SIX-point table (0..5) — the 1983 code reads a stale slot of the transform
+// scratch page. The bake transcribes it faithfully (it is the audit record), so
+// the artifact now contains an edge index that is not a valid vertex. Anything
+// that walks edges into `vertices[i]` must therefore guard, exactly as it
+// already guards degenerate self-edges.
+describe('the ROM\'s out-of-range edge (WFG)', () => {
+  const outOfRange = (m: RomModel) =>
+    m.edges.filter(([a, b]) => [a, b].some((i) => i < 0 || i >= m.vertices.length))
+
+  it('is confined to WFG — any other offender is an off-by-one, not a ROM quirk', () => {
+    const offenders = ROM_MODELS.filter((m) => outOfRange(m).length > 0).map((m) => m.name)
+    expect(offenders).toEqual(['WFG'])
+    expect(outOfRange(ROM_MODELS.find((m) => m.name === 'WFG')!)).toEqual([[5, 6], [6, 3]])
+  })
+
+  it('never touches a MAPPED pair, so the punch-list diff can never be poisoned by one', () => {
+    for (const m of ROM_MODELS) {
+      if (ROM_TO_PORT[m.name]) expect(outOfRange(m), m.name).toEqual([])
+    }
+  })
+
+  it('pairOne never reports an out-of-range ROM edge as drift', () => {
+    // A fixture, not real data — WFG is unmapped today. But if a future story
+    // maps an object that has one, an edge indexing a vertex that does not
+    // exist is not connectivity and must never surface as "the ROM draws an
+    // edge you are missing". Same class of lie as a degenerate self-edge.
+    const rom: RomModel = {
+      name: 'X', scale: 1, hasDrawList: true,
+      vertices: [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
+      edges: [[0, 1], [1, 5]], // 5 does not exist
+    }
+    const port: Model3D = { name: 'Y', vertices: [[0, 0, 0], [1, 1, 1], [2, 2, 2]], edges: [[0, 1]] }
+    const p = pairOne(rom, 'Y', port)
+    expect(p.verticesMatch).toBe(true)
+    expect(p.onlyInRom).toEqual([])
+    expect(p.onlyInPort).toEqual([])
   })
 })
 
