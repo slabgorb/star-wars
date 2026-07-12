@@ -52,15 +52,20 @@ const playerBolt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, -1], ttl: PROJ
 const fireball = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, 1], ttl: ENEMY_SHOT_TTL })
 const tie = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
 
-/** A playing trench state with the exhaust port under a live player bolt.
- *  Adapted from force-bonus.test.ts; `trenchShotsFired` selects the payoff
- *  branch (0 = clean "Use the Force"; ≥2 = base bonus only). */
+/** A port kill lands only inside the narrow approach window (sw3-15: the ROM
+ *  `$800` window near the end wall). `spawnPort` seeds the port far downrange at
+ *  −EXHAUST_PORT_DISTANCE (z = −2,400), which is OUTSIDE that window, so — exactly
+ *  as force-bonus.test.ts:28-36 does — we re-seat the port near the cockpit and
+ *  put the bolt on it. (This re-seat escaped sw3-15 / #68, which fixed its other
+ *  port-kill siblings but missed this transcription suite.) `trenchShotsFired`
+ *  selects the payoff branch (0 = clean "Use the Force"; ≥2 = base bonus only). */
+const IN_WINDOW_PORT: Vec3 = [0, 0, -300]
 function portKill(state: GameState): GameState {
-  const port = state.exhaustPort!.pos
   return {
     ...state,
     mode: 'playing',
-    projectiles: [{ pos: [port[0], port[1], port[2]], vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
+    exhaustPort: { pos: [...IN_WINDOW_PORT] as Vec3 },
+    projectiles: [{ pos: [...IN_WINDOW_PORT] as Vec3, vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
   }
 }
 
