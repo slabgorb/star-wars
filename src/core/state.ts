@@ -12,6 +12,7 @@
 import type { Vec3, Mat4 } from '@arcade/shared/math3d'
 import type { GameEvent } from './events'
 import { createRng, type Rng } from '@arcade/shared/rng'
+import { mazeForWave } from './surfaceMazes'
 
 /** The three phases of an attack run, in order. */
 export type Phase = 'space' | 'surface' | 'trench'
@@ -95,8 +96,10 @@ export interface Turret {
    * pre-sw3-11 fixtures and saves stay valid. Bunkers are the squat red
    * SURFACE_BUNKER shorties: shootable, but quota-NEUTRAL (the ROM's BUNKER
    * maze macro never increments `.TWRS`, so they never count toward the
-   * towersForWave quota or the cleared-all bonus). */
-  kind?: 'tower' | 'bunker'
+   * towersForWave quota or the cleared-all bonus). Bishops (sw4-3, the ROM
+   * BISHOP maze macro) DO count toward the quota, like towers — only bunkers
+   * are neutral. */
+  kind?: 'tower' | 'bunker' | 'bishop'
 }
 
 /** A trench wall/channel entity: turrets and squares are shootable for score;
@@ -195,10 +198,6 @@ export const SPAWN_DISTANCE = 1200
  * fresh fighter read as a screen-filling wall and the whole wave a turkey shoot.
  * At 31744 a spawn is a distant speck that swoops in and grows dramatically. */
 export const TIE_SPAWN_DISTANCE = 0x7c00 // 31744 — WSCPU STARTING LOCATIONS depth word
-/** Half-width of the lateral box SURFACE TURRETS spawn within (spawnTurret). TIEs
- * no longer use this — since sw4-1 they spawn on the authentic TBG lateral table
- * {0, ±1024, ±2048} (see SPAWN_LATERALS in sim.ts), not a continuous ±spread. */
-export const SPAWN_SPREAD = 350
 /** TIE approach speed (units/second). PROVISIONAL (sw4-1, spec §A): the cabinet
  * advances the range by $200/tick, but that per-tick delta is NOT pinned to a
  * source-true units/second figure (docs/tie-flight-ai-model.md porting caveat).
@@ -332,10 +331,11 @@ export const SKIM_ALTITUDE = 120
 export const MIN_SKIM_ALTITUDE = 40
 /** Points awarded for destroying a laser turret. */
 export const TURRET_SCORE = 200
-/** Seconds between turret spawns onto the surface ahead. */
+/** Legacy surface cadence constant — since sw4-3 the surface lays the wave's
+ * fixed WSGRND maze instead of spawning on a timer, so `stepSurface` no longer
+ * decrements a turret spawn timer. Retained as the surface `spawnTimer` seed and
+ * as a convenient step-size unit in the surface suites. */
 export const TURRET_SPAWN_INTERVAL = 1.5
-/** Maximum turrets on the surface at once. */
-export const MAX_TURRETS = 4
 /** Hit sphere around a turret for player bolts. */
 export const TURRET_HIT_RADIUS = 200
 /** Elevation of a tower's gun — the white cap crowning the column (sw3-11,
@@ -358,11 +358,6 @@ export const TOWER_FIRE_GRACE = 0.75
 export const ALTITUDE_RATE = 200
 /** How fast the surface scrolls turrets toward the cockpit (units/second). */
 export const TURRET_SCROLL_SPEED = 600
-/** Chance a surface spawn is a red ground BUNKER instead of a tower (sw3-11).
- * The ROM places both from fixed per-wave mazes (WSGRND.MAC: TDIFF is ~8/28
- * bunkers, TCLUSTR ~10/26 — roughly a third); the clone approximates that mix
- * with a seeded-RNG draw until an authentic-maze story lands. */
-export const BUNKER_SPAWN_CHANCE = 0.3
 
 // --- Wave 3 trench constants ------------------------------------------------
 //
@@ -427,32 +422,19 @@ export const PORT_AHEAD_RANGE = 1800 // PROVISIONAL(findings ## HUD & framing)
 export const SPACE_WAVE_QUOTA = 6
 
 /**
- * Towers to destroy to clear the surface phase, scaled by wave — the authentic
- * ROM `byte_98CB` table (ROM:98CB), indexed by the mission counter `byte_4B13`
- * (= this clone's 1-based `wave`; the ROM's index-0 `0` is an unused sentinel,
- * so wave 1 reads index 1). Recovered from
- * reference/disasm/StarWars_annotated.lst — `sub_A1CE` (ROM:A1EF) reads it into
- * `byte_4B1A` ("towers left to shoot") at surface init. Values are decimal:
+ * Towers to destroy to clear the surface phase of the given (1-based) wave —
+ * the count of TOWER+BISHOP entries in that wave's authored WSGRND maze
+ * (`mazeForWave(wave).towerCount`, the ROM `.TWRS`/TTWRS value; bunkers are
+ * quota-neutral).
  *
- *   wave:   1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18+
- *   towers:22 22 32 32 32 33 33 39 40 32 32 36 36 36 37 37 49 50
- *
- * The cabinet clamps to the table tail (`byte_98DD` = 50) for deep missions and
- * PRNG-re-rolls the index past mission 18; the pure core cannot carry that
- * randomness, so `towersForWave` clamps deterministically to 50 (session
- * deviation). Replaced the flat 4-kill quota (sw3-3).
+ * sw4-3 RECONCILE (user-ratified): this SUPERSEDES sw3-3's disasm `byte_98CB`
+ * stream quota (22,22,32,…,50). The surface is a finite single-pass maze — the
+ * original Atari source (`WSGRND.MAC` `IGRND` seeds "# OF TOWERS LEFT" straight
+ * from `.TWRS`) outranks the disasm per CLAUDE.md, and a maze of N towers can
+ * only be cleared by killing its N towers (a larger target would soft-lock).
  */
-const SURFACE_TOWERS_BY_WAVE: readonly number[] = [
-  0, 22, 22, 32, 32, 32, 33, 33, 39, 40, 32, 32, 36, 36, 36, 37, 37, 49, 50,
-]
-
-/** Towers the player must clear on the surface phase of the given (1-based) wave.
- * A pure lookup into the ROM `byte_98CB` table above: clamped so wave ≤ 1 reads
- * the first playable count (22, never the index-0 sentinel) and every wave past
- * the table tail holds at 50. */
 export function towersForWave(wave: number): number {
-  const i = Math.max(1, Math.min(wave, SURFACE_TOWERS_BY_WAVE.length - 1))
-  return SURFACE_TOWERS_BY_WAVE[i]
+  return mazeForWave(wave).towerCount
 }
 
 /** Score for clearing every tower in the surface phase — the ROM `byte_9862`
@@ -489,6 +471,11 @@ export interface GameState {
    * scrolls the turrets — so the grid and turrets rush past together; read `mod
    * GRID_Z` by the surfaceGrid generator and reset to 0 on every phase entry. */
   surfaceScrollZ: number
+  /** Whether this surface run's authored WSGRND maze field has been laid into
+   * `turrets` yet (sw4-3). `enterPhase` resets it to false per wave; the first
+   * `stepSurface` frame lays `mazeForWave(wave)` into `turrets` — but ONLY if no
+   * turrets were hand-placed, so pre-placed fixtures and saves are respected. */
+  surfaceMazeLaid: boolean
   /** How far the walled trench channel has scrolled toward the cockpit (Wave 3,
    * story 11-6). Advanced by TRENCH_SCROLL_SPEED — the SAME rate that scrolls the
    * exhaust port up the channel — so the corridor and the port rush past together;
@@ -597,6 +584,7 @@ export function initialState(seed = 1983): GameState {
     bonusFlash: 0,
     altitude: SKIM_ALTITUDE,
     surfaceScrollZ: 0,
+    surfaceMazeLaid: false,
     trenchScrollZ: 0,
     trenchView: [0, 0, 0],
     phaseKills: 0,

@@ -12,6 +12,7 @@
 // rule helpers — there is no ad-hoc geometry in here.
 
 import { initialState } from './state'
+import { mazeForWave } from './surfaceMazes'
 import type { GameState, Projectile, Enemy, Turret, Phase, TrenchObstacle, DyingTie } from './state'
 import {
   PROJECTILE_TTL,
@@ -20,7 +21,6 @@ import {
   SPAWN_INTERVAL,
   SPAWN_DISTANCE,
   TIE_SPAWN_DISTANCE,
-  SPAWN_SPREAD,
   ENEMY_SHOT_SPEED,
   ENEMY_SHOT_TTL,
   ENEMY_SHOT_HIT_RADIUS,
@@ -39,12 +39,10 @@ import {
   ALTITUDE_RATE,
   TURRET_SPAWN_INTERVAL,
   TURRET_SCROLL_SPEED,
-  MAX_TURRETS,
   TURRET_SCORE,
   TURRET_HIT_RADIUS,
   TOWER_HEIGHT,
   TOWER_FIRE_GRACE,
-  BUNKER_SPAWN_CHANCE,
   SPACE_WAVE_QUOTA,
   towersForWave,
   SURFACE_CLEAR_BONUS,
@@ -445,19 +443,25 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     events.push({ type: 'terrain-crash' }) // its own cue, not a player-death
   }
 
-  // --- Ground objects: scroll toward the cockpit with the surface, spawn ----
-  const turrets = state.turrets
+  // --- Ground objects: lay the authored WSGRND maze once, then scroll it in --
+  // sw4-3: the surface is the wave's fixed, hand-authored WSGRND tower maze —
+  // NOT a random spawner. Lay the whole field on the first surface frame (unless
+  // turrets were hand-placed, so pre-seated fixtures/saves are respected), then
+  // the existing scroll/cull machinery translates the field toward the cockpit
+  // and drops each object as it sweeps past (a finite, single-pass field).
+  let surfaceMazeLaid = state.surfaceMazeLaid
+  let field = state.turrets
+  if (!surfaceMazeLaid) {
+    if (field.length === 0) field = mazeField(state.wave)
+    surfaceMazeLaid = true
+  }
+  const turrets = field
     .map((turret): Turret => {
       const pos: Vec3 = [turret.pos[0], turret.pos[1], turret.pos[2] + TURRET_SCROLL_SPEED * dt]
-      // age toward fire grace; keep the kind (bunker/tower) riding along
+      // age toward fire grace; keep the kind (bunker/tower/bishop) riding along
       return { ...turret, pos, age: (turret.age ?? 0) + dt }
     })
     .filter((turret) => turret.pos[2] < 0) // drop those that have scrolled past
-  let spawnTimer = state.spawnTimer - dt
-  if (spawnTimer <= 0 && turrets.length < MAX_TURRETS) {
-    turrets.push(spawnTurret(rng))
-    spawnTimer = TURRET_SPAWN_INTERVAL
-  }
 
   // --- A tower lobs a fireball from its white cap on the fire cadence -------
   // Only towers past their fire grace may shoot (Story sw2-3): a freshly-risen
@@ -486,8 +490,8 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
   // --- Player bolts vs ground objects: destroy on contact, score per kill --
   // Towers advance phaseKills toward the towersForWave quota; BUNKERS DO NOT
   // (sw3-11): the ROM's BUNKER maze macro never increments `.TWRS`, so bunkers
-  // are shootable but quota-neutral — a bunker kill can never eat into the
-  // byte_98CB count or trigger the cleared-all bonus.
+  // are shootable but quota-neutral — a bunker kill can never eat into the maze's
+  // tower count (`.TWRS`/TTWRS) or trigger the cleared-all bonus.
   let score = state.score
   let towerKills = 0
   const killed = new Set<number>()
@@ -532,6 +536,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     // The ground grid rides the SAME flow as the turrets (story 11-5) — both
     // advance by TURRET_SCROLL_SPEED·dt — so they rush past the cockpit together.
     surfaceScrollZ: state.surfaceScrollZ + TURRET_SCROLL_SPEED * dt,
+    surfaceMazeLaid,
     gameOver: lives <= 0,
     mode: lives <= 0 ? 'gameover' : state.mode,
     phaseKills: state.phaseKills + towerKills, // towers only — bunkers are quota-neutral
@@ -539,7 +544,9 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     turrets: standingTurrets,
     enemyShots: liveShots,
     fireCooldown,
-    spawnTimer,
+    // The surface no longer runs a turret spawn timer (sw4-3 replaced the random
+    // spawner with the fixed maze field); pass it through untouched.
+    spawnTimer: state.spawnTimer,
     enemyFireCooldown,
     events,
   }
@@ -764,20 +771,49 @@ const NEXT_PHASE: Record<Phase, Phase | null> = {
   trench: null,
 }
 
-/** Kills that clear a phase this frame. Space is a flat quota; the SURFACE is
- * wave-scaled — the authentic ROM `byte_98CB` tower count (sw3-3), replacing the
- * old flat 4-kill quota; the trench never clears by KILL count (the exhaust-port
- * hit in stepTrench ends it), so its quota is unreachable here. Exhaustive over
- * Phase so a new phase can't silently default to a wrong quota. */
-function phaseQuota(s: GameState): number {
+/** Has this phase been cleared? Space is a flat KILL quota. The SURFACE is a
+ * scroll-COMPLETION approach (sw4-3): its authored WSGRND maze is a FINITE,
+ * single-pass field, so the run drops into the trench once that field has swept
+ * fully past the cockpit — killing every tower only clears it EARLY (and banks the
+ * 50,000 bonus, see `progress`). A kill-count-only gate would SOFT-LOCK the run:
+ * towers sit out to x = ±$8000 and a single missed one would make the quota
+ * permanently unreachable over an empty floor. The trench never clears by count
+ * (the exhaust-port hit in stepTrench ends it). Exhaustive over Phase so a new
+ * phase can't silently default to a wrong condition. */
+function phaseCleared(s: GameState): boolean {
   switch (s.phase) {
     case 'space':
-      return SPACE_WAVE_QUOTA
+      return s.phaseKills >= SPACE_WAVE_QUOTA
     case 'surface':
-      return towersForWave(s.wave)
+      return allTowersKilled(s) || s.surfaceScrollZ >= surfaceFieldDepth(s.wave)
     case 'trench':
-      return Infinity
+      return false
   }
+}
+
+/** Every tower in the wave's maze is down — the authentic "cleared all towers"
+ * condition (WSGRND `sub_973A` fires the bonus on the kill that drives "# OF
+ * TOWERS LEFT" to 0). `towerCount > 0` matters: the bunkers-only wave (BUNK) has
+ * NO towers, so it can never "clear them all" — without this guard its 0-quota is
+ * met at entry, insta-clearing the surface and gifting a free 50,000. Bunkers are
+ * quota-neutral, so `phaseKills` only ever counts towers/bishops. */
+function allTowersKilled(s: GameState): boolean {
+  const towers = towersForWave(s.wave)
+  return towers > 0 && s.phaseKills >= towers
+}
+
+/** How far the surface must scroll for the wave's whole authored field to pass the
+ * cockpit: the deepest entry's authored depth, plus the SPAWN_DISTANCE lead-in
+ * `mazeField` places it behind. `surfaceScrollZ` accumulates at exactly the rate
+ * the turrets advance (TURRET_SCROLL_SPEED·dt), so reaching this distance means the
+ * last object has crossed z=0 and been culled — the field is spent. Derived from the
+ * maze data, not from the live `turrets` array, so shooting objects down cannot make
+ * the field "end" early. */
+function surfaceFieldDepth(wave: number): number {
+  const entries = mazeForWave(wave).entries
+  let deepest = 0
+  for (const e of entries) if (e.y > deepest) deepest = e.y
+  return deepest + SPAWN_DISTANCE
 }
 
 /** The looping music track a phase opens with (sw3-5). The space wave swaps to the
@@ -830,7 +866,7 @@ const TRENCH_VOICE_CUES: ReadonlyArray<{
  */
 function progress(s: GameState): GameState {
   if (s.gameOver) return s
-  if (s.phaseKills < phaseQuota(s)) return s
+  if (!phaseCleared(s)) return s
   const next = NEXT_PHASE[s.phase]
   if (next === null) return s
   // The phase cleared — carry the frame's events forward, announce the warp, and
@@ -846,8 +882,11 @@ function progress(s: GameState): GameState {
   // carries its 'trench' music cue.
   events.push({ type: 'music', track: musicTrackFor(next, advanced.wave) })
   // Clearing every tower on the surface banks the 50,000 "cleared all towers"
-  // bonus and cues its banner — ONCE, on the drop into the trench (sw3-3).
-  if (s.phase === 'surface') {
+  // bonus and cues its banner — ONCE, on the drop into the trench (sw3-3). Gated on
+  // the towers ACTUALLY being killed (sw4-3): the surface can now also be left by
+  // simply outliving the field (scroll-completion), and flying over towers you never
+  // shot must bank nothing — nor may the 0-tower bunker wave gift the bonus.
+  if (s.phase === 'surface' && allTowersKilled(s)) {
     events.push({ type: 'tower-bonus', amount: SURFACE_CLEAR_BONUS })
     return { ...advanced, score: advanced.score + SURFACE_CLEAR_BONUS, events }
   }
@@ -899,6 +938,10 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     // Reset the surface scroll on every phase entry so a fresh (or jumped) surface
     // always opens with the ground grid anchored at the cockpit (story 11-5).
     surfaceScrollZ: 0,
+    // A fresh surface re-lays its authored WSGRND maze (sw4-3): the next
+    // stepSurface frame fills `turrets` from `mazeForWave(wave)`. Reset here so
+    // each wave's surface (and a dev phase-jump) lays its own field.
+    surfaceMazeLaid: false,
     // Likewise the trench channel scroll, so a fresh (or jumped) trench always
     // opens with the corridor anchored at the cockpit (story 11-6).
     trenchScrollZ: 0,
@@ -937,14 +980,20 @@ function clearRun(s: GameState): GameState {
   }
 }
 
-/** A fresh ground object: lateral-spread spawn far down −Z, on the floor.
- *  The seeded RNG decides tower vs bunker (sw3-11) — the ROM's fixed per-wave
- *  mazes mix both at roughly a 1-in-3 bunker rate (see BUNKER_SPAWN_CHANCE). */
-function spawnTurret(rng: Rng): Turret {
-  const x = (nextFloat(rng) * 2 - 1) * SPAWN_SPREAD
-  const pos: Vec3 = [x, 0, -SPAWN_DISTANCE]
-  const kind = nextFloat(rng) < BUNKER_SPAWN_CHANCE ? 'bunker' : 'tower'
-  return { pos, age: 0, kind } // fresh — a tower holds fire for TOWER_FIRE_GRACE
+/** The wave's authored WSGRND maze as a fixed field of ground objects (sw4-3),
+ *  replacing the old random spawner. Each entry sits at its authored lateral X
+ *  on the floor (y=0); its authored forward depth Y maps UNSCALED to −Z, shifted
+ *  by SPAWN_DISTANCE so the nearest row enters from the same spawn horizon the
+ *  turrets always rose at. The existing surface scroll then translates the whole
+ *  field toward the cockpit, preserving the maze's relative depth spacing. All
+ *  objects rise together (age 0), so a fresh tower still holds fire for
+ *  TOWER_FIRE_GRACE. */
+function mazeField(wave: number): Turret[] {
+  return mazeForWave(wave).entries.map((e) => ({
+    pos: [e.x, 0, -(e.y + SPAWN_DISTANCE)] as Vec3,
+    age: 0,
+    kind: e.kind,
+  }))
 }
 
 /** Move bolts by their velocity, age them, and drop the expired. New array. */

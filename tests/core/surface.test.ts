@@ -42,12 +42,12 @@ import {
   SKIM_ALTITUDE,
   MIN_SKIM_ALTITUDE,
   TURRET_SPAWN_INTERVAL,
-  MAX_TURRETS,
   TURRET_SCORE,
   PROJECTILE_TTL,
   type GameState,
   type Projectile,
 } from '../../src/core/state'
+import { mazeForWave } from '../../src/core/surfaceMazes'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
 import { dot, sub, type Vec3 } from '@arcade/shared/math3d'
@@ -140,7 +140,9 @@ describe('Wave 2 — laser turrets', () => {
     expect(s.enemies).toHaveLength(0)
   })
 
-  it('turrets rise on a timed schedule', () => {
+  it('rises the authored maze field once the surface run begins (sw4-3: laid, not timed)', () => {
+    // Post-sw4-3 the surface no longer spawns on a timer — the wave's fixed maze
+    // is laid on the first surface frame. A stepped run shows ground objects present.
     let s = surface()
     for (let i = 0; i < 16; i++) s = stepGame(s, NO_INPUT, (TURRET_SPAWN_INTERVAL * 2) / 16)
     expect((s.turrets ?? []).length).toBeGreaterThan(0)
@@ -159,11 +161,16 @@ describe('Wave 2 — laser turrets', () => {
     }
   })
 
-  it('never puts more than MAX_TURRETS on the surface at once', () => {
+  it('keeps the surface within the wave maze — a finite field, not an unbounded stream', () => {
+    // sw4-3 replaced the capped random spawner with the wave's fixed authored
+    // WSGRND maze: the whole field is present and scrolls past ONCE, so the
+    // ceiling is the maze's own entry count, not the old MAX_TURRETS on-screen
+    // cap. (See surface-maze-field.test.ts for the authored-placement contract.)
     let s = surface()
+    const cap = mazeForWave(s.wave).entries.length
     for (let i = 0; i < 120; i++) {
       s = stepGame(s, NO_INPUT, TURRET_SPAWN_INTERVAL / 2)
-      expect((s.turrets ?? []).length).toBeLessThanOrEqual(MAX_TURRETS)
+      expect((s.turrets ?? []).length).toBeLessThanOrEqual(cap)
     }
   })
 

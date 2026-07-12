@@ -1,7 +1,19 @@
 // tests/core/surface-tower-quota.test.ts
 //
-// Story sw3-3 — Surface phase: wave-scaled towers-remaining (ROM byte_98CB) +
-// a 50,000 cleared-all-towers bonus, REPLACING the flat 4-kill quota. RED phase.
+// Story sw3-3 — Surface phase: wave-scaled towers-remaining + a 50,000
+// cleared-all-towers bonus, REPLACING the flat 4-kill quota. RED phase.
+//
+// *** sw4-3 RECONCILE (ratified in-story) ***
+// The wave-scaled tower count NO LONGER comes from the disasm's byte_98CB stream
+// table (22,22,32,…,50). sw4-3 restores the original Atari source (WSGRND.MAC):
+// the surface is a fixed, finite, single-pass maze whose ground routine seeds
+// "# OF TOWERS LEFT" straight from the per-maze .TWRS count — so the clear quota
+// is the PLACED MAZE'S own tower count (`mazeForWave(wave).towerCount`), which a
+// larger byte_98CB target would soft-lock. The original source outranks the
+// disasm (star-wars/CLAUDE.md); see the sw4-3 session Design Deviations. The
+// byte_98CB value pins below are superseded by the maze-derived contract; the
+// clear-mechanic and 50,000-bonus coverage is unchanged (it reads the quota
+// opaquely via `towersForWave`).
 //
 // These tests define the contract the GREEN phase implements; they are EXPECTED
 // TO FAIL until then. They reference symbols GREEN will add
@@ -68,59 +80,23 @@ function crossFrom(s: GameState, from: string, input: Input = NO_INPUT): GameSta
   return s
 }
 
-// The ROM byte_98CB table, indexed by the clone's 1-based wave (index 0 sentinel
-// dropped). This is the authored contract, transcribed straight from the disasm.
-const ROM_TOWERS_BY_WAVE: ReadonlyArray<[wave: number, towers: number]> = [
-  [1, 22],
-  [2, 22],
-  [3, 32],
-  [4, 32],
-  [5, 32],
-  [6, 33],
-  [7, 33],
-  [8, 39],
-  [9, 40],
-  [10, 32],
-  [11, 32],
-  [12, 36],
-  [13, 36],
-  [14, 36],
-  [15, 37],
-  [16, 37],
-  [17, 49],
-  [18, 50],
-]
+// --- sw4-3 RECONCILE: towersForWave is the placed maze's tower count ---------
 
-// --- AC1: wave-scaled towers-remaining (ROM byte_98CB) -----------------------
-
-describe('sw3-3 — towersForWave pins the ROM byte_98CB table', () => {
-  it.each(ROM_TOWERS_BY_WAVE)('wave %i requires %i towers', (wave, towers) => {
-    expect(towersForWave(wave)).toBe(towers)
-  })
-
-  it("opens 22 / 22 / 32 — the title's byte_98CB sequence for waves 1-3", () => {
-    expect([towersForWave(1), towersForWave(2), towersForWave(3)]).toEqual([22, 22, 32])
-  })
-
-  it('clamps to the table tail (50) for missions past the end of the table', () => {
-    // ROM re-rolls byte_4B13 past index 18; the clone clamps to byte_98DD = 50.
-    expect(towersForWave(18)).toBe(50)
-    expect(towersForWave(19)).toBe(50)
-    expect(towersForWave(25)).toBe(50)
-    expect(towersForWave(999)).toBe(50)
-  })
-
-  it('never yields 0 towers for any playable wave (the ROM index-0 sentinel is not exposed)', () => {
-    // A 0 would insta-clear the surface — the sentinel byte_98CB[0] must stay hidden.
-    for (let wave = 1; wave <= 60; wave++) {
-      expect(towersForWave(wave)).toBeGreaterThanOrEqual(22)
-      expect(towersForWave(wave)).toBeLessThanOrEqual(50)
-    }
+describe('sw4-3 — towersForWave is the placed maze tower count (supersedes byte_98CB)', () => {
+  // Concrete WSGRND TTWRS values the clear tests below rely on (the full
+  // wave→maze table is pinned once in surface-maze-field.test.ts). NOT
+  // `=== mazeForWave(w).towerCount`, which is a tautology (towersForWave IS
+  // that expression) and can't catch a wrong wave→maze mapping.
+  it('is the maze TTWRS: wave 1 (SQUARE)=16, wave 2 (BUNK)=0, wave 9 (SYMTRC)=21, wave 16 (3DIFF)=24', () => {
+    expect(towersForWave(1)).toBe(16)
+    expect(towersForWave(2)).toBe(0)
+    expect(towersForWave(9)).toBe(21)
+    expect(towersForWave(16)).toBe(24)
   })
 
   it('is a pure function of the wave — same wave, same count (no RNG, no time)', () => {
     expect(towersForWave(9)).toBe(towersForWave(9))
-    expect(towersForWave(9)).toBe(40)
+    expect(towersForWave(9)).toBe(21)
   })
 })
 
@@ -135,11 +111,11 @@ describe('sw3-3 — SURFACE_CLEAR_BONUS is the ROM byte_9862 value', () => {
 // --- AC3: the surface clears at the wave-scaled count, not the flat 4 --------
 
 describe('sw3-3 — surface clears at towersForWave(wave), replacing the flat 4-kill quota', () => {
-  it('wave 1 stays on the surface one kill short of its 22-tower quota', () => {
+  it('wave 1 stays on the surface one kill short of its 16-tower (SQUARE) quota', () => {
     const s0: GameState = {
       ...surface(),
       wave: 1,
-      phaseKills: towersForWave(1) - 1, // 21
+      phaseKills: towersForWave(1) - 1, // 15
       turrets: [],
       enemyShots: [],
     }
@@ -147,11 +123,11 @@ describe('sw3-3 — surface clears at towersForWave(wave), replacing the flat 4-
     expect(s1.phase).toBe('surface')
   })
 
-  it('wave 1 clears to the trench once its 22-tower quota is met', () => {
+  it('wave 1 clears to the trench once its 16-tower (SQUARE) quota is met', () => {
     const s0: GameState = {
       ...surface(),
       wave: 1,
-      phaseKills: towersForWave(1), // 22
+      phaseKills: towersForWave(1), // 16
       turrets: [],
       enemyShots: [],
     }
@@ -160,23 +136,25 @@ describe('sw3-3 — surface clears at towersForWave(wave), replacing the flat 4-
   })
 
   it('the OLD flat 4-kill quota no longer clears the surface (regression pin)', () => {
-    // 4 kills used to drop the run into the trench; wave 1 now needs 22.
+    // 4 kills used to drop the run into the trench; wave 1 now needs 16.
     const s0: GameState = { ...surface(), wave: 1, phaseKills: 4, turrets: [], enemyShots: [] }
     const s1 = crossFrom(s0, 'surface')
     expect(s1.phase).toBe('surface')
   })
 
-  it('scales with the wave — wave 3 needs 32, not 22', () => {
-    const short: GameState = { ...surface(), wave: 3, phaseKills: 31, turrets: [], enemyShots: [] }
-    expect(crossFrom(short, 'surface').phase).toBe('surface') // 31 < 32: not cleared
-    const met: GameState = { ...surface(), wave: 3, phaseKills: 32, turrets: [], enemyShots: [] }
-    expect(crossFrom(met, 'surface').phase).toBe('trench') // 32 == quota: cleared
+  it('scales with the wave — a deeper wave uses its own maze count', () => {
+    const q = towersForWave(3)
+    const short: GameState = { ...surface(), wave: 3, phaseKills: q - 1, turrets: [], enemyShots: [] }
+    expect(crossFrom(short, 'surface').phase).toBe('surface') // one short: not cleared
+    const met: GameState = { ...surface(), wave: 3, phaseKills: q, turrets: [], enemyShots: [] }
+    expect(crossFrom(met, 'surface').phase).toBe('trench') // at quota: cleared
   })
 
-  it('a mid-table wave uses its own count — wave 9 needs 40', () => {
-    const short: GameState = { ...surface(), wave: 9, phaseKills: 39, turrets: [], enemyShots: [] }
+  it('a mid-run wave uses its own maze count', () => {
+    const q = towersForWave(9)
+    const short: GameState = { ...surface(), wave: 9, phaseKills: q - 1, turrets: [], enemyShots: [] }
     expect(crossFrom(short, 'surface').phase).toBe('surface')
-    const met: GameState = { ...surface(), wave: 9, phaseKills: 40, turrets: [], enemyShots: [] }
+    const met: GameState = { ...surface(), wave: 9, phaseKills: q, turrets: [], enemyShots: [] }
     expect(crossFrom(met, 'surface').phase).toBe('trench')
   })
 })
@@ -244,8 +222,8 @@ describe('sw3-3 — clearing every tower scores the 50,000 bonus', () => {
   })
 
   it('the clearing tower kill scores BOTH its 200-point tower and the 50,000 bonus', () => {
-    // The 22nd tower is alive this frame; the player bolt kills it, meeting the
-    // quota — score gets TURRET_SCORE for the kill AND the completion bonus.
+    // The last (16th, SQUARE) tower is alive this frame; the player bolt kills it,
+    // meeting the quota — score gets TURRET_SCORE for the kill AND the completion bonus.
     const s0: GameState = {
       ...surface(),
       wave: 1,
