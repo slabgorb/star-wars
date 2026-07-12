@@ -192,10 +192,26 @@ export const SPAWN_SPREAD = 350
  * spawn, not a slow crawl); the 8-6 difficulty ramp still rides this as the
  * wave-1 base. */
 export const ENEMY_SPEED = 1300
-/** Enemy fireball speed (units/second). */
+/** Cabinet simulation-tick rate (Hz) — the shared basis for frame-rate-independent
+ *  ROM rates ported from the 1983 source, which counts in cabinet ticks/frames
+ *  (fireball life `5,u = $40` = 64 ticks; docs/tie-flight-ai-model.md §6). The real
+ *  cabinet's rate is self-timed by vector-list length and is NOT pinned by the
+ *  disassembly, so this is PROVISIONAL — playtest-tuned, not unit-tested (design
+ *  spec §B/§D "PROVISIONAL feel items"). 30 lands the homing fireball's arrival at
+ *  ~0.8–1.5 s across the 2,048–31,744 launch range (spec §B "~1–2 s") and its
+ *  64-tick life at ~2.1 s. Shared with sw4-1 (its speeds derive from the same
+ *  TICK_HZ); define it ONCE here (epic sw4 guardrail). */
+export const TICK_HZ = 30
+/** Surface tower/turret fireball speed (units/second, straight-line). Space TIE
+ *  fireballs no longer use it — they home via the ROM decay law (story sw4-2, spec
+ *  §B); surface fire stays straight-line (out of sw4-2's scope). */
 export const ENEMY_SHOT_SPEED = 300
-/** Enemy fireball lifetime (seconds). */
-export const ENEMY_SHOT_TTL = 6
+/** Enemy fireball lifetime: the ROM's 64-tick fireball life (`5,u = $40`,
+ *  docs/tie-flight-ai-model.md §6) expressed in seconds via TICK_HZ. A homing space
+ *  fireball (story sw4-2) reaches the cockpit well inside this, so the TTL is a
+ *  cleanup cap, not the balance lever. PROVISIONAL — derived from the unpinned
+ *  TICK_HZ (design spec §B). */
+export const ENEMY_SHOT_TTL = 64 / TICK_HZ
 /** Seconds between enemy fireballs (whole formation). */
 export const ENEMY_FIRE_INTERVAL = 1
 /** Maximum enemy fireballs on screen at once — authentic "6 fireball slots". */
