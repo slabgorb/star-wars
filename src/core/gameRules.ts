@@ -5,7 +5,7 @@
 // math routes through the Math Box (math3d), never ad-hoc trig, so there is a
 // single source of 3D truth.
 
-import { length, sub, normalize, perspective, transform, type Vec3 } from '@arcade/shared/math3d'
+import { length, sub, add, scale, dot, normalize, perspective, transform, type Vec3 } from '@arcade/shared/math3d'
 import {
   SPAWN_INTERVAL,
   ENEMY_SPEED,
@@ -54,6 +54,26 @@ export function crosshairNdc(aimX: number, aimY: number): readonly [number, numb
  */
 export function collides(a: Vec3, b: Vec3, radius: number): boolean {
   return length(sub(a, b)) <= radius
+}
+
+/**
+ * Swept 3D sphere overlap: true when the SEGMENT `a`→`b` passes within `radius`
+ * of `center`. This is the anti-tunnelling twin of `collides` — a fast target
+ * that steps clean over a small sphere between two frames still registers,
+ * because we test the whole path it swept this frame rather than only its end
+ * point. Decouples anti-tunnelling from the hit radius (sw4-4): the sphere stays
+ * exactly `radius`; only the query widens from a point to the frame's segment.
+ * Degenerates to a point test when the segment has zero length. Pure Math-Box
+ * math (dot/sub/add/scale/length) — no ad-hoc trig, safe for the core.
+ */
+export function sweptCollides(center: Vec3, a: Vec3, b: Vec3, radius: number): boolean {
+  const ab = sub(b, a)
+  const abLen2 = dot(ab, ab)
+  if (abLen2 === 0) return collides(center, a, radius) // still segment → point test
+  // Closest point on the segment to `center`: project, clamped to [a, b].
+  const t = clamp(dot(sub(center, a), ab) / abLen2, 0, 1)
+  const closest = add(a, scale(ab, t))
+  return length(sub(center, closest)) <= radius
 }
 
 function clamp(v: number, lo: number, hi: number): number {

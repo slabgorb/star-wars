@@ -73,7 +73,7 @@ import {
   lookRotation,
   type Vec3,
 } from '@arcade/shared/math3d'
-import { aimDirection, collides, waveParams } from './gameRules'
+import { aimDirection, collides, sweptCollides, waveParams } from './gameRules'
 import { nextFloat, nextInt, type Rng } from '@arcade/shared/rng'
 import { stepNameEntry } from '@arcade/shared/name-entry'
 import {
@@ -630,7 +630,16 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   // to win every run — is outside the window and cannot count.
   const inApproachWindow = port[2] >= -PORT_APPROACH_WINDOW
   const hitBolt = inApproachWindow
-    ? afterObstacles.projectiles.findIndex((b) => collides(port, b.pos, PORT_HIT_RADIUS))
+    ? afterObstacles.projectiles.findIndex((b) =>
+        // Swept, not snapshot: test the bolt's whole path THIS frame — from the
+        // pre-advance start (`pos − vel·dt`) to its current `pos` — against the
+        // fixed 70u port sphere. `advance` (above) has already moved the bolt
+        // this tick, so a point-in-sphere check on `pos` alone tunnels: sw4-1's
+        // restored 12,000 u/s bolt steps 200u/frame, clean over the 140u sphere,
+        // hitting nothing. The segment test catches the crossing WITHOUT widening
+        // PORT_HIT_RADIUS and stays inside the same $800 approach-window gate (sw4-4).
+        sweptCollides(port, sub(b.pos, scale(b.vel ?? ZERO, dt)), b.pos, PORT_HIT_RADIUS),
+      )
     : -1
   if (hitBolt >= 0) {
     const liveBolts = afterObstacles.projectiles.filter((_, i) => i !== hitBolt)
