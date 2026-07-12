@@ -44,7 +44,7 @@ import {
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
-import { normalize, sub, scale, length, dot, type Vec3, type Mat4 } from '@arcade/shared/math3d'
+import { normalize, sub, scale, length, type Vec3, type Mat4 } from '@arcade/shared/math3d'
 
 const COCKPIT: Vec3 = [0, 0, 0]
 const DT = 0.05
@@ -165,8 +165,18 @@ describe('Story 9-4 — fireball source & aim track the firing TIE (AC1, AC3)', 
     const originIsATie = s.enemies.some((e) => length(sub(e.pos, shot!.pos)) < 1e-6)
     expect(originIsATie).toBe(true)
     expect(length(shot!.pos)).toBeGreaterThan(COCKPIT_HIT_RADIUS)
-    // Aimed back at the cockpit: velocity has a positive component toward the origin.
-    expect(dot(shot!.vel, sub(COCKPIT, shot!.pos))).toBeGreaterThan(0)
+    // Aimed back at the cockpit: the fireball HOMES there. Isolate this shot and
+    // confirm a step pulls it inward toward the origin (sw4-2 replaced the old
+    // straight-line velocity this once read off `shot!.vel`). Green under either
+    // law — both close on the cockpit; homing just decays the position there.
+    const isolated: GameState = {
+      ...initialState(1983),
+      enemies: [],
+      enemyShots: [{ ...shot!, pos: [...shot!.pos] as Vec3 }],
+      spawnTimer: 1e9,
+    }
+    const homed = stepGame(isolated, NO_INPUT, 0.02).enemyShots[0]
+    expect(length(homed.pos)).toBeLessThan(length(shot!.pos))
   })
 })
 
