@@ -8,6 +8,7 @@
 
 import { MODELS, type Model3D } from '../core/models'
 import { ROM_MODELS, type RomModel } from './romModels.generated'
+import type { Vec3 } from '@arcade/shared/math3d'
 
 /**
  * ROM object name (WSOBJ.MAC) -> the `name` of its counterpart in MODELS.
@@ -102,13 +103,44 @@ export function diffEdges(
   }
 }
 
+/** Element-wise deep equality over two vertex arrays — same length AND every
+ * [x,y,z] triple identical at every index. Edges are indices into `vertices`,
+ * so a reorder (same length, same first vertex, different order past that)
+ * would silently shift what every edge index points at and make an edge diff
+ * meaningless even though it would still "run" without error. Deliberately
+ * NOT a length/first-vertex spot check — that is exactly the weak guard this
+ * replaces. */
+function verticesEqual(a: readonly Vec3[], b: readonly Vec3[]): boolean {
+  if (a.length !== b.length) return false
+  return a.every((v, i) => v[0] === b[i][0] && v[1] === b[i][1] && v[2] === b[i][2])
+}
+
 export interface ModelPair {
   readonly romName: string
   readonly portName: string | null
   readonly rom: RomModel | null
   readonly port: Model3D | null
+  /** Whether the ROM and port vertex arrays are deep-equal. Only meaningful
+   * when `port` is non-null; false (not "unknown") otherwise. Edge diffing is
+   * gated on this — see `pairOne`. */
+  readonly verticesMatch: boolean
   readonly onlyInRom: string[]
   readonly onlyInPort: string[]
+}
+
+/** Pure per-pair logic, split out of `pairModels` so it is unit-testable
+ * against fabricated fixtures without touching the real ROM_MODELS/MODELS
+ * data (see romCompare.test.ts's mismatched-vertices coverage). */
+export function pairOne(rom: RomModel, portName: string | null, port: Model3D | null): ModelPair {
+  const verticesMatch = port ? verticesEqual(rom.vertices, port.vertices) : false
+  // Edges are indices into `vertices` — an edge diff is only meaningful when
+  // the ROM actually has a draw list AND the two vertex arrays agree. If they
+  // don't, refuse to diff: reporting edge drift over mismatched vertex arrays
+  // would be a fabricated result (see verdictFor's "vertices differ" case).
+  const d = port && rom.hasDrawList && verticesMatch
+    ? diffEdges(rom.edges, port.edges)
+    : { onlyInRom: [], onlyInPort: [] }
+  return { romName: rom.name, portName, rom, port, verticesMatch, ...d }
 }
 
 /** Every ROM object, paired with its port model where one exists. */
@@ -116,11 +148,7 @@ export function pairModels(): ModelPair[] {
   return ROM_MODELS.map((rom) => {
     const portName = ROM_TO_PORT[rom.name] ?? null
     const port = portName ? (MODELS.find((m) => m.name === portName) ?? null) : null
-    // Only meaningful when the ROM actually has a draw list.
-    const d = port && rom.hasDrawList
-      ? diffEdges(rom.edges, port.edges)
-      : { onlyInRom: [], onlyInPort: [] }
-    return { romName: rom.name, portName, rom, port, ...d }
+    return pairOne(rom, portName, port)
   })
 }
 
@@ -138,8 +166,19 @@ export interface Verdict {
  * those objects have no recoverable `.WL` edge list, so `pairModels` never
  * actually compared edges for them (diffEdges is skipped entirely — see
  * above), and claiming a match would assert a comparison that never ran.
+ *
+ * Must ALSO never print a drift count when the ROM and port vertex arrays
+ * disagree: edges are indices into `vertices`, so a mismatch (reorder,
+ * length change) invalidates any edge diff `pairOne` might otherwise have
+ * computed. `pairOne` already refuses to compute one in that case (its `d` is
+ * forced empty), so this checks `verticesMatch` FIRST and reports that state
+ * honestly instead of falling through to "✓ edges match" on the resulting
+ * zero drift.
  */
 export function verdictFor(p: ModelPair): Verdict {
+  if (p.port && p.rom?.hasDrawList && !p.verticesMatch) {
+    return { text: 'vertices differ — edge diff not meaningful', drift: true }
+  }
   const drift = p.onlyInRom.length + p.onlyInPort.length
   if (drift > 0) {
     return {

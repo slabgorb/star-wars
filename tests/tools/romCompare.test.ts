@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { edgeKey, diffEdges, pairModels, verdictFor, ROM_TO_PORT, type ModelPair } from '../../src/tools/romCompare'
-import { ROM_MODELS } from '../../src/tools/romModels.generated'
-import { MODELS } from '../../src/core/models'
+import { edgeKey, diffEdges, pairModels, pairOne, verdictFor, ROM_TO_PORT, type ModelPair } from '../../src/tools/romCompare'
+import { ROM_MODELS, type RomModel } from '../../src/tools/romModels.generated'
+import { MODELS, type Model3D } from '../../src/core/models'
 
 describe('edgeKey', () => {
   it('is orientation-independent', () => {
@@ -90,11 +90,21 @@ describe('pairModels', () => {
     expect(tie!.rom).not.toBeNull()
   })
 
-  it('the ROM vertices for TIE agree with the port (only edges should drift)', () => {
-    const tie = pairs.find((p) => p.romName === 'TIE')!
-    expect(tie.rom!.vertices.length).toBe(tie.port!.vertices.length)
-    expect(tie.rom!.vertices[0]).toEqual(tie.port!.vertices[0])
-  })
+  // The 5 pairs the edge diff is actually meaningful for (hasDrawList:true +
+  // mapped). Edges are INDICES into `vertices` — a length/first-vertex spot
+  // check (the old version of this test) cannot catch a reorder past index 0,
+  // which would silently invalidate every edge index without either array
+  // looking "wrong" at a glance. Assert full deep equality, not a spot check.
+  it.each(['TIE', 'TI1', 'TI2', 'TI3', 'RTH'])(
+    '%s: the ROM vertices deep-equal the port vertices (only edges should drift)',
+    (romName) => {
+      const p = pairs.find((pair) => pair.romName === romName)!
+      expect(p.rom).not.toBeNull()
+      expect(p.port).not.toBeNull()
+      expect(p.rom!.vertices).toEqual(p.port!.vertices)
+      expect(p.verticesMatch).toBe(true)
+    },
+  )
 
   // X-Wing and Y-Wing are NOT in the ROM — their vertices and draw lists sit
   // inside `.IF NE,0` blocks (MACRO-11's `#if 0`), so they were compiled OUT of
@@ -134,13 +144,107 @@ describe('pairModels', () => {
   })
 })
 
+// THE PROJECT'S HEADLINE DELIVERABLE. This tool exists to produce exactly one
+// thing: the punch-list of edges the port's heuristic reconstruction got
+// wrong versus what WSOBJ.MAC actually draws. Every other test in this file
+// guards the mechanism; this one pins the RESULT — the number a stakeholder
+// would actually read off the contact sheet. If a future change to the
+// parser, the taxonomy map, or the diff logic moves these counts, this test
+// must fail and force that change to be deliberate, not a silent drift in the
+// one artifact the whole tool is for.
+describe('the punch-list (regression pin)', () => {
+  const pairs = pairModels()
+  const punchList = (romName: string) => {
+    const p = pairs.find((pair) => pair.romName === romName)!
+    return { onlyInRom: p.onlyInRom.length, onlyInPort: p.onlyInPort.length }
+  }
+
+  it('TIE -> TIE Fighter', () => {
+    expect(punchList('TIE')).toEqual({ onlyInRom: 1, onlyInPort: 3 })
+  })
+
+  it('TI1 -> TIE Fragment Left Wing', () => {
+    expect(punchList('TI1')).toEqual({ onlyInRom: 1, onlyInPort: 0 })
+  })
+
+  it('TI2 -> TIE Fragment Right Wing', () => {
+    expect(punchList('TI2')).toEqual({ onlyInRom: 1, onlyInPort: 0 })
+  })
+
+  it('TI3 -> TIE Fragment Cabin', () => {
+    expect(punchList('TI3')).toEqual({ onlyInRom: 3, onlyInPort: 0 })
+  })
+
+  it('RTH -> Darth Vader TIE', () => {
+    expect(punchList('RTH')).toEqual({ onlyInRom: 12, onlyInPort: 44 })
+  })
+})
+
+// Finding 2: edges are INDICES into `vertices`. If the ROM and port vertex
+// arrays were ever to disagree (reordered, different length), every edge
+// index would point at a different vertex and an edge diff would report
+// FABRICATED drift while looking completely normal. `pairOne` must refuse to
+// diff edges in that case. These fixtures are fabricated, not real data —
+// the real pairs are proven to agree by the deep-equal test above.
+describe('pairOne: the vertex-mismatch guard', () => {
+  const romWith = (vertices: RomModel['vertices']): RomModel => ({
+    name: 'X', scale: 1, hasDrawList: true,
+    vertices,
+    edges: [[0, 1], [1, 2]],
+  })
+  const portWith = (vertices: Model3D['vertices']): Model3D => ({
+    name: 'Y',
+    vertices,
+    edges: [[0, 1], [1, 2]],
+  })
+
+  it('refuses to diff edges when vertices are reordered past index 0 (same length, same first vertex)', () => {
+    // A length/first-vertex spot check would pass this fixture; deep equality
+    // must not.
+    const rom = romWith([[0, 0, 0], [1, 1, 1], [2, 2, 2]])
+    const port = portWith([[0, 0, 0], [2, 2, 2], [1, 1, 1]])
+    const p = pairOne(rom, 'Y', port)
+    expect(p.verticesMatch).toBe(false)
+    expect(p.onlyInRom).toEqual([])
+    expect(p.onlyInPort).toEqual([])
+  })
+
+  it('refuses to diff edges when the vertex arrays differ in length', () => {
+    const rom = romWith([[0, 0, 0], [1, 1, 1], [2, 2, 2]])
+    const port = portWith([[0, 0, 0], [1, 1, 1]])
+    const p = pairOne(rom, 'Y', port)
+    expect(p.verticesMatch).toBe(false)
+    expect(p.onlyInRom).toEqual([])
+    expect(p.onlyInPort).toEqual([])
+  })
+
+  it('diffs edges normally when vertices are deep-equal', () => {
+    const rom = romWith([[0, 0, 0], [1, 1, 1], [2, 2, 2]])
+    const port = portWith([[0, 0, 0], [1, 1, 1], [2, 2, 2]])
+    const p = pairOne(rom, 'Y', port)
+    expect(p.verticesMatch).toBe(true)
+    expect(p.onlyInRom).toEqual([])
+    expect(p.onlyInPort).toEqual([])
+  })
+
+  it('surfaces the mismatch honestly through verdictFor instead of a nonsense drift count', () => {
+    const rom = romWith([[0, 0, 0], [1, 1, 1], [2, 2, 2]])
+    const port = portWith([[0, 0, 0], [2, 2, 2], [1, 1, 1]])
+    const p = pairOne(rom, 'Y', port)
+    const v = verdictFor(p)
+    expect(v.text).toBe('vertices differ — edge diff not meaningful')
+    expect(v.text).not.toMatch(/^⚠/)
+    expect(v.text).not.toBe('✓ edges match')
+  })
+})
+
 describe('verdictFor', () => {
   const rom = (hasDrawList: boolean) => ({ name: 'X', scale: 1, hasDrawList, vertices: [], edges: [] })
   const port = { name: 'Y', vertices: [], edges: [] }
 
   it('shows the warning + exact counts when edges drift', () => {
     const p: ModelPair = {
-      romName: 'X', portName: 'Y', rom: rom(true), port,
+      romName: 'X', portName: 'Y', rom: rom(true), port, verticesMatch: true,
       onlyInRom: ['1-2'], onlyInPort: ['3-4', '5-6'],
     }
     const v = verdictFor(p)
@@ -150,7 +254,7 @@ describe('verdictFor', () => {
 
   it('claims edges match when a hasDrawList:true pair has zero drift', () => {
     const p: ModelPair = {
-      romName: 'X', portName: 'Y', rom: rom(true), port,
+      romName: 'X', portName: 'Y', rom: rom(true), port, verticesMatch: true,
       onlyInRom: [], onlyInPort: [],
     }
     expect(verdictFor(p).text).toBe('✓ edges match')
@@ -159,7 +263,7 @@ describe('verdictFor', () => {
 
   it('NEVER claims edges match for a hasDrawList:false pair, even with zero drift', () => {
     const p: ModelPair = {
-      romName: 'X', portName: 'Y', rom: rom(false), port,
+      romName: 'X', portName: 'Y', rom: rom(false), port, verticesMatch: true,
       onlyInRom: [], onlyInPort: [],
     }
     const v = verdictFor(p)
@@ -167,9 +271,18 @@ describe('verdictFor', () => {
     expect(v.drift).toBe(false)
   })
 
+  it('reports "vertices differ" instead of a match/drift verdict when a hasDrawList:true pair has mismatched vertices', () => {
+    const p: ModelPair = {
+      romName: 'X', portName: 'Y', rom: rom(true), port, verticesMatch: false,
+      onlyInRom: [], onlyInPort: [],
+    }
+    const v = verdictFor(p)
+    expect(v.text).toBe('vertices differ — edge diff not meaningful')
+  })
+
   it('shows a neutral dash when the ROM object has no port mapping', () => {
     const p: ModelPair = {
-      romName: 'X', portName: null, rom: rom(true), port: null,
+      romName: 'X', portName: null, rom: rom(true), port: null, verticesMatch: false,
       onlyInRom: [], onlyInPort: [],
     }
     expect(verdictFor(p).text).toBe('—')

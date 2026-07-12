@@ -15,6 +15,15 @@
 // does not parse. For these objects only VERTICES are authoritative; do not
 // treat edges: [] as evidence the shipped game rendered a blank object.
 //
+// NOTE — `edges` is a faithful transcription of the ROM's beam path and may
+// contain degenerate self-edges (`[n, n]`) where the draw list repeats an
+// index (RTH has one: `.BD 31,23,22,21,21,24,23` walks to index 20 twice in a
+// row, baked here as edge [20, 20]). A self-edge draws a zero-length line, not
+// real connectivity — this artifact keeps it because the artifact is the
+// audit record, but any consumer comparing or porting this geometry (edge
+// diffing, hand-porting into src/core/models.ts) should filter `a === b`
+// edges out first, the way romCompare.ts's `isSelfEdge` does.
+//
 // Dev-tool data. Never import this from src/core — the core is the pure sim.
 
 import type { Vec3 } from '@arcade/shared/math3d'
