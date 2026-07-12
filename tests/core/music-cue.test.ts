@@ -260,8 +260,16 @@ describe('no run-two-silent regression — a later wave still cues its edges (AC
   })
 
   it('a second run (wave 2) still swaps to the trench theme entering the trench', () => {
+    // Re-seated by sw4-3: wave 2's authored maze is BUNK — bunkers only, ZERO towers
+    // — so there is no tower quota to meet and `phaseKills: towersForWave(2)` (= 0)
+    // no longer crosses the surface->trench edge (it used to insta-clear the phase on
+    // entry and gift a free 50,000; that was the bug). Wave 2 leaves the surface the
+    // authentic way: scroll-COMPLETION, once its finite field has swept past. Seat the
+    // scroll beyond any authored field depth (deepest maze reaches y=32768 + the
+    // SPAWN_DISTANCE lead-in) so this frame IS the edge. The cue under test — the
+    // trench theme on a second run — is unchanged.
     const out = stepGame(
-      playing({ phase: 'surface', phaseKills: towersForWave(2), wave: 2 }),
+      playing({ phase: 'surface', surfaceScrollZ: 100_000, wave: 2 }),
       NO_INPUT,
       DT,
     )
