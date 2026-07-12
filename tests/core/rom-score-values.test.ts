@@ -64,6 +64,21 @@ function portKill(state: GameState): GameState {
   }
 }
 
+/** A fresh trench with the exhaust port re-seated INSIDE the approach window.
+ *  sw3-15 gated port detonation to PORT_APPROACH_WINDOW (800 units of the
+ *  cockpit), but `enterPhase` seeds the port at `spawnPort()`'s far -2,400 —
+ *  OUTSIDE that window — so a kill staged there no longer scores (score stays 0).
+ *  Re-seat it in-window at [0,0,-300], exactly mirroring the sibling suites
+ *  (exhaust-port-outcome / force-bonus). The 25,000 / 30,000 VALUE intent these
+ *  two cases assert is orthogonal to the port's staged position — only the
+ *  position moves into the gate. (TEA test-maintenance under sw3-6: sw3-15
+ *  re-seated its named siblings but missed this transcription suite, leaving
+ *  develop red on these two.) */
+function trenchPortInWindow(): GameState {
+  const pos: Vec3 = [0, 0, -300]
+  return { ...enterPhase(initialState(), 'trench'), exhaustPort: { pos } }
+}
+
 describe('sw3-1 — resolved ROM score values (transcription contract)', () => {
   // --- Exact literal pins: the four values the sw2-6 audit resolved ----------
   it('TIE fighter is worth 1,000 (ROM byte_984A) — was 100, "do NOT ×10"', () => {
@@ -122,7 +137,7 @@ describe('sw3-1 — resolved ROM score values (transcription contract)', () => {
   })
 
   it('a non-clean exhaust-port kill scores exactly 25,000 (base bonus, no Force)', () => {
-    const s0 = { ...portKill(enterPhase(initialState(), 'trench')), trenchShotsFired: 3 }
+    const s0 = { ...portKill(trenchPortInWindow()), trenchShotsFired: 3 }
     const s1 = stepGame(s0, NO_INPUT, 1 / 60)
     expect(s1.score).toBe(25000)
   })
@@ -130,7 +145,7 @@ describe('sw3-1 — resolved ROM score values (transcription contract)', () => {
   it('a clean exhaust-port kill scores 25,000 + 5,000 Force = 30,000', () => {
     // Confirms the new 25k port value composes correctly with the untouched
     // Force bonus — it must not fold into or replace the Force branch.
-    const s0 = { ...portKill(enterPhase(initialState(), 'trench')), trenchShotsFired: 0 }
+    const s0 = { ...portKill(trenchPortInWindow()), trenchShotsFired: 0 }
     const s1 = stepGame(s0, NO_INPUT, 1 / 60)
     expect(s1.score).toBe(30000)
   })
