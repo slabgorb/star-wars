@@ -218,8 +218,9 @@ describe('sw4-3 — prefix structure: T3{NAME} extends T{NAME} (base ⊂ extende
 
 describe('sw4-3 — the maze registry is stable, immutable data', () => {
   it('is a singleton — repeated reads return the identical object graph (no regeneration)', () => {
+    // Two DISTINCT lookups must return the same instance (not a rebuilt copy).
     expect(getMaze('DIFF')).toBe(getMaze('DIFF'))
-    expect(SURFACE_MAZES).toBe(SURFACE_MAZES)
+    expect(getMaze('3TWRCTY')).toBe(SURFACE_MAZES[SURFACE_MAZES.length - 1])
   })
 
   it('exposes no unknown maze (getMaze is undefined for a non-name, not a throw)', () => {

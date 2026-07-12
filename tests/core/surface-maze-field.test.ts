@@ -77,14 +77,38 @@ describe('sw4-3 — mazeForWave maps every wave to an authored maze', () => {
   })
 })
 
-// --- RECONCILE: the clear quota is the placed maze's tower count --------------
+// --- RECONCILE + wave→maze map: pinned to CONCRETE ROM values -----------------
 
-describe('sw4-3 — towers-to-clear is the maze TTWRS, superseding sw3-3 byte_98CB', () => {
-  it.each([1, 2, 3, 5, 8, 12, 16, 20])('wave %i clears at its maze tower count', (wave) => {
-    // The ratified reconciliation: the quota IS the placed maze's real tower
-    // count. Not sw3-3's 22/22/32/… byte_98CB stream target (which a finite
-    // single-pass maze can never satisfy — it would soft-lock the surface).
-    expect(towersForWave(wave)).toBe(mazeForWave(wave).towerCount)
+describe('sw4-3 — the wave→maze map and tower counts are the ROM values', () => {
+  // Independently-known WSGRND values (TGDPTR order + TTWRS), NOT
+  // `towersForWave(w) === mazeForWave(w).towerCount` — that is a tautology
+  // (towersForWave IS that expression), so it can't catch a wrong mapping.
+  const WAVE_MAZE: ReadonlyArray<readonly [wave: number, name: string, towers: number]> = [
+    [1, 'SQUARE', 16], // clone intro (ROM has no wave-1 ground)
+    [2, 'BUNK', 0], // the bunkers-only wave
+    [5, 'TURNON', 20],
+    [7, 'DIFF', 20],
+    [10, 'VALLEY', 27],
+    [16, '3DIFF', 24],
+    [20, '3TWRCTY', 32],
+  ]
+  it.each(WAVE_MAZE)('wave %i → maze %s with %i towers', (wave, name, towers) => {
+    expect(mazeForWave(wave).name).toBe(name)
+    expect(towersForWave(wave)).toBe(towers)
+  })
+
+  it('deep waves (≥21) wrap the last six extended mazes with period 6', () => {
+    expect(mazeForWave(21).name).toBe('3WEDGE') // MAP$RPT
+    expect(mazeForWave(21).name).toBe(mazeForWave(27).name) // period 6
+    expect(mazeForWave(21).name).not.toBe(mazeForWave(22).name) // …not a constant
+    // the wrap only ever selects the extended (T3) mazes — never BUNK or a base form
+    for (let w = 21; w <= 44; w++) expect(mazeForWave(w).towerCount).toBeGreaterThanOrEqual(24)
+  })
+
+  it('clamps wave ≤ 0 and floors a fractional wave to the wave-1 maze', () => {
+    expect(mazeForWave(0).name).toBe(mazeForWave(1).name)
+    expect(mazeForWave(-5).name).toBe(mazeForWave(1).name)
+    expect(mazeForWave(7.9).name).toBe(mazeForWave(7).name)
   })
 })
 
@@ -124,6 +148,16 @@ describe('sw4-3 — the surface field is authored, not randomly spawned', () => 
     const wave = 5
     const seenX = turretXsOverRun(1983, wave, 1200)
     expect(seenX.size).toBeLessThanOrEqual(mazeForWave(wave).entries.length)
+  })
+
+  it('lays the FULL authored field on entry — every maze entry, not a subset', () => {
+    // Guards the half-field bug the Reviewer flagged: towersForWave reads the
+    // maze's OWN full tower count, so a partial placement would silently
+    // soft-lock. One surface frame in, the whole field is laid and nothing has
+    // yet scrolled past the cull plane (the nearest entry enters at −SPAWN_DISTANCE).
+    const wave = 5
+    const s = stepGame(enterSurface(1983, wave), NO_INPUT, DT)
+    expect(s.turrets).toHaveLength(mazeForWave(wave).entries.length)
   })
 })
 

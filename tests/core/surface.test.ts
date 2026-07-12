@@ -140,7 +140,9 @@ describe('Wave 2 — laser turrets', () => {
     expect(s.enemies).toHaveLength(0)
   })
 
-  it('turrets rise on a timed schedule', () => {
+  it('rises the authored maze field once the surface run begins (sw4-3: laid, not timed)', () => {
+    // Post-sw4-3 the surface no longer spawns on a timer — the wave's fixed maze
+    // is laid on the first surface frame. A stepped run shows ground objects present.
     let s = surface()
     for (let i = 0; i < 16; i++) s = stepGame(s, NO_INPUT, (TURRET_SPAWN_INTERVAL * 2) / 16)
     expect((s.turrets ?? []).length).toBeGreaterThan(0)

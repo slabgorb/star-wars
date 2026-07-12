@@ -66,7 +66,6 @@ import {
   type Projectile,
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
-import { mazeForWave } from '../../src/core/surfaceMazes'
 import { NO_INPUT, type Input } from '../../src/core/input'
 import type { GameEvent } from '../../src/core/events'
 import type { Vec3 } from '@arcade/shared/math3d'
@@ -84,15 +83,20 @@ function crossFrom(s: GameState, from: string, input: Input = NO_INPUT): GameSta
 // --- sw4-3 RECONCILE: towersForWave is the placed maze's tower count ---------
 
 describe('sw4-3 — towersForWave is the placed maze tower count (supersedes byte_98CB)', () => {
-  it.each([1, 2, 3, 5, 8, 12, 16, 20])('wave %i clears at its maze TTWRS', (wave) => {
-    // The ratified reconciliation: the clear quota IS the placed maze's real
-    // tower count, not sw3-3's 22/22/32/… byte_98CB stream target.
-    expect(towersForWave(wave)).toBe(mazeForWave(wave).towerCount)
+  // Concrete WSGRND TTWRS values the clear tests below rely on (the full
+  // wave→maze table is pinned once in surface-maze-field.test.ts). NOT
+  // `=== mazeForWave(w).towerCount`, which is a tautology (towersForWave IS
+  // that expression) and can't catch a wrong wave→maze mapping.
+  it('is the maze TTWRS: wave 1 (SQUARE)=16, wave 2 (BUNK)=0, wave 9 (SYMTRC)=21, wave 16 (3DIFF)=24', () => {
+    expect(towersForWave(1)).toBe(16)
+    expect(towersForWave(2)).toBe(0)
+    expect(towersForWave(9)).toBe(21)
+    expect(towersForWave(16)).toBe(24)
   })
 
   it('is a pure function of the wave — same wave, same count (no RNG, no time)', () => {
     expect(towersForWave(9)).toBe(towersForWave(9))
-    expect(towersForWave(9)).toBe(mazeForWave(9).towerCount)
+    expect(towersForWave(9)).toBe(21)
   })
 })
 
@@ -107,11 +111,11 @@ describe('sw3-3 — SURFACE_CLEAR_BONUS is the ROM byte_9862 value', () => {
 // --- AC3: the surface clears at the wave-scaled count, not the flat 4 --------
 
 describe('sw3-3 — surface clears at towersForWave(wave), replacing the flat 4-kill quota', () => {
-  it('wave 1 stays on the surface one kill short of its 22-tower quota', () => {
+  it('wave 1 stays on the surface one kill short of its 16-tower (SQUARE) quota', () => {
     const s0: GameState = {
       ...surface(),
       wave: 1,
-      phaseKills: towersForWave(1) - 1, // 21
+      phaseKills: towersForWave(1) - 1, // 15
       turrets: [],
       enemyShots: [],
     }
@@ -119,11 +123,11 @@ describe('sw3-3 — surface clears at towersForWave(wave), replacing the flat 4-
     expect(s1.phase).toBe('surface')
   })
 
-  it('wave 1 clears to the trench once its 22-tower quota is met', () => {
+  it('wave 1 clears to the trench once its 16-tower (SQUARE) quota is met', () => {
     const s0: GameState = {
       ...surface(),
       wave: 1,
-      phaseKills: towersForWave(1), // 22
+      phaseKills: towersForWave(1), // 16
       turrets: [],
       enemyShots: [],
     }
@@ -132,7 +136,7 @@ describe('sw3-3 — surface clears at towersForWave(wave), replacing the flat 4-
   })
 
   it('the OLD flat 4-kill quota no longer clears the surface (regression pin)', () => {
-    // 4 kills used to drop the run into the trench; wave 1 now needs 22.
+    // 4 kills used to drop the run into the trench; wave 1 now needs 16.
     const s0: GameState = { ...surface(), wave: 1, phaseKills: 4, turrets: [], enemyShots: [] }
     const s1 = crossFrom(s0, 'surface')
     expect(s1.phase).toBe('surface')
@@ -218,8 +222,8 @@ describe('sw3-3 — clearing every tower scores the 50,000 bonus', () => {
   })
 
   it('the clearing tower kill scores BOTH its 200-point tower and the 50,000 bonus', () => {
-    // The 22nd tower is alive this frame; the player bolt kills it, meeting the
-    // quota — score gets TURRET_SCORE for the kill AND the completion bonus.
+    // The last (16th, SQUARE) tower is alive this frame; the player bolt kills it,
+    // meeting the quota — score gets TURRET_SCORE for the kill AND the completion bonus.
     const s0: GameState = {
       ...surface(),
       wave: 1,
