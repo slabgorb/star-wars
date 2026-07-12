@@ -20,7 +20,7 @@ import { drawWireframe, project, GLOW_FOR, DEFAULT_GLOW, NEAR, FAR } from '../sh
 import { withGlow } from '../shell/glow'
 import { SURFACE_ORIENT } from '../shell/render'
 import { modelBounds, fitDistance, cellRects } from '../core/modelView'
-import { pairModels, verdictFor, type ModelPair } from './romCompare'
+import { pairModels, verdictFor, inRangeEdges, type ModelPair } from './romCompare'
 
 const FOV_Y = Math.PI / 3 // match the game camera
 const COLS = 3
@@ -102,7 +102,17 @@ const pairRenders: PairRender[] = pairs.map((p) => {
   const rom: CellSide = !romModel
     ? { kind: 'missing', note: 'no ROM data' }
     : romModel.hasDrawList
-      ? { kind: 'edges', model: { name: p.romName, vertices: romModel.vertices, edges: romModel.edges } }
+      // `inRangeEdges` drops the ROM's own out-of-bounds stroke (WFG's
+      // `DRAWTO 6,3` into a six-point table — see romCompare). Stroking it
+      // unfiltered would transform `vertices[6] === undefined` and draw to NaN.
+      ? {
+          kind: 'edges',
+          model: {
+            name: p.romName,
+            vertices: romModel.vertices,
+            edges: inRangeEdges(romModel.edges, romModel.vertices.length),
+          },
+        }
       : { kind: 'dots', name: p.romName, vertices: romModel.vertices }
   const port: CellSide = p.port ? { kind: 'edges', model: p.port } : { kind: 'missing', note: 'not ported' }
 
