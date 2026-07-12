@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { edgeKey, diffEdges, pairModels, pairOne, verdictFor, ROM_TO_PORT, type ModelPair } from '../../src/tools/romCompare'
+import { edgeKey, diffEdges, pairModels, pairOne, verdictFor, inRangeEdges, ROM_TO_PORT, type ModelPair } from '../../src/tools/romCompare'
 import { ROM_MODELS, type RomModel } from '../../src/tools/romModels.generated'
 import { MODELS, type Model3D } from '../../src/core/models'
 
@@ -193,17 +193,32 @@ describe('the punch-list (regression pin)', () => {
   // counts, and its failure at that moment is the point.
   const verdict = (romName: string) => verdictFor(pairs.find((p) => p.romName === romName)!)
 
-  it.each(['PORT', 'STB', 'BNK'])(
-    '%s: now has ROM edges, but the diff stays blocked on the port\'s wrong vertices',
-    (romName) => {
+  // Pin the REASON the diff is blocked, not merely the fact. `{onlyInRom: 0,
+  // onlyInPort: 0}` is true BY CONSTRUCTION once verticesMatch is false (pairOne
+  // hard-forces it), so asserting it proves nothing — adversarial review caught
+  // that. The vertex COUNTS are the real content: they distinguish "the port's
+  // octagon is still wrong" (the known defect sw5-4/sw5-5 fix) from "the ROM
+  // side regressed" (a bake bug), which a bare `verticesMatch === false` cannot.
+  it.each([
+    { romName: 'PORT', romVerts: 12, portVerts: 8, romEdges: 18 },
+    { romName: 'STB', romVerts: 15, portVerts: 12, romEdges: 13 },
+    { romName: 'BNK', romVerts: 15, portVerts: 6, romEdges: 8 },
+  ])(
+    '$romName: has ROM edges now, but the diff stays blocked on the PORT\'s wrong vertex count',
+    ({ romName, romVerts, portVerts, romEdges }) => {
       const p = pairs.find((pair) => pair.romName === romName)!
-      expect(p.rom!.hasDrawList, 'sw5-1 recovered its .WGD draw list').toBe(true)
-      expect(p.rom!.edges.length, 'and that draw list is not empty').toBeGreaterThan(0)
 
-      expect(p.verticesMatch, 'but the port vertices still disagree with the ROM').toBe(false)
+      // The ROM side: real, recovered connectivity.
+      expect(p.rom!.hasDrawList, 'sw5-1 recovered its .WGD draw list').toBe(true)
+      expect(p.rom!.vertices.length, 'ROM vertex count').toBe(romVerts)
+      expect(p.rom!.edges.length, 'ROM edge count').toBe(romEdges)
+
+      // The port side: still the pre-ROM authored geometry. THIS is the defect.
+      expect(p.port!.vertices.length, 'port vertex count — still wrong').toBe(portVerts)
+
+      // ...so the edge diff is refused, honestly.
+      expect(p.verticesMatch).toBe(false)
       expect(verdict(romName).text).toBe('vertices differ — edge diff not meaningful')
-      expect(verdict(romName).text).not.toBe('✓ edges match')
-      expect(punchList(romName)).toEqual({ onlyInRom: 0, onlyInPort: 0 })
     },
   )
 
@@ -235,6 +250,47 @@ describe('the ROM\'s out-of-range edge (WFG)', () => {
     for (const m of ROM_MODELS) {
       if (ROM_TO_PORT[m.name]) expect(outOfRange(m), m.name).toEqual([])
     }
+  })
+
+  // `inRangeEdges` had no direct unit test — adversarial review showed that
+  // dropping the `i >= 0` half of its predicate left the whole suite green.
+  describe('inRangeEdges', () => {
+    it('keeps edges whose endpoints both index a real vertex', () => {
+      expect(inRangeEdges([[0, 1], [1, 2]], 3)).toEqual([[0, 1], [1, 2]])
+    })
+
+    it('drops an edge at the boundary — index === vertexCount is one past the end', () => {
+      expect(inRangeEdges([[0, 1], [1, 3]], 3)).toEqual([[0, 1]])
+      expect(inRangeEdges([[2, 2]], 3)).toEqual([[2, 2]]) // len-1 is still valid
+    })
+
+    it('drops a NEGATIVE index (the other half of the predicate)', () => {
+      expect(inRangeEdges([[-1, 1], [0, 1]], 3)).toEqual([[0, 1]])
+    })
+
+    it('drops everything when the model has no vertices, and handles no edges', () => {
+      expect(inRangeEdges([[0, 1]], 0)).toEqual([])
+      expect(inRangeEdges([], 3)).toEqual([])
+    })
+  })
+
+  // The self-edge filter has a port-side mirror test; this one did not, and the
+  // mutant that stopped filtering the PORT side survived the whole suite.
+  it('pairOne never reports an out-of-range PORT edge as drift either', () => {
+    const rom: RomModel = {
+      name: 'X', scale: 1, hasDrawList: true,
+      vertices: [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
+      edges: [[0, 1]],
+    }
+    const port: Model3D = {
+      name: 'Y',
+      vertices: [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
+      edges: [[0, 1], [1, 9]], // 9 does not exist
+    }
+    const p = pairOne(rom, 'Y', port)
+    expect(p.verticesMatch).toBe(true)
+    expect(p.onlyInPort).toEqual([])
+    expect(p.onlyInRom).toEqual([])
   })
 
   it('pairOne never reports an out-of-range ROM edge as drift', () => {

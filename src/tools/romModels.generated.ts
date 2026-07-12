@@ -18,11 +18,19 @@
 // ⚠ THE ROM'S OWN OUT-OF-RANGE STROKE — WFG. WSOBJ.MAC:1844 draws `DRAWTO 6,3`,
 // but WFG shares WFF's SIX-point table (indices 0..5): point 6 does not exist.
 // On the real cabinet that reads a stale slot of the transform scratch page —
-// an out-of-bounds read in the 1983 ROM, not a transcription error. (What proves
-// that: the other nine ground objects' indices land EXACTLY filling
-// [0, vertices.length-1].) It is transcribed verbatim rather than clamped,
-// because this artifact is the audit record. So WFG's `edges` contain [5,6] and
-// [6,3], whose index 6 is NOT a valid subscript of its `vertices`.
+// an out-of-bounds read in the 1983 ROM, not a transcription error.
+//
+// What proves it is the ROM's bug and not our index rebase: across the other
+// nine ground objects the lowest index used is exactly 0 and the highest is
+// exactly `vertices.length - 1`. A rebase off by one in either direction breaks
+// that immediately — too few and the minimum goes negative, too many and the
+// maximum overruns. (The indices are not dense: BNK touches only 6 of its 15
+// points. It is the ENDPOINTS that pin the rebase, not coverage.) WFF draws this
+// very same six-point table and tops out at 5; only WFG reaches 6.
+//
+// It is transcribed verbatim rather than clamped, because this artifact is the
+// audit record. So WFG's `edges` contain [5,6] and [6,3], whose index 6 is NOT a
+// valid subscript of its `vertices`.
 // ANY CONSUMER THAT WALKS `edges` INTO `vertices[i]` MUST SKIP EDGES WHOSE
 // INDEX IS >= vertices.length — exactly as it must skip degenerate self-edges
 // (below). Rendering one unfiltered strokes to `undefined`.
