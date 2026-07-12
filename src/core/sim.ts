@@ -24,6 +24,7 @@ import {
   ENEMY_SHOT_SPEED,
   ENEMY_SHOT_TTL,
   ENEMY_SHOT_HIT_RADIUS,
+  TICK_HZ,
   ENEMY_FIRE_INTERVAL,
   WAVE_SIZE,
   MAX_FIREBALL_SLOTS,
@@ -156,8 +157,14 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     events.push({ type: 'fire' })
   }
 
-  // Enemy/turret fire advances & expires the same way in every phase.
-  const enemyShots = advance(state.enemyShots, dt)
+  // Enemy fire advances & expires each step. SPACE-phase TIE fireballs HOME on the
+  // cockpit (ROM sub_A875, story sw4-2 / spec §B): their position decays 7/8 per
+  // cabinet tick toward the origin, so an un-shot shot ALWAYS arrives. Surface/trench
+  // fire still flies straight (out of sw4-2's scope; the trench carries no fire).
+  const enemyShots =
+    state.phase === 'space'
+      ? homeShots(state.enemyShots, dt)
+      : advance(state.enemyShots, dt)
 
   const common: StepCommon = { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots, events }
 
@@ -206,8 +213,10 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     const inPassWindow = !e.peeling && length(e.pos) > TIE_NEAR_BOUND
     if (inPassWindow && cooldown <= 0 && enemyShots.length < params.maxConcurrentShots) {
       enemyShots.push({
+        // The homing law (homeShots) drives the fireball by decaying this position
+        // toward the cockpit — it carries no straight-line velocity (sw4-2, spec §B).
         pos: [...e.pos] as Vec3,
-        vel: scale(toCockpit(e.pos), ENEMY_SHOT_SPEED),
+        vel: [0, 0, 0],
         ttl: ENEMY_SHOT_TTL,
       })
       events.push({ type: 'enemy-fire', pos: [...e.pos] as Vec3 })
@@ -894,6 +903,28 @@ function advance(bolts: readonly Projectile[], dt: number): Projectile[] {
     const ttl = b.ttl - dt
     if (ttl <= 0) continue
     out.push({ pos: add(b.pos, scale(b.vel ?? ZERO, dt)), vel: b.vel, ttl })
+  }
+  return out
+}
+
+/**
+ * Advance enemy fireballs by the ROM homing law (`sub_A875`,
+ * docs/tie-flight-ai-model.md §6): the shot's position decays 7/8 per cabinet tick
+ * toward the cockpit at the origin, so it homes along its launch line and ALWAYS
+ * arrives — the sole space damage source (story sw4-2, spec §B). Frame-rate
+ * independent: the per-tick 7/8 is raised to `dt × TICK_HZ`, so 30/60/144 Hz stepping
+ * traces the same trajectory (`pow` composes: `pow(r, a)·pow(r, b) = pow(r, a+b)`).
+ * Ages ttl (the 64-tick life) and drops the expired. New array — never mutates the
+ * input, keeping the step pure. Velocity is unused (the shot has none); it is
+ * carried through untouched so the Projectile shape stays intact.
+ */
+function homeShots(shots: readonly Projectile[], dt: number): Projectile[] {
+  const decay = Math.pow(7 / 8, dt * TICK_HZ)
+  const out: Projectile[] = []
+  for (const s of shots) {
+    const ttl = s.ttl - dt
+    if (ttl <= 0) continue
+    out.push({ pos: scale(s.pos, decay), vel: s.vel, ttl })
   }
   return out
 }
