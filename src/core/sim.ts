@@ -78,7 +78,7 @@ import {
   type Vec3,
 } from '@arcade/shared/math3d'
 import { aimDirection, collides, sweptCollides, waveParams } from './gameRules'
-import { nextFloat, nextInt, type Rng } from '@arcade/shared/rng'
+import { createRng, nextFloat, nextInt, type Rng } from '@arcade/shared/rng'
 import { stepNameEntry } from '@arcade/shared/name-entry'
 import {
   spawnTrenchObstacles,
@@ -876,7 +876,10 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     // The trench opens with its target downrange; other phases carry no port.
     exhaustPort: phase === 'trench' ? spawnPort() : null,
     // ...and its wall obstacles (fidelity epic, task 3); other phases carry none.
-    trenchObstacles: phase === 'trench' ? spawnTrenchObstacles() : [],
+    // Seeded per-run variation (sw3-7): the trench chain's picked tail is drawn
+    // from the run RNG via a LOCAL cursor (createRng(s.rng.seed)), so different
+    // runs get different obstacle chains while `s.rng` stays unmutated (purity).
+    trenchObstacles: phase === 'trench' ? spawnTrenchObstacles(createRng(s.rng.seed)) : [],
     // The "Use the Force" clean-run tell resets on every phase entry, like
     // phaseKills/trenchScrollZ (fidelity epic, task 4) — `clearRun` below
     // re-stamps `forceBonusAwardedAt` after this reset so the banner survives

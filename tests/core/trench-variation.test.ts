@@ -29,7 +29,7 @@ import { describe, it, expect } from 'vitest'
 import { createRng } from '@arcade/shared/rng'
 import { initialState, type TrenchObstacle } from '../../src/core/state'
 import { enterPhase } from '../../src/core/sim'
-import { spawnTrenchObstacles } from '../../src/core/trench-obstacles'
+import { spawnTrenchObstacles, TRENCH_OBSTACLE_STATIONS } from '../../src/core/trench-obstacles'
 
 /** The obstacle chain a fresh trench run opens with, for a given RNG seed. */
 function chainForSeed(seed: number): TrenchObstacle[] {
@@ -123,9 +123,14 @@ describe('sw3-7 trench per-run variation — PRNG fixed-head + picked-tail (sub_
   it('spawnTrenchObstacles(rng) is a pure function of the seed and returns fresh, unshared arrays', () => {
     const a = spawnTrenchObstacles(createRng(42))
     const b = spawnTrenchObstacles(createRng(42))
-    expect(sig(a)).toBe(sig(b)) // same seed -> same chain
-    expect(a).not.toBe(b) // a fresh array each call (positions mutate as they scroll)
-    a[0].pos[2] = 999 // mutating one result must never corrupt a later spawn
-    expect(sig(spawnTrenchObstacles(createRng(42)))).toBe(sig(b))
+    expect(sig(a)).toBe(sig(b)) // same seed -> same chain (deterministic)
+    // Fresh, unshared references every call: nothing aliases another spawn or
+    // the readonly source table, so a scrolling run can never corrupt a later
+    // spawn. Vec3 is `readonly`, so freshness is checked by identity, not by
+    // mutating a position.
+    expect(a).not.toBe(b)
+    expect(a[0]).not.toBe(b[0])
+    expect(a[0].pos).not.toBe(b[0].pos)
+    expect(a[0].pos).not.toBe(TRENCH_OBSTACLE_STATIONS[0].pos)
   })
 })
