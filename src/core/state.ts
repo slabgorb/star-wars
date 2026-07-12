@@ -122,6 +122,21 @@ export interface TrenchObstacle {
 
 /** Shields the player starts a run with; a hit costs one. */
 export const STARTING_LIVES = 6
+/** Cumulative-score thresholds that each award one bonus shield/life, the first
+ *  time the score reaches them (sw3-6). ROM: the extra-life text `a40000`/`a80000`
+ *  (docs/star-wars-1983-source-findings.md ~442-449) = **400,000 / 800,000**. The
+ *  doc's load-bearing cross-note warns against reading these as 4M/8M or 250k/500k —
+ *  "do NOT ×10". Each fires once; a single score delta that vaults past both grants
+ *  both (see `awardExtraLives` in sim.ts). */
+export const EXTRA_LIFE_THRESHOLDS: readonly number[] = [400_000, 800_000]
+/** The bonus/extra-life HUD flash (`bonusFlash`) re-arms to this on any score
+ *  change, then decays by BONUS_FLASH_DECAY per tick toward 0 — the ROM `byte_4B2C`
+ *  "score changed, redraw HUD" counter (`lda #$FF` on every score change; `sub_761D`
+ *  drains it under the score). Modeled as a normalized [0,1] intensity; the exact
+ *  −8/refresh rate is a cosmetic detail, so BONUS_FLASH_DECAY is an authentic-FEEL
+ *  tunable (~1s flash at 60fps), not a test-pinned value. */
+export const BONUS_FLASH_MAX = 1
+export const BONUS_FLASH_DECAY = 1 / 60
 /** Points for destroying a TIE fighter — ROM `byte_984A` = 1,000 (sw3-1, from
  *  the sw2-6 audit; its load-bearing cross-note settles this at 1,000, "do NOT
  *  ×10"). Was a 100-point authentic-feel guess. */
@@ -422,6 +437,13 @@ export interface GameState {
   t: number
   score: number
   lives: number
+  /** The flashing bonus/extra-life HUD counter under the score — the ROM
+   *  `byte_4B2C` analog (sw3-6). A normalized [0,1] flash intensity: re-armed to
+   *  BONUS_FLASH_MAX on any score change, decayed by BONUS_FLASH_DECAY each tick
+   *  toward 0. The shell draws the amber row beneath the score only while this is
+   *  > 0 (render.ts); when it reaches 0 the row is absent. Owned by the core tick
+   *  (`finalizeScore` in sim.ts); the shell only reads it. */
+  bonusFlash: number
   /** Player height above the y=0 surface (Wave 2 terrain skim). */
   altitude: number
   /** How far the Death Star surface ground grid has scrolled toward the cockpit
@@ -528,6 +550,7 @@ export function initialState(seed = 1983): GameState {
     t: 0,
     score: 0,
     lives: STARTING_LIVES,
+    bonusFlash: 0,
     altitude: SKIM_ALTITUDE,
     surfaceScrollZ: 0,
     trenchScrollZ: 0,
