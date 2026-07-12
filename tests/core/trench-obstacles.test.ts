@@ -21,11 +21,16 @@ import {
 import { initialState, TRENCH_SCROLL_SPEED, PROJECTILE_TTL, type GameState } from '../../src/core/state'
 import { stepGame, enterPhase } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
+import { createRng } from '@arcade/shared/rng'
 
 describe('trench obstacles — spawn & scroll', () => {
-  it('enterPhase(trench) seeds the full station table; other phases carry none', () => {
+  it('enterPhase(trench) seeds the run chain from the run RNG; other phases carry none', () => {
     const t = enterPhase(initialState(), 'trench')
-    expect(t.trenchObstacles).toEqual(spawnTrenchObstacles())
+    // sw3-7: the trench chain is now SEEDED from the run RNG (fixed-head +
+    // picked-tail, ROM sub_83A4), so it equals the generator seeded with the
+    // run's own seed — no longer the static no-arg default. enterPhase must seed
+    // from a LOCAL cursor (createRng(state.rng.seed)) so the run RNG is unmutated.
+    expect(t.trenchObstacles).toEqual(spawnTrenchObstacles(createRng(initialState().rng.seed)))
     expect(t.trenchObstacles.length).toBe(TRENCH_OBSTACLE_STATIONS.length)
     expect(enterPhase(initialState(), 'space').trenchObstacles).toEqual([])
     expect(enterPhase(initialState(), 'surface').trenchObstacles).toEqual([])
