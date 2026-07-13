@@ -20,6 +20,15 @@
 //   • Keep sw3-15's $800 approach-window gate (the hit only resolves near the cockpit).
 //   • Keep the core pure & deterministic (no wall-clock, no Math.random).
 //
+// ⚠ RE-SEATED BY sw5-4 — read the first bullet as history, not as a live constraint.
+// The octagon it pinned 70 against was an AUTHORED shape (the disassembly held no
+// vertex table for the port). WSOBJ.MAC `.WP PORT` does, so sw5-4 swaps in the real
+// object and the radius is re-tuned to the ROM porthole (70 → 96-136). What sw4-4
+// actually cares about is UNTOUCHED and still enforced below: anti-tunnelling must be
+// achieved by SWEEPING the bolt's path, never by inflating the sphere. The ceiling
+// that forbids inflation is now the porthole/berm rather than the literal 120 — which,
+// against the real hole, would have forbidden a correct radius.
+//
 // Why these tests hand-place FAST bolts instead of firing them: sw4-4 branches off
 // `develop`, where sw4-1 has NOT landed, so PROJECTILE_SPEED is still 5,000 (~83
 // u/frame — under the port diameter, so a real fired bolt does not tunnel yet). To
@@ -66,9 +75,26 @@ const FRAME = 1 / 60
  *  can still catch. A bolt stepping more than this in one frame can tunnel. */
 const PORT_DIAMETER = PORT_HIT_RADIUS * 2
 
-/** The visible octagon's outer reach (EXHAUST_PORT is stroked flat in the XZ plane).
- *  Derived from the model so the octagon-tight contract can't rot if it's re-authored. */
-const OCTAGON_REACH = Math.max(...EXHAUST_PORT.vertices.map((v) => Math.hypot(v[0], v[2])))
+/**
+ * The visible target's reach. RE-SEATED BY sw5-4: EXHAUST_PORT was an authored octagon
+ * lying flat in the XZ plane (reach ~69.5); it is now the ROM's `PORT` — three
+ * concentric squares flat in z=0, facing the pilot. The hole the player shoots is the
+ * innermost (`.WGD PORT`'s red `;PORTHOLE` pen); the berm and base are the lip and the
+ * Death Star surface around the shaft. Derived from the model so this contract cannot
+ * rot if it is ever re-ported again.
+ */
+const PORTHOLE_HALF_WIDTH = 96 // `.PH 0C,0C,0` × .S=8 — the hole
+const BERM_HALF_WIDTH = 160 //    `.PH 14,14,0` × .S=8 — the lip
+const BASE_HALF_WIDTH = 256 //    `.PH 20,20,0` × .S=8 — Death Star surface
+/** The porthole's corner reach — the WYSIWYG ceiling. ~135.8. */
+const PORTHOLE_REACH = Math.hypot(PORTHOLE_HALF_WIDTH, PORTHOLE_HALF_WIDTH)
+
+/** What the port model ACTUALLY ships, read in the plane the ROM plate lies in.
+ *  Checked against the ROM constants above by the guard test — never used in their
+ *  place, so a shrunken or re-authored port can never quietly satisfy the bounds. */
+const MODEL_RINGS = [...new Set(EXHAUST_PORT.vertices.map((v) => Math.abs(v[0])))].sort(
+  (a, b) => a - b,
+)
 
 const hit = (events: GameEvent[]): boolean => events.some((e) => e.type === 'death-star-destroyed')
 
@@ -173,28 +199,46 @@ describe('sw4-4 — a fast bolt sweeps the exhaust port instead of tunnelling th
 })
 
 // ---------------------------------------------------------------------------
-// The fix must SWEEP, not WIDEN — sw3-15's octagon-tight radius & $800 window hold
+// The fix must SWEEP, not WIDEN — the target-tight radius & $800 window hold
+// (sw5-4: the visible target is now the ROM porthole, not the authored octagon)
 // ---------------------------------------------------------------------------
 
-describe('sw4-4 — the swept fix preserves the octagon-tight radius and the approach window', () => {
-  it('PORT_HIT_RADIUS stays octagon-tight (≤ the ~70 the player sees) — never the fat 120 sphere', () => {
+describe('sw4-4 — the swept fix preserves the target-tight radius and the approach window', () => {
+  it('PORT_HIT_RADIUS stays target-tight (≤ the porthole you see) — the fix must SWEEP, not WIDEN', () => {
     // The story's headline constraint: anti-tunnelling must be decoupled from the hit
-    // radius. Papering over the tunnel by re-inflating the sphere toward the old 120 is
-    // forbidden — that would re-break sw3-15's WYSIWYG finish.
-    expect(OCTAGON_REACH).toBeGreaterThan(60)
-    expect(OCTAGON_REACH).toBeLessThan(80)
-    expect(PORT_HIT_RADIUS).toBeLessThanOrEqual(Math.ceil(OCTAGON_REACH))
-    expect(PORT_HIT_RADIUS).toBeLessThan(120)
+    // radius. Papering over the tunnel by inflating the sphere is forbidden — that would
+    // re-break sw3-15's WYSIWYG finish.
+    //
+    // RE-SEATED BY sw5-4. The old literal ceiling was 120 ("never restore the fat sphere
+    // sw3-15 removed"), which was meaningful only against the authored octagon's ~70. The
+    // ROM porthole reaches ~135.8, so 120 is now TIGHTER than the target and the old
+    // ceiling would forbid a CORRECT radius. The intent — the sphere may never swell out
+    // past the hole onto the surrounding structure — is preserved by ceiling it at the
+    // porthole and the berm, which is what "don't widen" always meant.
+    // The guard: the bounds are stated in the ROM's units, so they only mean anything
+    // if the port we draw and collide against IS the ROM plate. If the model is ever
+    // re-authored (as the octagon was), this fires first and the bound can be re-read
+    // rather than silently rotting.
+    expect(MODEL_RINGS, 'the port model is the ROM plate').toEqual([
+      PORTHOLE_HALF_WIDTH,
+      BERM_HALF_WIDTH,
+      BASE_HALF_WIDTH,
+    ])
+    expect(PORT_HIT_RADIUS).toBeLessThanOrEqual(Math.ceil(PORTHOLE_REACH))
+    expect(PORT_HIT_RADIUS, 'never out onto the berm').toBeLessThan(BERM_HALF_WIDTH)
   })
 
   it('a FAST bolt whose whole path stays wider than the hit radius still misses (swept, not widened)', () => {
-    // A fast bolt offset laterally just past the sphere — inside the OLD 120, outside the
-    // real 70 — sweeps straight down the trench without ever coming within PORT_HIT_RADIUS
-    // of the port. A correct swept test (perpendicular distance to the path) misses it; a
-    // lazy "just widen the radius" fix would wrongly catch it. Keeps GREEN honest.
-    const OFFSET = PORT_HIT_RADIUS + 25 // outside 70, inside the removed 120
+    // A fast bolt offset laterally just past the sphere sweeps straight down the trench
+    // without ever coming within PORT_HIT_RADIUS of the port. A correct swept test
+    // (perpendicular distance to the path) misses it; a lazy "just widen the radius" fix
+    // would wrongly catch it. Keeps GREEN honest.
+    //
+    // The offset is derived from the radius, so it re-seats itself: it is a NEAR miss —
+    // outside the sphere, but still on the plate rather than a wild shot down the trench.
+    const OFFSET = PORT_HIT_RADIUS + 25
     expect(OFFSET).toBeGreaterThan(PORT_HIT_RADIUS)
-    expect(OFFSET).toBeLessThan(120)
+    expect(OFFSET, 'still on the plate — a near miss, not a wild shot').toBeLessThanOrEqual(BASE_HALF_WIDTH)
     const stepDist = PORT_DIAMETER * 3
     const s0: GameState = {
       ...trench(portAt([0, 0, -300]), { trenchShotsFired: 2 }),
@@ -203,7 +247,7 @@ describe('sw4-4 — the swept fix preserves the octagon-tight radius and the app
       ],
     }
     const s1 = stepGame(s0, NO_INPUT, FRAME)
-    expect(hit(s1.events)).toBe(false) // off the visible octagon → no hit, however fast
+    expect(hit(s1.events)).toBe(false) // off the visible porthole → no hit, however fast
     expect(s1.exhaustPort).not.toBeNull()
   })
 
