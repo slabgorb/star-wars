@@ -42,10 +42,11 @@ import type { Vec3 } from '@arcade/shared/math3d'
  * - BNK maps to Surface Bunker: `.WGD BNK` (WSOBJ.MAC:1711) is its OWN draw
  *   routine, distinct from TWR/GND/STB, that strokes only the bunker's top
  *   cross-section — matching SURFACE_BUNKER's own citation of `.WGD BNK`.
- * - PORT maps to Exhaust Port for header purposes only: PORT is
- *   `hasDrawList: false` (no recoverable `.WL` edges here) and EXHAUST_PORT
- *   is itself PROVISIONAL/authored (no confirmed ROM source), so this pair
- *   never asserts edges either — see the vertices-only handling below.
+ * - PORT maps to Exhaust Port: `.WGD PORT` (WSOBJ.MAC:1855) is PORT's own draw
+ *   routine — `;THERMAL EXHAUST PORT` — distinct from TWR/GND/STB/BNK. sw5-4
+ *   re-ported EXHAUST_PORT from `.WP PORT`'s 12-point table verbatim, so this
+ *   pair is NOT header-only like the ones above: vertices AND edges are
+ *   compared for real, and come out clean — 0/0 drift (romCompare.test.ts).
  * - TW1/TW2/TW3, BK1/BK2/BK3, WG1/WG2/WG3 are DELIBERATELY LEFT UNMAPPED.
  *   Their own WSOBJ.MAC `.WP` comments (not the abbreviated `.WL` draw-list
  *   comments) name them "TOWER TOP EXPLOSION PIECE 1/2/3", "BUNKER EXPLOSION
@@ -84,6 +85,24 @@ export function edgeKey([a, b]: Edge): string {
  * so it is never real connectivity and must never be reported as drift. */
 function isSelfEdge([a, b]: Edge): boolean {
   return a === b
+}
+
+/**
+ * Edges that actually index a vertex the model HAS.
+ *
+ * The ROM contains one that does not: WFG's `.WGD` routine (WSOBJ.MAC:1844) is
+ * `DRAWTO 6,3` against a six-point table (0..5), so the baked artifact carries
+ * edges [5,6] and [6,3] whose index 6 is not a valid subscript. That is an
+ * out-of-bounds read in the 1983 ROM itself — on the cabinet it strokes to a
+ * stale slot of the transform scratch page. romModels.generated.ts transcribes
+ * it verbatim (it is the audit record), so every consumer must filter it here:
+ * it is undefined geometry, never real connectivity. Diffing it would fabricate
+ * drift; STROKING it would read `vertices[6] === undefined` and draw to NaN.
+ *
+ * Same contract as `isSelfEdge`, one rung more dangerous.
+ */
+export function inRangeEdges(edges: readonly Edge[], vertexCount: number): Edge[] {
+  return edges.filter(([a, b]) => [a, b].every((i) => i >= 0 && i < vertexCount))
 }
 
 export function diffEdges(
@@ -137,8 +156,16 @@ export function pairOne(rom: RomModel, portName: string | null, port: Model3D | 
   // the ROM actually has a draw list AND the two vertex arrays agree. If they
   // don't, refuse to diff: reporting edge drift over mismatched vertex arrays
   // would be a fabricated result (see verdictFor's "vertices differ" case).
+  // Filter each side's edges against its OWN vertex count before diffing: an
+  // edge that indexes a vertex the model does not have is undefined geometry,
+  // not connectivity, and reporting it as drift would be a fabricated finding.
+  // (`verticesMatch` already guarantees the two counts agree here — filtering
+  // per-side is just the honest way to say it.)
   const d = port && rom.hasDrawList && verticesMatch
-    ? diffEdges(rom.edges, port.edges)
+    ? diffEdges(
+        inRangeEdges(rom.edges, rom.vertices.length),
+        inRangeEdges(port.edges, port.vertices.length),
+      )
     : { onlyInRom: [], onlyInPort: [] }
   return { romName: rom.name, portName, rom, port, verticesMatch, ...d }
 }

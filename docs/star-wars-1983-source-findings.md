@@ -269,6 +269,16 @@ three concentric squares (corner magnitudes `$60/$A0/$100`) — a targeting-reti
 / lock-on box. ⚠︎ These object identities beyond `Obj_Trench_Squares` are agent
 inferences, not source names.
 
+> **⚠ SUPERSEDED (sw5-4):** `Object_12`'s "targeting-reticle / lock-on box" guess
+> is settled, not just corroborated. The original 1983 MACRO-11 source
+> (`WSOBJ.MAC`, `~/Projects/star-wars-1983-source-text`) names this exact
+> three-concentric-square table `.WP PORT` (`;THERMAL EXHAUST PORT`), with its
+> own draw routine `.WGD PORT`. sw5-4 re-ports `EXHAUST_PORT` from that table
+> verbatim (corner magnitudes 96/160/256 in the port's own `.S=8` scale — this
+> disasm entry's hex `$60/$A0/$100` are the same numbers, unscaled). Left as
+> history above, not rewritten — see `## Exhaust port & run outcome` below and
+> `docs/sw2-6-disassembly-fidelity-audit.md` for the corresponding errata.
+
 ---
 
 ## Trench catwalks, turrets & wall squares
@@ -706,3 +716,11 @@ against the current clone:
     or addresses it (see #1); the nearest candidate, `Object_12`'s three
     concentric squares, is the extraction's OWN unconfirmed inference
     ("targeting-reticle / lock-on box"), not safe to claim as the port.
+
+    > **⚠ SUPERSEDED (sw5-4):** the "not safe to claim" hedge above was written
+    > against the disassembly alone. The original MACRO-11 source settles it:
+    > `WSOBJ.MAC`'s `.WP PORT` (`;THERMAL EXHAUST PORT`) IS `Object_12`'s
+    > three-concentric-square table, with its own draw routine `.WGD PORT`.
+    > `EXHAUST_PORT` is no longer an authored octagon — sw5-4 re-ported it from
+    > `.WP PORT` verbatim (12 vertices / 18 edges, `PORT_HIT_RADIUS` re-tuned
+    > 70 → 108). Left as history above, not rewritten.

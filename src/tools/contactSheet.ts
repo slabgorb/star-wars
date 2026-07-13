@@ -20,12 +20,12 @@ import { drawWireframe, project, GLOW_FOR, DEFAULT_GLOW, NEAR, FAR } from '../sh
 import { withGlow } from '../shell/glow'
 import { SURFACE_ORIENT } from '../shell/render'
 import { modelBounds, fitDistance, cellRects } from '../core/modelView'
-import { pairModels, verdictFor, type ModelPair } from './romCompare'
+import { pairModels, verdictFor, inRangeEdges, type ModelPair } from './romCompare'
 
 const FOV_Y = Math.PI / 3 // match the game camera
 const COLS = 3
 const SPIN_RATE = 0.6 // radians per second
-const VIEW_TILT = -Math.PI / 6 // fixed 3/4-view pitch so flat y=0 models aren't edge-on
+const VIEW_TILT = -Math.PI / 6 // fixed 3/4-view pitch so flat models (y=0 or z=0) aren't edge-on
 const GAMEPLAY_DISTANCE = 2200 // representative engagement distance for "G" mode
 // Dev-only tool labels stay on plain canvas text (SH2-5): they use characters
 // the caps-only shared stroke font deliberately lacks.
@@ -85,7 +85,7 @@ const bounds = MODELS.map((m) => modelBounds(m))
 // these — see romCompare.ts's ROM_TO_PORT doc comment); 'missing' is the
 // PORT side when the ROM object has no port counterpart.
 type CellSide =
-  | { readonly kind: 'edges'; readonly model: Model3D }
+  | { readonly kind: 'edges'; readonly model: Model3D; readonly note?: string }
   | { readonly kind: 'dots'; readonly name: string; readonly vertices: readonly Vec3[] }
   | { readonly kind: 'missing'; readonly note: string }
 
@@ -99,10 +99,27 @@ interface PairRender {
 // sphere once instead of every frame (24 pairs x 60fps).
 const pairRenders: PairRender[] = pairs.map((p) => {
   const romModel = p.rom
+  // `inRangeEdges` drops the ROM's own out-of-bounds strokes (WFG's
+  // `DRAWTO 6,3` into a six-point table — see romCompare). Stroking one
+  // unfiltered would transform `vertices[6] === undefined` and draw to NaN.
+  //
+  // But dropping them SILENTLY would defeat the point of this tool: it exists to
+  // make ROM/port discrepancies visible, not to normalize them away (same reason
+  // both halves are framed on the ROM's bounding sphere below). So the cell says
+  // how many strokes were dropped, and the `E:` count is the DRAWN count.
+  const drawable = romModel ? inRangeEdges(romModel.edges, romModel.vertices.length) : []
+  const dropped = romModel ? romModel.edges.length - drawable.length : 0
   const rom: CellSide = !romModel
     ? { kind: 'missing', note: 'no ROM data' }
     : romModel.hasDrawList
-      ? { kind: 'edges', model: { name: p.romName, vertices: romModel.vertices, edges: romModel.edges } }
+      ? {
+          kind: 'edges',
+          model: { name: p.romName, vertices: romModel.vertices, edges: drawable },
+          // Kept SHORT on purpose: the cell is clipped to a half-width column
+          // (the same one 'no draw list' has to fit in), so a longer string is
+          // silently truncated mid-word and says nothing.
+          ...(dropped > 0 && { note: `${dropped} edge${dropped === 1 ? '' : 's'} out of range` }),
+        }
       : { kind: 'dots', name: p.romName, vertices: romModel.vertices }
   const port: CellSide = p.port ? { kind: 'edges', model: p.port } : { kind: 'missing', note: 'not ported' }
 
@@ -153,9 +170,11 @@ function drawModelCell(m: Model3D, r: { x: number; y: number; w: number; h: numb
   const dist = fitToCell ? fitDistance(radius, FOV_Y) : GAMEPLAY_DISTANCE
 
   // vertex -> recentre -> display-orient -> spin -> fixed view tilt -> push back
-  // (matrices compose right-to-left). The tilt lifts flat y=0-plane models
-  // (TRENCH, EXHAUST_PORT) out of edge-on and gives every model a 3/4 view; the
-  // final translation(-dist) is this cell's view matrix (camera at the origin).
+  // (matrices compose right-to-left). The tilt lifts flat models out of edge-on
+  // and gives every model a 3/4 view: TRENCH lies flat in y=0, while EXHAUST_PORT
+  // (sw5-4) is a ROM plate flat in z=0 facing the pilot — a different plane, same
+  // need for the tilt. The final translation(-dist) is this cell's view matrix
+  // (camera at the origin).
   const recentre = translation(-center[0], -center[1], -center[2])
   const spun = multiply(rotationY(spinAngle), multiply(orientFor(m.name), recentre))
   const orient = multiply(rotationX(VIEW_TILT), spun)
@@ -215,6 +234,9 @@ function drawPair(p: ModelPair, pr: PairRender, r: { x: number; y: number; w: nu
     // nobody mistakes the dots for recovered edge connectivity.
     if (side.kind === 'dots') ctx.fillText('no draw list', 8, 54)
     if (side.kind === 'missing') ctx.fillText(side.note, 8, 54)
+    // The ROM's own out-of-bounds strokes (WFG). Say so — an audit tool that
+    // quietly discards a ROM anomaly is worse than one that never found it.
+    if (side.kind === 'edges' && side.note) ctx.fillText(side.note, 8, 54)
     ctx.restore()
   })
 

@@ -688,11 +688,14 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     ? afterObstacles.projectiles.findIndex((b) =>
         // Swept, not snapshot: test the bolt's whole path THIS frame — from the
         // pre-advance start (`pos − vel·dt`) to its current `pos` — against the
-        // fixed 70u port sphere. `advance` (above) has already moved the bolt
-        // this tick, so a point-in-sphere check on `pos` alone tunnels: sw4-1's
-        // restored 12,000 u/s bolt steps 200u/frame, clean over the 140u sphere,
-        // hitting nothing. The segment test catches the crossing WITHOUT widening
-        // PORT_HIT_RADIUS and stays inside the same $800 approach-window gate (sw4-4).
+        // 108u port sphere (216u diameter, sw5-4). `advance` (above) has already
+        // moved the bolt this tick, so a point-in-sphere check on `pos` alone can
+        // tunnel: a bolt whose step outpaces the sphere — including sw4-1's
+        // 12,000 u/s bolt, once the port's own per-frame scroll narrows the
+        // margin (see tests/core/swept-port-collision.test.ts) — passes between
+        // two consecutive frame samples and hits nothing. The segment test
+        // catches the crossing WITHOUT widening PORT_HIT_RADIUS and stays inside
+        // the same $800 approach-window gate (sw4-4).
         sweptCollides(port, sub(b.pos, scale(b.vel ?? ZERO, dt)), b.pos, PORT_HIT_RADIUS),
       )
     : -1

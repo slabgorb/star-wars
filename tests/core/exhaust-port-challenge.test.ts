@@ -22,10 +22,20 @@
 //       crash-and-respawn-a-fresh-pass is authentic).
 //
 // The three restore actions the story asks for map to the two describe blocks below:
-//   • tighten the hit sphere toward the octagon span  ─┐  "the hit sphere is
-//   • require aim alignment (a shot must be ON the port)┘   tightened to the octagon"
+//   • tighten the hit sphere toward the VISIBLE target ─┐  "the hit sphere is
+//   • require aim alignment (a shot must be ON the port)┘   tightened to the target"
 //   • gate the hit/miss test to the narrow $800 window  →  "the hit/miss decision
 //                                                            is gated to the window"
+//
+// ⚠ RE-SEATED BY sw5-4. Everything above is sw3-15's history and still true OF ITS
+// TIME: the "visible octagon" it tightened against (EXHAUST_PORT, ~70 reach) was an
+// AUTHORED shape, because the disassembly held no vertex table for the port. The 1983
+// source does (WSOBJ.MAC `.WP PORT`, ";THERMAL EXHAUST PORT"), so sw5-4 replaces the
+// octagon with the real object: three concentric squares, the innermost of which —
+// the ±96 `;PORTHOLE` — is the hole. sw3-15's WYSIWYG rule is UNCHANGED and still
+// enforced below; only the geometry it points at moves, from the octagon to the
+// porthole. The hit sphere therefore GROWS (70 → 96-136) and the finish gets easier
+// by exactly that much. Full contract + difficulty call-out: exhaust-port-hit-rom.test.ts.
 //
 // Like the sibling suites (exhaust-port-outcome, force-bonus) these drive behaviour
 // through the pure surface — stepGame(state, input, dt) and the GameState/events it
@@ -76,10 +86,32 @@ const FIRE: Input = { aimX: 0, aimY: 0, fire: true, aspect: 1 }
  *  sibling suites use for their in-range port kills. */
 const IN_WINDOW_Z = -300
 
-/** The visible octagon's outer reach — max vertex radius in the XZ plane the port
- *  is drawn in (render.ts strokes EXHAUST_PORT flat, y=0). Derived from the model so
- *  the hit-sphere contract can't rot if the octagon is ever re-authored. ~69.5. */
-const OCTAGON_REACH = Math.max(...EXHAUST_PORT.vertices.map((v) => Math.hypot(v[0], v[2])))
+/**
+ * The visible target's outer reach — the geometry sw3-15's WYSIWYG bound is pinned
+ * against. RE-SEATED BY sw5-4: this used to be the authored octagon's ~69.5, read in
+ * the XZ plane the octagon lay flat in. EXHAUST_PORT is now the ROM's `PORT` object —
+ * three concentric squares (96 / 160 / 256), flat in the z=0 plane, facing the pilot —
+ * so the reach is read in the x/y plane it actually occupies, and it is measured over
+ * the PORTHOLE (the innermost square, the one `.WGD PORT`'s red `;PORTHOLE` pen
+ * closes) rather than the whole plate. The berm and base are the lip and the Death
+ * Star surface around the shaft; a torpedo into them has missed.
+ *
+ * sw3-15's rule is unchanged — "you may only HIT what you can SEE" — it is simply
+ * pointed at the real hole instead of a fabricated octagon. See
+ * exhaust-port-hit-rom.test.ts for the full AC-4 contract and the difficulty call-out.
+ */
+const PORTHOLE_HALF_WIDTH = 96 // `.PH 0C,0C,0` × .S=8 — the hole
+const BERM_HALF_WIDTH = 160 //    `.PH 14,14,0` × .S=8 — the lip
+const BASE_HALF_WIDTH = 256 //    `.PH 20,20,0` × .S=8 — Death Star surface
+/** The porthole's corner reach — the WYSIWYG ceiling. ~135.8. */
+const PORTHOLE_REACH = Math.hypot(PORTHOLE_HALF_WIDTH, PORTHOLE_HALF_WIDTH)
+
+/** What the port model ACTUALLY ships. Checked against the ROM constants above by the
+ *  guard test — never used in their place, so a re-authored port cannot quietly
+ *  satisfy a bound by shrinking the yardstick along with the target. */
+const MODEL_RINGS = [...new Set(EXHAUST_PORT.vertices.map((v) => Math.abs(v[0])))].sort(
+  (a, b) => a - b,
+)
 
 /**
  * Fire ONE real bolt down the trench, then coast at a true 60fps, collecting the
@@ -107,33 +139,46 @@ const hit = (events: GameEvent[]): boolean => events.some((e) => e.type === 'dea
 const missed = (events: GameEvent[]): boolean => events.some((e) => e.type === 'exhaust-port-missed')
 
 // ---------------------------------------------------------------------------
-// tighten the hit sphere toward the octagon span + require aim alignment
+// tighten the hit sphere to the VISIBLE target + require aim alignment
+// (sw5-4: the visible target is now the ROM porthole, not the authored octagon)
 // ---------------------------------------------------------------------------
 
-describe('sw3-15 — the exhaust-port hit sphere is tightened to the visible octagon (a shot must be ON the port)', () => {
-  it('the derived octagon reach is ~64-70 (guards the WYSIWYG bound below)', () => {
-    // Sanity on the geometry the contract is pinned against: the octagon the player
-    // SEES reaches ~69.5 units. If the model is re-authored to a different size this
-    // fires first, so the bound below can be re-read rather than silently rotting.
-    expect(OCTAGON_REACH).toBeGreaterThan(60)
-    expect(OCTAGON_REACH).toBeLessThan(80)
+describe('sw3-15 — the exhaust-port hit sphere is tightened to the visible target (a shot must be ON the port)', () => {
+  it('the port we draw IS the ROM plate, and its porthole reaches ~136 (guards the bound below)', () => {
+    // Sanity on the geometry the contract is pinned against. RE-SEATED BY sw5-4: this
+    // used to read the authored octagon's ~69.5. The hole the player now SEES is the
+    // ROM's ±96 porthole, reaching ~135.8 at its corners. If the model is re-ported
+    // again this fires first, so the bound below can be re-read rather than silently
+    // rotting — which is exactly what it did when the octagon was replaced.
+    expect(MODEL_RINGS, 'the port model is the ROM plate').toEqual([
+      PORTHOLE_HALF_WIDTH,
+      BERM_HALF_WIDTH,
+      BASE_HALF_WIDTH,
+    ])
+    expect(PORTHOLE_REACH).toBeGreaterThan(130)
+    expect(PORTHOLE_REACH).toBeLessThan(140)
   })
 
-  it('the hit sphere is no larger than the octagon you can see (~64), not ~2x it (120)', () => {
-    // WYSIWYG: you may only HIT what you can SEE. Today PORT_HIT_RADIUS is 120 — about
-    // twice the octagon's reach — which is exactly why any centred bolt lands. Tighten
-    // it toward the ~64 span (findings ## Exhaust port & run outcome).
-    expect(PORT_HIT_RADIUS).toBeLessThanOrEqual(Math.ceil(OCTAGON_REACH))
+  it('the hit sphere is no larger than the porthole you can see — never out onto the berm', () => {
+    // WYSIWYG: you may only HIT what you can SEE. sw3-15 removed a 120 sphere that was
+    // ~2x the (fabricated) octagon and forgave any centred bolt. The rule survives
+    // sw5-4 intact; only its reference moves, to the real hole. Note the sting: 120 is
+    // now TIGHTER than the porthole, so the old literal ceiling would forbid a correct
+    // radius. The honest ceiling is the porthole's own reach.
+    expect(PORT_HIT_RADIUS).toBeLessThanOrEqual(Math.ceil(PORTHOLE_REACH))
+    expect(PORT_HIT_RADIUS, 'the lip is not the hole').toBeLessThan(BERM_HALF_WIDTH)
   })
 
-  it('a bolt offset past the octagon (but inside the OLD 120 sphere) no longer detonates the port', () => {
-    // The "require aim alignment" pin. GAP_OFFSET sits in the band the tightening
-    // removes: beyond the octagon the player sees, but within the fat 120 sphere that
-    // used to forgive it. The port is seated in-window so the RADIUS, not the window,
-    // decides this. An unaligned shot must miss the small target.
-    const GAP_OFFSET = 96
-    expect(GAP_OFFSET).toBeGreaterThan(OCTAGON_REACH) // genuinely off the visible octagon
-    expect(GAP_OFFSET).toBeLessThanOrEqual(120) // ...yet the OLD radius forgave it (so this is RED today)
+  it('a bolt offset past the porthole (out on the support berm) does not detonate the port', () => {
+    // The "require aim alignment" pin, RE-SEATED BY sw5-4. GAP_OFFSET must sit in the
+    // band the tightening removes: genuinely off the hole the player sees, yet still on
+    // the plate — a near-miss on the structure, not a wild shot. It used to be 96,
+    // which was "past the octagon"; against the ROM object 96 is ON the porthole rim
+    // and now legitimately SCORES (exhaust-port-hit-rom.test.ts pins that as the
+    // difficulty change). Moving it out onto the berm preserves this test's actual
+    // intent — an unaligned shot must miss the small target — under the real geometry.
+    const GAP_OFFSET = BERM_HALF_WIDTH // 160: on the lip, off the hole
+    expect(GAP_OFFSET).toBeGreaterThan(PORTHOLE_REACH) // genuinely off the visible hole
     const base = trench(portAt([0, 0, IN_WINDOW_Z]), { trenchShotsFired: 2 })
     const s1 = stepGame({ ...base, projectiles: [bolt([GAP_OFFSET, 0, IN_WINDOW_Z])] }, NO_INPUT, 0.001)
     expect(hit(s1.events)).toBe(false)
@@ -142,7 +187,7 @@ describe('sw3-15 — the exhaust-port hit sphere is tightened to the visible oct
 
   it('a dead-centre bolt on the in-window port still detonates it (you CAN hit when aimed)', () => {
     // The tightening must not make the port unhittable — a shot actually ON the
-    // octagon still wins. Guards against over-shrinking the sphere.
+    // hole still wins. Guards against over-shrinking the sphere.
     const base = trench(portAt([0, 0, IN_WINDOW_Z]), { trenchShotsFired: 2 })
     const s1 = stepGame({ ...base, projectiles: [bolt([0, 0, IN_WINDOW_Z])] }, NO_INPUT, 0.001)
     expect(hit(s1.events)).toBe(true)

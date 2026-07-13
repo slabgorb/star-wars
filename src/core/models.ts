@@ -6,7 +6,17 @@
 // (reference/disasm/Object_3D_Data.asm — gitignored, never committed): the real
 // signed 16-bit object-space coordinates from the 1983 board. The leading
 // (0,0,0) object anchor in each table is metadata, not a drawn point, so it is
-// dropped — every exported vertex is a render vertex.
+// dropped — so for most models every exported vertex is a render vertex.
+//
+// THE ONE EXCEPTION (sw5-5): the three GROUND LASAR TOWER objects — SURFACE_TOWER,
+// TOWER_CAP, SURFACE_BUNKER — each carry the ROM's SHARED fifteen-point `.WP GND`
+// table while their own `.WGD` draw routine strokes only a subset of it, so they
+// DO hold vertices their edges never touch. That is ROM structure, not dead weight
+// (WSOBJ.MAC's `.WPZ2 TWR/BNK/STB` alias one table across four objects), and it is
+// load-bearing: the contact sheet will not diff edges until the port's vertex array
+// deep-equals the ROM's. tests/core/models.test.ts carries the matching, named
+// orphan-vertex carve-out and re-asserts the invariant's intent over what each model
+// actually draws.
 //
 // EDGES are authored here, not ported: Object_3D_Data.asm holds vertex tables
 // only — the line-segment connectivity lived in the AVG vector-draw routines,
@@ -19,10 +29,14 @@
 // rings). This replaces the original 8-2 nearest-neighbour heuristic, which was
 // well-formed but rendered as a tangle (rims never closed). The reconstruction
 // is guarded by an induced-single-cycle topology test (tests/core/models.test.ts).
-// SURFACE_TOWER was later re-authored AGAIN from the original Atari source
-// (story sw3-11 — see its doc comment): its vertices AND stroke order are the
-// real WSOBJ.MAC ground-tower data, so its guard is connectivity, not
-// ring-closure (the cabinet never closes the 3-point cross-sections). TRENCH's floor squares already closed cleanly; story
+// The ground objects were re-authored from the original Atari source by story
+// sw3-11 and then RE-PORTED by sw5-5, which is the version that stands: sw3-11 read
+// the `.PGND` height column in decimal from a `.RADIX 16` file and re-expressed the
+// models in a private ×4 y-up frame, so its "real WSOBJ.MAC data" was neither the
+// ROM's numbers nor the ROM's frame. As of sw5-5 the vertices AND the stroke order
+// ARE the ROM's (see each model's doc comment), so their guard is connectivity, not
+// ring-closure (the cabinet never closes the 3-point cross-sections).
+// TRENCH's floor squares already closed cleanly; story
 // 8-5 connected them with catwalk rails and added the ring-based EXHAUST_PORT.
 // TIE_FIGHTER and DARTH_TIE were likewise RE-AUTHORED from their own ring structure
 // (story 8-10), clearing the inherited 8-2 heuristic-edge debt; both are now closed
@@ -376,25 +390,62 @@ export const DEATH_STAR_SURFACE: Model3D = {
   ],
 }
 
+// --- the GROUND LASAR TOWER family (WSOBJ.MAC `.WP GND`) ----------------------
+//
+// Re-ported from the original Atari source by story sw5-5, replacing sw3-11's
+// hand-re-authored versions. Two things changed, and both matter:
+//
+// 1. RAW ROM UNITS, like every ship model above. sw3-11 re-authored these three
+//    into a private frame (×4, y-up, base on y=0), which is why they were the
+//    only models the contact sheet could not compare against the ROM. They now
+//    carry `.WP GND`'s table verbatim, in the ROM's own axes:
+//
+//        x = fore/aft (the "FRONT" point is -x)   y = lateral   z = UP
+//
+//    Standing them up in the y-up world is the SHELL's job — see render.ts's
+//    TOWER_ORIENT / GROUND_MODEL_SCALE.
+//
+// 2. THE HEIGHTS ARE HEX. WSOBJ.MAC is `.RADIX 16`, so the `.PGND` height column
+//    reads 0x14 / 0x52 / 0x58 = 20 / 82 / 88 — not the decimal 14 / 52 / 58 that
+//    sw3-11 transcribed. The shipped tower was therefore too short AND wrong in
+//    the middle. (The arithmetic settles it: 0x58 × 120 − GD$MDT = 6720, which is
+//    exactly what the ROM bake emits; the decimal reading gives 3120, a number
+//    that appears nowhere in the ROM.)
+//
+// ONE TABLE, FOUR OBJECTS. `.WPZ2 TWR` / `.WPZ2 BNK` / `.WPZ2 STB` all alias
+// `.WP GND`: the four objects SHARE these fifteen points and differ only in which
+// of them their `.WGD` draw routine strokes. So each model below carries the full
+// table while its own edges touch a subset — the untouched points are ROM
+// structure, not port dead weight, and trimming them would break the vertex
+// equality the contact sheet needs before it will diff edges at all.
+// (tests/core/models.test.ts carries the matching orphan carve-out.)
+
 /**
- * Authentic GROUND LASAR TOWER column (Story sw3-11) — the surface tower body.
+ * GD$MDT — WSOBJ.MAC's "OFFSET HITE TO MID OF PLAYERS HITE" (0xF00).
  *
- * RE-AUTHORED from the original Atari source (historicalsource/star-wars @
- * 5355b76, "Warp Speed"): WSOBJ.MAC `.WP GND` point table (scale `.S=30.*4`,
- * heights recentred by GD$MDT — recentring dropped here, base on y=0). The ROM
- * profile, in .S units, is (h,r) = (0,8) (6,6) (14,5) (52,4) (58,4): a TALL
- * tapering column, 58 high on a 16-wide footprint (~3.6:1), with 3-point
- * front/left/right cross-sections — never 4-corner boxes. Ported here at ×4
- * world units per .S unit, so the composite (column + TOWER_CAP) peaks at
- * y = 232 ≈ 2× SKIM_ALTITUDE — the ROM's GD$MDT ("PART WAY UP TOWERS") puts the
- * ship's skim height at about mid-tower, and 120 ≈ 232/2 keeps that feel.
+ * The ROM recentres every ground object's height by this, so that model z = 0
+ * sits at the height the player flies at and the base ring lands at z = -GD$MDT.
+ * It is therefore the ROM's own statement of the skim altitude: the shell undoes
+ * the recentring to seat the base on the floor (render.ts), and state.ts's
+ * SKIM_ALTITUDE is this value at the shell's presentation scale.
+ */
+export const GD_HEIGHT_OFFSET = 0xf00
+
+/**
+ * Authentic GROUND LASAR TOWER column — the surface tower body (sw3-11, re-ported
+ * from the ROM by sw5-5).
  *
- * This model is the STUB portion (WSOBJ `.WGD STB` — the yellow column, levels
- * 0..52); the white cannon/hat section (52..58) is the separate TOWER_CAP so the
- * shell can stroke it VGCWHT. EDGES follow the cabinet's `.WGD TWR/STB` draw
- * code: three vertical profile polylines (right, front, left) meeting at the
- * base front and the cannon bottom — the cross-section triangles are NEVER
- * closed (the cabinet strokes no horizontal bands; see the revised 8-4 guard).
+ * This model is the STUB: WSOBJ.MAC `.WGD STB`, "STUB OF TOWER WITHOUT BUNKER HAT
+ * ON TOP" — the yellow column. It strokes 12 of the shared table's 15 points,
+ * leaving the cannon-top ring (points 3-5) bare, because in the ROM the white cap
+ * strokes it. The profile, in .S units, is (h,r) = (0,8) (6,6) (0x14,5) (0x52,4)
+ * (0x58,4): a tall waisted column, 0x58 = 88 high on a 16-wide footprint (5.5:1),
+ * with 3-point front/left/right cross-sections — never 4-corner boxes, and the
+ * cabinet never closes them into horizontal bands.
+ *
+ * The cannon/hat section (0x52 → 0x58) is the separate TOWER_CAP so the shell can
+ * stroke it VGCWHT; see that model for why the split exists and what proves it
+ * lossless.
  *
  * (The model this replaces was local-disasm `Object_10`, misidentified as the
  * tower — its base rectangle is identical to `Obj_Trench_Squares`' outer floor
@@ -403,93 +454,77 @@ export const DEATH_STAR_SURFACE: Model3D = {
 export const SURFACE_TOWER: Model3D = {
   name: 'Surface Tower',
   vertices: [
-    // base ring (y = 0, r = 32): front / left / right
-    [-32, 0, 0],
-    [0, 0, 32],
-    [0, 0, -32],
-    // near-bottom ring (y = 24, r = 24)
-    [-24, 24, 0],
-    [0, 24, 24],
-    [0, 24, -24],
-    // midline ring (y = 56, r = 20)
-    [-20, 56, 0],
-    [0, 56, 20],
-    [0, 56, -20],
-    // cannon-bottom ring (y = 208, r = 16) — the cap's seat
-    [-16, 208, 0],
-    [0, 208, 16],
-    [0, 208, -16],
+    // The shared `.WP GND` table: five 3-point cross-sections (front/left/right).
+    // z = h × .S(120) − GD$MDT, with h read in the file's own hex radix.
+    [-960, 0, -3840], [0, 960, -3840], [0, -960, -3840], //  0- 2  h=0     r=8  BASE
+    [-480, 0, 6720], [0, 480, 6720], [0, -480, 6720], //     3- 5  h=0x58  r=4  TOP OF CANNON
+    [-480, 0, 6000], [0, 480, 6000], [0, -480, 6000], //     6- 8  h=0x52  r=4  BOTTOM OF CANNON
+    [-600, 0, -1440], [0, 600, -1440], [0, -600, -1440], //  9-11  h=0x14  r=5  MIDLINE
+    [-720, 0, -3120], [0, 720, -3120], [0, -720, -3120], // 12-14  h=6     r=6  NEAR BOTTOM
   ],
+  // `.WGD STB` — three vertical profile polylines meeting at the base front and
+  // the cannon seat. The routine's own 1-based point numbers, minus one:
+  //   BDRAWTO 1,3,15,12,9   ;UP RIGHT SIDE
+  //   DRAWTO  7,10,13,1     ;DOWN CENTER
+  //   DRAWTO  2,14,11,8,7   ;UP LEFT SIDE
   edges: [
-    // right profile: base front across to the right corner, then up
-    [0, 2], [2, 5], [5, 8], [8, 11],
-    // front profile: across the cannon bottom, then down the front to the base
-    [11, 9], [9, 6], [6, 3], [3, 0],
-    // left profile: across the base, up the left, closing at the cannon bottom
-    [0, 1], [1, 4], [4, 7], [7, 10], [10, 9],
+    [0, 2], [2, 14], [14, 11], [11, 8], // up the right side
+    [8, 6], [6, 9], [9, 12], [12, 0], // down the centre
+    [0, 1], [1, 13], [13, 10], [10, 7], [7, 6], // up the left side
   ],
 }
 
 /**
- * The tower's WHITE CAP (Story sw3-11) — the ROM's cannon/hat section, WSOBJ.MAC
- * `.WP GND` levels 52→58 (r = 4), drawn by `.WGD TWR` in the "special" color:
- * WSGRND.MAC GDVIEW `VGCWHT` — "SO DRAW IT SPECIAL WHITE". Replaces the sw2-3
- * authored TOWER_CUBE. A separate model because Canvas strokes one color per
- * drawWireframe call; it shares the tower's placement transform and seats
- * exactly on the column's cannon-bottom ring (y = 208), peaking at
- * y = 232 = TOWER_HEIGHT — the tower's gun, where its fireballs erupt (WYSIWYG).
- * Edges follow the cabinet's white strokes: up the right and left cap sides,
- * across the top, and the partial cannon-bottom ring (front→right, front→left).
+ * The tower's WHITE CAP — the ROM's cannon/hat section (sw3-11, re-ported by
+ * sw5-5): the strokes `.WGD TWR` makes under `MOVD M.GDCT`, the "special" colour
+ * of WSGRND.MAC's GDVIEW ("SO DRAW IT SPECIAL WHITE"). It spans the shared table's
+ * cannon rings, h = 0x52 → 0x58 (r = 4).
+ *
+ * WHY THIS MODEL EXISTS AT ALL — in the ROM it does not. `.WGD TWR` (which IS
+ * `.WGD2 GND`: one object, two names, ONE draw routine) strokes the column and the
+ * hat together in a single plot, switching pen colour mid-draw. Canvas strokes one
+ * colour per `drawWireframe` call, so the port splits that single routine into two
+ * models — a COLOUR split, not a geometry one. It is lossless, and provably so:
+ * SURFACE_TOWER's 13 edges ∪ this model's 7 (2 shared) are exactly the 18 edges of
+ * `.WGD TWR` (pinned in tests/core/ground-objects-rom.test.ts). The two share the
+ * ROM point table and hence the placement transform, so the cap cannot drift off
+ * the column's cannon ring.
+ *
+ * The 2-edge overlap with SURFACE_TOWER is the ROM's, not sloppiness: the partial
+ * cannon-bottom ring is stroked white here, and in the base colour by the stub to
+ * close its open top. Each port model inherits its own routine's version.
+ *
+ * The cap's top ring is the highest thing drawn at a tower site — the gun, where
+ * the tower's fireballs erupt (state.ts TOWER_HEIGHT, WYSIWYG).
  */
 export const TOWER_CAP: Model3D = {
   name: 'Tower Cap',
-  vertices: [
-    // cannon-bottom ring (y = 208, r = 16): front / left / right
-    [-16, 208, 0],
-    [0, 208, 16],
-    [0, 208, -16],
-    // top-of-tower ring (y = 232, r = 16)
-    [-16, 232, 0],
-    [0, 232, 16],
-    [0, 232, -16],
-  ],
+  vertices: SURFACE_TOWER.vertices, // `.WPZ2` — the same `.WP GND` table
+  // The 7 white strokes of `.WGD TWR`: up the cannon sides, across the top, and
+  // the partial cannon-bottom ring (BDRAWTO 7,9 / 7,8).
   edges: [
-    // right side up, across the top, down the front
-    [2, 5], [5, 3], [3, 0],
-    // left side up to the top front
-    [1, 4], [4, 3],
-    // partial cannon-bottom ring (the cabinet's BDRAWTO 7,9 / 7,8)
-    [0, 2], [0, 1],
+    [8, 5], [5, 3], [3, 6], // up the right cannon side and across the top
+    [7, 4], [4, 3], // up the left cannon side to the top front
+    [6, 8], [6, 7], // the partial cannon-bottom ring
   ],
 }
 
 /**
- * Authentic GROUND BUNKER (Story sw3-11) — WSOBJ.MAC `.WGD BNK`, which draws
- * ONLY the base (r=8) and near-bottom (r=6, h=6) rings of the shared GND point
- * table: a squat truncated pyramid, the macro's own word — "SHORTY" (6 high on
- * a 16-wide footprint). Lone undamaged bunkers stroke `VGCRED` (GDVIEW).
- * Same ×4 scale as SURFACE_TOWER. Quota note for the sim: WSGRND's BUNKER maze
- * macro never increments `.TWRS` — bunkers do not count toward the tower quota.
+ * Authentic GROUND BUNKER (sw3-11, re-ported by sw5-5) — WSOBJ.MAC `.WGD BNK`,
+ * which strokes ONLY the base (r=8) and near-bottom (h=6, r=6) rings of the shared
+ * GND table: a squat truncated pyramid, the macro's own word — "SHORTY" (6 high on
+ * a 16-wide footprint). It never touches the column. Lone undamaged bunkers stroke
+ * `VGCRED` (GDVIEW). Quota note for the sim: WSGRND's BUNKER maze macro never
+ * increments `.TWRS` — bunkers do not count toward the tower quota.
  */
 export const SURFACE_BUNKER: Model3D = {
   name: 'Surface Bunker',
-  vertices: [
-    // base ring (y = 0, r = 32): front / left / right
-    [-32, 0, 0],
-    [0, 0, 32],
-    [0, 0, -32],
-    // top ring (y = 24, r = 24)
-    [-24, 24, 0],
-    [0, 24, 24],
-    [0, 24, -24],
-  ],
+  vertices: SURFACE_TOWER.vertices, // `.WPZ2` — the same `.WP GND` table
+  // `.WGD BNK`:  BDRAWTO 1,2,14,13,1,3,15,13  /  BDRAWTO 14,15
   edges: [
-    // left face: base front → left corner → up → across to the top front
-    [0, 1], [1, 4], [4, 3], [3, 0],
-    // right face: base front → right corner → up → across to the top front
-    [0, 2], [2, 5], [5, 3],
-    // the top cross-stroke (the cabinet's BDRAWTO 14,15)
-    [4, 5],
+    [0, 1], [1, 13], [13, 12], [12, 0], // the left face, up and back to the front
+    [0, 2], [2, 14], [14, 12], // the right face
+    [13, 14], // the top cross-stroke
   ],
 }
 
@@ -525,40 +560,56 @@ export const TRENCH: Model3D = {
 }
 
 /**
- * The trench exhaust port — the run's target. Trued against the fidelity epic's
- * findings dump (fidelity epic task 4; findings ## Exhaust port & run outcome /
- * ## Trench geometry & limits / Open follow-ups #1): the port is a scripted
- * hit-test PLANE (the type-3 segment latches `DPbyte_92/93`, a Z-boundary, not a
- * drawn shape) — `Object_3D_Data.asm` has no vertex table named or addressed for
- * it. The nearest candidate in the vertex dump, `Object_12` @ `$6545` (12 verts,
- * Z=0, three concentric squares at corner magnitudes `$60/$A0/$100` = 96/160/256),
- * sits right after the trench's other fixtures (`Object_10` catwalk brace,
- * `Object_11` posts) — but the findings doc itself flags that identity an AGENT
- * INFERENCE ("targeting-reticle / lock-on box"), not a confirmed source name, so
- * it is not safe to claim as the port. The geometry therefore stays AUTHORED: a
- * small octagonal opening lying flat in the y=0 floor plane, ring-based from the
- * start (a single closed loop), per the epic's geometry-connectivity contract.
- * The symmetric (±64,±27)/(±27,±64) octagon keeps every vertex at one exact
- * integer radius, so it reads as a single ring and avoids floating-point drift.
- * Display orientation (recessing it into the trench floor / facing the run) is a
- * render concern applied in the shell, not baked into this object-space data.
- * PROVISIONAL(findings ## Trench geometry & limits) — no authentic vertex table
- * to port; see Open follow-ups #1.
+ * The trench exhaust port — the run's target. Authentic, from WSOBJ.MAC `.WP PORT`
+ * ("THERMAL EXHAUST PORT") and its `.WGD PORT` draw routine (sw5-4).
+ *
+ * This object was invented by hand until now, because the disassembly held no
+ * vertex table the port could be identified with. It did hold the geometry —
+ * `Object_12` @ `$6545`, "12 verts, Z=0, three concentric squares at $60/$A0/$100"
+ * — but nothing in the dump said what that object WAS, so the old comment here
+ * called the identification an inference and shipped an octagon instead. The 1983
+ * source settles it: the object is named PORT and its comment reads ";THERMAL
+ * EXHAUST PORT". The octagon is gone.
+ *
+ * TWELVE points in THREE CONCENTRIC SQUARES, flat in z=0 — a plate whose face
+ * looks down the trench at the pilot (the shell draws it under TRENCH_ORIENT =
+ * IDENTITY, so it presents face-on; it does NOT lie in the floor plane the way the
+ * old octagon did). The `.PH` rows are HEX under `.RADIX 16`, at `.S=8`:
+ *
+ *   .PH 0C,0C,0   ;0-3 INNER CIRCLE   0x0C * 8 =  96   the PORTHOLE — the hole
+ *   .PH 14,14,0   ;4-7 SUPPORT BERM   0x14 * 8 = 160   the raised lip around it
+ *   .PH 20,20,0   ;8-15 BASE          0x20 * 8 = 256   Death Star surface
+ *
+ * Read those as decimal and the base row lands on 160 — exactly the true berm —
+ * collapsing three squares into two. (tests/core/exhaust-port-rom.test.ts refutes
+ * the decimal reading arithmetically.)
+ *
+ * `.WGD PORT` strokes the plate in THREE PENS, and the pen changes are the ROM
+ * telling us which part is which: VGCGRN the outer base, VGCTRQ the inner berm,
+ * and VGCRED — commented ";PORTHOLE" — closing points 0-3 and nothing else. So the
+ * HOLE is the ±96 inner square; the berm and base are structure around it. That is
+ * what state.ts's PORT_HIT_RADIUS is tuned to, NOT the full 512-wide plate.
+ *
+ * Canvas strokes one colour per drawWireframe call, so the three pens collapse to
+ * one here — the same limitation that split SURFACE_TOWER from TOWER_CAP. Left as
+ * one model: no AC asks for the colours, and unlike the tower the port's draw
+ * routine has no white/base split to reconcile.
  */
 export const EXHAUST_PORT: Model3D = {
   name: 'Exhaust Port',
+  // `.WP PORT`, in ROM order — the edge indices below are indices into THIS array.
   vertices: [
-    [64, 0, 27],
-    [27, 0, 64],
-    [-27, 0, 64],
-    [-64, 0, 27],
-    [-64, 0, -27],
-    [-27, 0, -64],
-    [27, 0, -64],
-    [64, 0, -27],
+    [96, 96, 0], [96, -96, 0], [-96, 96, 0], [-96, -96, 0], //      0-3   porthole
+    [160, 160, 0], [160, -160, 0], [-160, 160, 0], [-160, -160, 0], // 4-7   berm
+    [256, 256, 0], [256, -256, 0], [-256, 256, 0], [-256, -256, 0], // 8-11  base
   ],
+  // `.WGD PORT`, hand-walked: PLOT 5 / DRAWTO 9,8,4 / BDRAWTO 6,10,11,7 (green) /
+  // DRAWTO 6,2 / BDRAWTO 6,4,0 / BDRAWTO 4,5,1 / BDRAWTO 5,7,3 (turquoise) /
+  // DRAWTO 2,0,1,3 (red — the porthole).
   edges: [
-    [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 0],
+    [5, 9], [9, 8], [8, 4], [6, 10], [10, 11], [11, 7], // outer base + its skirt
+    [7, 6], [6, 2], [6, 4], [4, 0], [4, 5], [5, 1], [5, 7], [7, 3], // inner berm
+    [3, 2], [2, 0], [0, 1], [1, 3], // the porthole, closed
   ],
 }
 

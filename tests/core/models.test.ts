@@ -138,18 +138,80 @@ describe('models — well-formedness (every model)', () => {
     }
   })
 
+  // sw5-5 — THE ONE ENUMERATED EXCEPTION, and why it is not a loosening.
+  //
+  // The ROM authors the ground objects as ONE shared point table: WSOBJ.MAC's
+  // `.WP GND` (15 points), aliased by `.WPZ2 TWR` / `.WPZ2 BNK` / `.WPZ2 STB`.
+  // Four objects, one table — they differ only in which points their `.WGD` draw
+  // routine strokes. The bunker ("SHORTY") strokes 6 of the 15; the stub strokes
+  // 12, leaving the cannon-top ring for the cap to draw in white.
+  //
+  // So a ported ground object necessarily carries points its OWN edges never
+  // touch. That is ROM structure, not port dead weight — and it is not optional:
+  // the contact sheet gates its edge diff on the port's vertex array being
+  // DEEP-EQUAL to the ROM's (romCompare.ts `verticesEqual`), so trimming these
+  // models to only their stroked points would slam that gate shut and forfeit
+  // the very comparison sw5-5 exists to win.
+  //
+  // The invariant's INTENT — "no geometry the game never draws" — is preserved
+  // below, measured over the drawn subgraph instead of the raw array. The
+  // exemption is a NAMED LIST, so a genuinely orphaned vertex in any other model
+  // still fails, and adding a new model cannot quietly opt out.
+  const SHARED_ROM_TABLE_MODELS = ['Surface Tower', 'Tower Cap', 'Surface Bunker']
+
+  const referenced = (m: Model3D) => new Set(m.edges.flat())
+
   it('has no orphan vertices (every vertex is referenced by an edge)', () => {
-    const all = allModels()
+    const all = allModels().filter((m) => !SHARED_ROM_TABLE_MODELS.includes(m.name))
     expect(all.length).toBeGreaterThan(0)
     for (const m of all) {
-      const used = new Set<number>()
-      for (const [a, b] of m.edges) {
-        used.add(a)
-        used.add(b)
-      }
+      const used = referenced(m)
       for (let i = 0; i < m.vertices.length; i++) {
-        expect(used.has(i)).toBe(true)
+        expect(used.has(i), `${m.name} vertex ${i}`).toBe(true)
       }
+    }
+  })
+
+  it('the exempt ground objects are exactly the ones sharing the ROM point table — no others', () => {
+    // Guard the guard: the exemption list must not become a dumping ground for
+    // models that are simply broken. Every exempt model must genuinely be one of
+    // the `.WP GND` family, which is provable from the data — they all carry the
+    // identical 15-point table.
+    const exempt = allModels().filter((m) => SHARED_ROM_TABLE_MODELS.includes(m.name))
+    expect(exempt).toHaveLength(3)
+    const [first, ...rest] = exempt
+    expect(first.vertices).toHaveLength(15)
+    for (const m of rest) {
+      expect(m.vertices, `${m.name} shares .WP GND's table`).toEqual(first.vertices)
+    }
+  })
+
+  it('even the exempt ground objects draw a connected shape — orphans are the ONLY licence', () => {
+    // The intent of the orphan rule, restated over what is actually stroked: the
+    // points a ground object DOES draw must still form one connected wireframe.
+    // A floating fragment inside the drawn shape would be a real defect, and this
+    // exemption must not hide it.
+    for (const name of SHARED_ROM_TABLE_MODELS) {
+      const m = allModels().find((x) => x.name === name)!
+      const used = [...referenced(m)]
+      expect(used.length, `${name} must draw something`).toBeGreaterThan(0)
+
+      const adj = new Map<number, number[]>(used.map((i) => [i, []]))
+      for (const [a, b] of m.edges) {
+        adj.get(a)!.push(b)
+        adj.get(b)!.push(a)
+      }
+      const seen = new Set([used[0]])
+      const stack = [used[0]]
+      while (stack.length) {
+        for (const w of adj.get(stack.pop()!)!) {
+          if (!seen.has(w)) {
+            seen.add(w)
+            stack.push(w)
+          }
+        }
+      }
+      expect(seen.size, `${name}'s drawn points form ONE component`).toBe(used.length)
     }
   })
 })
@@ -405,11 +467,18 @@ describe('models — surface tower topology (8-4, revised by sw3-11)', () => {
     expect(m.edges.length).toBeGreaterThan(0)
   })
 
+  // sw5-5: re-seated onto the DRAWN subgraph. The tower now carries the ROM's
+  // full shared 15-point table (`.WP GND`), of which `.WGD STB` strokes 12 — the
+  // cannon-top ring is left for TOWER_CAP to draw in white. `isSingleComponent`
+  // walks every vertex in the array, so it now (correctly) sees those three as
+  // unreachable. The property worth guarding is unchanged: what the tower DRAWS
+  // must be one wireframe, with no floating section. See the orphan carve-out
+  // above for why the untouched points must stay in the array.
   it('is a single connected wireframe (profile polylines share their joints)', () => {
     const m = findTower()
     expect(m).toBeDefined()
     if (!m) return
-    expect(isSingleComponent(m)).toBe(true)
+    expect(isSingleComponent(drawnSubgraph(m))).toBe(true)
   })
 })
 
@@ -444,6 +513,26 @@ describe('models — surface tower topology (8-4, revised by sw3-11)', () => {
 // ---------------------------------------------------------------------------
 
 const findExhaustPort = () => findByName(/exhaust/i)
+
+/**
+ * The model restricted to the vertices its edges actually stroke, re-indexed.
+ *
+ * sw5-5: the ground objects (tower / cap / bunker) share the ROM's one 15-point
+ * `.WP GND` table, and each `.WGD` routine draws a subset of it, so their raw
+ * vertex arrays contain points they never touch (see the orphan carve-out).
+ * Connectivity questions are about the shape the player SEES, so ask them of the
+ * drawn subgraph. For a model with no orphans this is the identity, which is why
+ * every other caller is unaffected.
+ */
+function drawnSubgraph(m: Model3D): Model3D {
+  const used = [...new Set(m.edges.flat())].sort((a, b) => a - b)
+  const remap = new Map(used.map((old, i) => [old, i]))
+  return {
+    name: m.name,
+    vertices: used.map((i) => m.vertices[i]),
+    edges: m.edges.map(([a, b]) => [remap.get(a)!, remap.get(b)!] as const),
+  }
+}
 
 /** True iff the model's edges link every vertex into ONE connected component. */
 function isSingleComponent(m: Model3D): boolean {
@@ -545,16 +634,37 @@ describe('models — exhaust port (8-5)', () => {
   })
 
   it('the exhaust port is a closed ring opening, not a heuristic tangle', () => {
-    // The port is an opening — at least one coplanar equal-radius ring that closes
-    // into a single loop. Ring-based edges from the start, per the epic contract.
+    // The port is an opening — the INNERMOST coplanar equal-radius ring (the smallest
+    // corner magnitude) closes into a single loop. Ring-based edges from the start,
+    // per the epic contract.
+    //
+    // RE-SEATED BY sw5-4, to the intent its own comment already stated. This used to
+    // demand that EVERY derived ring close, which the authored octagon satisfied
+    // trivially (it was one ring). The real ROM object (`.WP PORT` / `.WGD PORT`) has
+    // three concentric squares, and the cabinet does NOT close the outermost: `.WGD
+    // PORT` strokes the base as two open runs (9-8 and 10-11) joined through the berm,
+    // never as a loop. Demanding all three close would reject the authentic geometry
+    // in favour of the fabricated shape — the exact inversion this epic exists to undo.
+    //
+    // sw5-4's first draft weakened this to "AT LEAST ONE ring closes" — too weak:
+    // corrupting the PORTHOLE ring alone still passes, because the berm ring's own
+    // closure satisfies "at least one" regardless. The intent is specifically that the
+    // OPENING closes — the porthole, the innermost ring, the hole the ROM's red
+    // `;PORTHOLE` pen draws and the one the player puts a torpedo through — so this
+    // targets THAT ring by picking the smallest corner magnitude (smallest |x| among
+    // each ring's own vertices), not "any" ring. Connectivity of the whole plate is
+    // covered by the sibling test below.
     const m = findExhaustPort()
     expect(m).toBeDefined()
     if (!m) return
     const rings = deriveRings(m.vertices)
     expect(rings.length).toBeGreaterThanOrEqual(1)
-    for (const ring of rings) {
-      expect(inducedSingleCycle(m.edges, ring)).toBe(true)
-    }
+    const ringHalfWidth = (ring: number[]) => Math.min(...ring.map((i) => Math.abs(m.vertices[i][0])))
+    const innermost = rings.reduce((a, b) => (ringHalfWidth(a) <= ringHalfWidth(b) ? a : b))
+    expect(
+      inducedSingleCycle(m.edges, innermost),
+      'the innermost ring — the porthole opening — closes into a loop',
+    ).toBe(true)
   })
 
   it('the exhaust port is one connected wireframe (no floating segments)', () => {

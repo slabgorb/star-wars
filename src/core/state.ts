@@ -325,8 +325,16 @@ export const TIE_PEEL_SWEEP = 1
 // noted this), so these are chosen to play right and named for easy correction
 // once deeper reverse-engineering recovers the real numbers.
 
-/** Nominal skim height above the surface (the y=0 floor) at phase start. */
-export const SKIM_ALTITUDE = 120
+/** Nominal skim height above the surface (the y=0 floor) at phase start.
+ *
+ * RECOVERED FROM THE ROM (sw5-5), no longer a hand-picked number. WSOBJ.MAC
+ * recentres every ground object's height by GD$MDT (0xF00 = 3840), whose comment
+ * is "OFFSET HITE TO MID OF PLAYERS HITE" — the offset exists precisely so that a
+ * ground object's model z = 0 sits at the height the player flies at. So GD$MDT IS
+ * the skim altitude, expressed in raw ROM units; at the shell's 1/30 presentation
+ * scale (render.ts GROUND_MODEL_SCALE) that is 3840/30 = 128. Pinned against the
+ * shell in tests/shell/render.ground-object-placement.test.ts. */
+export const SKIM_ALTITUDE = 128
 /** Below this clearance the ship scrapes the surface — a terrain crash. */
 export const MIN_SKIM_ALTITUDE = 40
 /** Points awarded for destroying a laser turret. */
@@ -341,11 +349,22 @@ export const TURRET_HIT_RADIUS = 200
 /** Elevation of a tower's gun — the white cap crowning the column (sw3-11,
  * ex the sw2-3 yellow cube). Fireballs launch from world y = TOWER_HEIGHT, not
  * from the y=0 floor. This IS the drawn composite peak (SURFACE_TOWER column +
- * TOWER_CAP top ring: the WSOBJ.MAC `.WP GND` level 58 at the ×4 port scale),
- * so the shot erupts WYSIWYG from the cap — pinned by
- * tests/core/surface-tower-geometry.test.ts. At this scale the ship's
- * SKIM_ALTITUDE (120) sits ≈ mid-tower, the ROM's GD$MDT placement. */
-export const TOWER_HEIGHT = 232
+ * TOWER_CAP top ring), so the shot erupts WYSIWYG from the cap — pinned against
+ * the PLACED cap in tests/shell/render.ground-object-placement.test.ts.
+ *
+ * CORRECTED by sw5-5 from 232. The cannon top is WSOBJ.MAC `.PGND -4,0,58`, and
+ * that 58 is HEX (the file is `.RADIX 16`): 0x58 = 88 .S units, which at the
+ * shell's 1/30 presentation scale is y = 352. sw3-11 read the column in decimal,
+ * so the shipped tower was short — and its true aspect is 5.5:1, not the 3.6:1
+ * that misreading implied. The ship now skims at the ROM's own fraction of tower
+ * height (SKIM_ALTITUDE / TOWER_HEIGHT = 3840 / (0x58 × 120) ≈ 0.36), not the
+ * ~mid-tower the old pairing appeared to give: the towers LOOM.
+ *
+ * NOTE the tower now out-reaches TURRET_HIT_RADIUS (200): the hit sphere no longer
+ * covers the cannon section it draws above y=328. The collidable VOLUME is
+ * unchanged — the tower simply grew around it. Growing the radius to match is a
+ * play-balance call, not a fidelity one, and is deliberately not made here. */
+export const TOWER_HEIGHT = 352
 /** Grace window (seconds) a freshly-risen tower holds fire before its first shot
  * (Story sw2-3). Turns round-1 firing into a readable reaction beat instead of a
  * tower that fires the instant it appears. Kept well under the ~2s a tower dwells
@@ -378,12 +397,31 @@ export const EXHAUST_PORT_DISTANCE = 2400
 export const TRENCH_BONUS = 25000
 /** How fast the exhaust port scrolls toward the cockpit (units/second). */
 export const TRENCH_SCROLL_SPEED = 500
-/** Hit sphere around the exhaust port for player bolts. WYSIWYG (sw3-15): the
- *  visible octagon (models.ts EXHAUST_PORT) reaches ~69.5 units at its farthest
- *  vertex (hypot(64,27)), so the sphere is pinned at 70 — you may only HIT what
- *  you can SEE. The old 120 was ~2x the octagon, which forgave any centred bolt
- *  and made the finish unmissable (findings ## Exhaust port & run outcome). */
-export const PORT_HIT_RADIUS = 70
+/** Hit sphere around the exhaust port for player bolts. WYSIWYG (sw3-15): you may
+ *  only HIT what you can SEE — a rule this constant keeps, re-pointed by sw5-4 at
+ *  the geometry that is actually there.
+ *
+ *  It used to be 70, the reach of an AUTHORED octagon. models.ts now carries the
+ *  real ROM object (`.WP PORT`), and `.WGD PORT`'s red ";PORTHOLE" pen says which
+ *  part of it is the hole: the INNER SQUARE at ±96. The berm (160) and outer base
+ *  (256) are the raised lip and the Death Star surface around the shaft — a proton
+ *  torpedo into the armour plating must not blow up the Death Star, so the sphere
+ *  is tuned to the porthole and NOT to the 3.6x-wider plate.
+ *
+ *  The hole is a SQUARE and this test is a SPHERE, so no single radius is exact.
+ *  108 is the EQUAL-AREA disc of the ±96 square (96 * 2/sqrt(pi) = 108.3): it
+ *  neither systematically forgives nor systematically punishes. The alternatives
+ *  are both worse — the square's corner reach (136) would score shots sitting
+ *  visibly OUTSIDE the hole, in the gap before the berm (the very forgiveness
+ *  sw3-15 removed), while its half-width (96) would refuse in-hole corner shots.
+ *
+ *  GAMEPLAY IMPACT (sw5-4 AC-4, called out rather than slipped in): the finish
+ *  gets EASIER — the sphere grows 70 -> 108, about 1.5x the radius and 2.4x the
+ *  disc area. That is deliberate. The old sphere was tuned to a fabricated shape
+ *  ~30% smaller than the real porthole, so part of the "unmissable finish" sw3-15
+ *  was fighting was this fidelity bug wearing a disguise. It is still a target:
+ *  a shot out on the berm or the base misses, as it always did. */
+export const PORT_HIT_RADIUS = 108
 /** Near-cockpit approach window (world units, −Z) inside which a player bolt can
  *  resolve the exhaust-port hit. Outside it — a shot fired far up the trench that
  *  merely crosses the port mid-channel — cannot detonate it; the port must have

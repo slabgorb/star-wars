@@ -36,8 +36,13 @@ export const TRENCH_SQUARE_SCORE = 50
  *  test: the doc's one nearby hit-box tolerance (`MReg3E ± $200 vs MReg22`,
  *  sub_B3E9's row 2) is a DIFFERENT check — the ship's firing-cone box, not a
  *  player bolt striking a turret/square — so it isn't a sound anchor to true
- *  this against. Tuned near PORT_HIT_RADIUS instead; stays provisional pending
- *  a dedicated hit-test decode (findings ## Trench catwalks, turrets & wall
+ *  this against. Originally tuned near PORT_HIT_RADIUS (then 70, so 90 was a
+ *  deliberate ~1.29x). sw5-4 re-seated PORT_HIT_RADIUS to the ROM porthole
+ *  (108), which flips that ratio to ~0.83x — PORT_HIT_RADIUS moved for
+ *  unrelated reasons (the real port geometry), not because 90 was re-tuned
+ *  against it, so read this as historical provenance, not a live tuning
+ *  relationship the two values still track. Stays provisional pending a
+ *  dedicated hit-test decode (findings ## Trench catwalks, turrets & wall
  *  squares; Open follow-ups #3). */
 export const OBSTACLE_HIT_RADIUS = 90 // PROVISIONAL(findings ## Trench catwalks, turrets & wall squares)
 
