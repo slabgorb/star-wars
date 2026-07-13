@@ -6,7 +6,17 @@
 // (reference/disasm/Object_3D_Data.asm — gitignored, never committed): the real
 // signed 16-bit object-space coordinates from the 1983 board. The leading
 // (0,0,0) object anchor in each table is metadata, not a drawn point, so it is
-// dropped — every exported vertex is a render vertex.
+// dropped — so for most models every exported vertex is a render vertex.
+//
+// THE ONE EXCEPTION (sw5-5): the three GROUND LASAR TOWER objects — SURFACE_TOWER,
+// TOWER_CAP, SURFACE_BUNKER — each carry the ROM's SHARED fifteen-point `.WP GND`
+// table while their own `.WGD` draw routine strokes only a subset of it, so they
+// DO hold vertices their edges never touch. That is ROM structure, not dead weight
+// (WSOBJ.MAC's `.WPZ2 TWR/BNK/STB` alias one table across four objects), and it is
+// load-bearing: the contact sheet will not diff edges until the port's vertex array
+// deep-equals the ROM's. tests/core/models.test.ts carries the matching, named
+// orphan-vertex carve-out and re-asserts the invariant's intent over what each model
+// actually draws.
 //
 // EDGES are authored here, not ported: Object_3D_Data.asm holds vertex tables
 // only — the line-segment connectivity lived in the AVG vector-draw routines,
@@ -19,10 +29,14 @@
 // rings). This replaces the original 8-2 nearest-neighbour heuristic, which was
 // well-formed but rendered as a tangle (rims never closed). The reconstruction
 // is guarded by an induced-single-cycle topology test (tests/core/models.test.ts).
-// SURFACE_TOWER was later re-authored AGAIN from the original Atari source
-// (story sw3-11 — see its doc comment): its vertices AND stroke order are the
-// real WSOBJ.MAC ground-tower data, so its guard is connectivity, not
-// ring-closure (the cabinet never closes the 3-point cross-sections). TRENCH's floor squares already closed cleanly; story
+// The ground objects were re-authored from the original Atari source by story
+// sw3-11 and then RE-PORTED by sw5-5, which is the version that stands: sw3-11 read
+// the `.PGND` height column in decimal from a `.RADIX 16` file and re-expressed the
+// models in a private ×4 y-up frame, so its "real WSOBJ.MAC data" was neither the
+// ROM's numbers nor the ROM's frame. As of sw5-5 the vertices AND the stroke order
+// ARE the ROM's (see each model's doc comment), so their guard is connectivity, not
+// ring-closure (the cabinet never closes the 3-point cross-sections).
+// TRENCH's floor squares already closed cleanly; story
 // 8-5 connected them with catwalk rails and added the ring-based EXHAUST_PORT.
 // TIE_FIGHTER and DARTH_TIE were likewise RE-AUTHORED from their own ring structure
 // (story 8-10), clearing the inherited 8-2 heuristic-edge debt; both are now closed
