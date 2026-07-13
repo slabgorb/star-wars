@@ -165,12 +165,21 @@ describe('sw4-4 — a fast bolt sweeps the exhaust port instead of tunnelling th
     },
   )
 
-  it("sw4-1's restored 12,000 u/s bolt (200 u/frame) no longer leaps over the 140-u port", () => {
-    // The exact shot this story exists to unblock: 12,000 u/s ÷ 60fps = 200 units/frame,
-    // 1.43× the port diameter — so one frame carries it clean past the whole sphere.
+  it("sw4-1's restored 12,000 u/s bolt (200 u/frame) detonates the port", () => {
+    // The exact shot this story exists to unblock: 12,000 u/s ÷ 60fps = 200 units/frame.
+    //
+    // RE-SEATED BY sw5-4. This used to assert `STEP > PORT_DIAMETER` — "one frame carries
+    // it clean past the whole sphere" — which was true of the 140-unit sphere the AUTHORED
+    // octagon bought (2 × 70). The real ROM porthole is bigger: PORT_HIT_RADIUS is now 108,
+    // a 216-unit diameter, so a 200-unit step no longer straddles it. sw4-1's bolt was
+    // never going to tunnel through the port the cabinet actually has — it only tunnelled
+    // through the one we invented. That premise is therefore dropped rather than fudged.
+    //
+    // What sw4-4 genuinely owns is untouched and still proven: the sweep catches a bolt
+    // that DOES overshoot the sphere, at 2×, 4× and 7× the diameter, in the it.each above.
+    // This case keeps its other half — the real shot, at the real speed, still wins.
     const PORT_Z = -300
     const STEP = 200
-    expect(STEP).toBeGreaterThan(PORT_DIAMETER) // a single frame overshoots the sphere
     const s0 = straddleState(PORT_Z, STEP)
     expect(s0.projectiles[0].vel).toEqual([0, 0, -12000]) // this really is sw4-1's bolt speed
     const s1 = stepGame(s0, NO_INPUT, FRAME)

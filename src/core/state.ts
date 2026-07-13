@@ -397,12 +397,31 @@ export const EXHAUST_PORT_DISTANCE = 2400
 export const TRENCH_BONUS = 25000
 /** How fast the exhaust port scrolls toward the cockpit (units/second). */
 export const TRENCH_SCROLL_SPEED = 500
-/** Hit sphere around the exhaust port for player bolts. WYSIWYG (sw3-15): the
- *  visible octagon (models.ts EXHAUST_PORT) reaches ~69.5 units at its farthest
- *  vertex (hypot(64,27)), so the sphere is pinned at 70 — you may only HIT what
- *  you can SEE. The old 120 was ~2x the octagon, which forgave any centred bolt
- *  and made the finish unmissable (findings ## Exhaust port & run outcome). */
-export const PORT_HIT_RADIUS = 70
+/** Hit sphere around the exhaust port for player bolts. WYSIWYG (sw3-15): you may
+ *  only HIT what you can SEE — a rule this constant keeps, re-pointed by sw5-4 at
+ *  the geometry that is actually there.
+ *
+ *  It used to be 70, the reach of an AUTHORED octagon. models.ts now carries the
+ *  real ROM object (`.WP PORT`), and `.WGD PORT`'s red ";PORTHOLE" pen says which
+ *  part of it is the hole: the INNER SQUARE at ±96. The berm (160) and outer base
+ *  (256) are the raised lip and the Death Star surface around the shaft — a proton
+ *  torpedo into the armour plating must not blow up the Death Star, so the sphere
+ *  is tuned to the porthole and NOT to the 3.6x-wider plate.
+ *
+ *  The hole is a SQUARE and this test is a SPHERE, so no single radius is exact.
+ *  108 is the EQUAL-AREA disc of the ±96 square (96 * 2/sqrt(pi) = 108.3): it
+ *  neither systematically forgives nor systematically punishes. The alternatives
+ *  are both worse — the square's corner reach (136) would score shots sitting
+ *  visibly OUTSIDE the hole, in the gap before the berm (the very forgiveness
+ *  sw3-15 removed), while its half-width (96) would refuse in-hole corner shots.
+ *
+ *  GAMEPLAY IMPACT (sw5-4 AC-4, called out rather than slipped in): the finish
+ *  gets EASIER — the sphere grows 70 -> 108, about 1.5x the radius and 2.4x the
+ *  disc area. That is deliberate. The old sphere was tuned to a fabricated shape
+ *  ~30% smaller than the real porthole, so part of the "unmissable finish" sw3-15
+ *  was fighting was this fidelity bug wearing a disguise. It is still a target:
+ *  a shot out on the berm or the base misses, as it always did. */
+export const PORT_HIT_RADIUS = 108
 /** Near-cockpit approach window (world units, −Z) inside which a player bolt can
  *  resolve the exhaust-port hit. Outside it — a shot fired far up the trench that
  *  merely crosses the port mid-channel — cannot detonate it; the port must have
