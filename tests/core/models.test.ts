@@ -634,8 +634,9 @@ describe('models — exhaust port (8-5)', () => {
   })
 
   it('the exhaust port is a closed ring opening, not a heuristic tangle', () => {
-    // The port is an opening — AT LEAST ONE coplanar equal-radius ring that closes
-    // into a single loop. Ring-based edges from the start, per the epic contract.
+    // The port is an opening — the INNERMOST coplanar equal-radius ring (the smallest
+    // corner magnitude) closes into a single loop. Ring-based edges from the start,
+    // per the epic contract.
     //
     // RE-SEATED BY sw5-4, to the intent its own comment already stated. This used to
     // demand that EVERY derived ring close, which the authored octagon satisfied
@@ -645,17 +646,25 @@ describe('models — exhaust port (8-5)', () => {
     // never as a loop. Demanding all three close would reject the authentic geometry
     // in favour of the fabricated shape — the exact inversion this epic exists to undo.
     //
-    // The intent survives intact, and is what actually matters: the OPENING closes. The
-    // porthole — the innermost ring, the hole the ROM's red `;PORTHOLE` pen draws and
-    // the one the player puts a torpedo through — is a single clean loop. Connectivity
-    // of the whole plate is covered by the sibling test below.
+    // sw5-4's first draft weakened this to "AT LEAST ONE ring closes" — too weak:
+    // corrupting the PORTHOLE ring alone still passes, because the berm ring's own
+    // closure satisfies "at least one" regardless. The intent is specifically that the
+    // OPENING closes — the porthole, the innermost ring, the hole the ROM's red
+    // `;PORTHOLE` pen draws and the one the player puts a torpedo through — so this
+    // targets THAT ring by picking the smallest corner magnitude (smallest |x| among
+    // each ring's own vertices), not "any" ring. Connectivity of the whole plate is
+    // covered by the sibling test below.
     const m = findExhaustPort()
     expect(m).toBeDefined()
     if (!m) return
     const rings = deriveRings(m.vertices)
     expect(rings.length).toBeGreaterThanOrEqual(1)
-    const closed = rings.filter((ring) => inducedSingleCycle(m.edges, ring))
-    expect(closed.length, 'the opening itself closes into a loop').toBeGreaterThanOrEqual(1)
+    const ringHalfWidth = (ring: number[]) => Math.min(...ring.map((i) => Math.abs(m.vertices[i][0])))
+    const innermost = rings.reduce((a, b) => (ringHalfWidth(a) <= ringHalfWidth(b) ? a : b))
+    expect(
+      inducedSingleCycle(m.edges, innermost),
+      'the innermost ring — the porthole opening — closes into a loop',
+    ).toBe(true)
   })
 
   it('the exhaust port is one connected wireframe (no floating segments)', () => {

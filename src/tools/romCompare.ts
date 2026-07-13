@@ -42,10 +42,11 @@ import type { Vec3 } from '@arcade/shared/math3d'
  * - BNK maps to Surface Bunker: `.WGD BNK` (WSOBJ.MAC:1711) is its OWN draw
  *   routine, distinct from TWR/GND/STB, that strokes only the bunker's top
  *   cross-section — matching SURFACE_BUNKER's own citation of `.WGD BNK`.
- * - PORT maps to Exhaust Port for header purposes only: PORT is
- *   `hasDrawList: false` (no recoverable `.WL` edges here) and EXHAUST_PORT
- *   is itself PROVISIONAL/authored (no confirmed ROM source), so this pair
- *   never asserts edges either — see the vertices-only handling below.
+ * - PORT maps to Exhaust Port: `.WGD PORT` (WSOBJ.MAC:1855) is PORT's own draw
+ *   routine — `;THERMAL EXHAUST PORT` — distinct from TWR/GND/STB/BNK. sw5-4
+ *   re-ported EXHAUST_PORT from `.WP PORT`'s 12-point table verbatim, so this
+ *   pair is NOT header-only like the ones above: vertices AND edges are
+ *   compared for real, and come out clean — 0/0 drift (romCompare.test.ts).
  * - TW1/TW2/TW3, BK1/BK2/BK3, WG1/WG2/WG3 are DELIBERATELY LEFT UNMAPPED.
  *   Their own WSOBJ.MAC `.WP` comments (not the abbreviated `.WL` draw-list
  *   comments) name them "TOWER TOP EXPLOSION PIECE 1/2/3", "BUNKER EXPLOSION

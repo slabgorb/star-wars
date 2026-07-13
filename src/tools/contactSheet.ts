@@ -25,7 +25,7 @@ import { pairModels, verdictFor, inRangeEdges, type ModelPair } from './romCompa
 const FOV_Y = Math.PI / 3 // match the game camera
 const COLS = 3
 const SPIN_RATE = 0.6 // radians per second
-const VIEW_TILT = -Math.PI / 6 // fixed 3/4-view pitch so flat y=0 models aren't edge-on
+const VIEW_TILT = -Math.PI / 6 // fixed 3/4-view pitch so flat models (y=0 or z=0) aren't edge-on
 const GAMEPLAY_DISTANCE = 2200 // representative engagement distance for "G" mode
 // Dev-only tool labels stay on plain canvas text (SH2-5): they use characters
 // the caps-only shared stroke font deliberately lacks.
@@ -170,9 +170,11 @@ function drawModelCell(m: Model3D, r: { x: number; y: number; w: number; h: numb
   const dist = fitToCell ? fitDistance(radius, FOV_Y) : GAMEPLAY_DISTANCE
 
   // vertex -> recentre -> display-orient -> spin -> fixed view tilt -> push back
-  // (matrices compose right-to-left). The tilt lifts flat y=0-plane models
-  // (TRENCH, EXHAUST_PORT) out of edge-on and gives every model a 3/4 view; the
-  // final translation(-dist) is this cell's view matrix (camera at the origin).
+  // (matrices compose right-to-left). The tilt lifts flat models out of edge-on
+  // and gives every model a 3/4 view: TRENCH lies flat in y=0, while EXHAUST_PORT
+  // (sw5-4) is a ROM plate flat in z=0 facing the pilot — a different plane, same
+  // need for the tilt. The final translation(-dist) is this cell's view matrix
+  // (camera at the origin).
   const recentre = translation(-center[0], -center[1], -center[2])
   const spun = multiply(rotationY(spinAngle), multiply(orientFor(m.name), recentre))
   const orient = multiply(rotationX(VIEW_TILT), spun)

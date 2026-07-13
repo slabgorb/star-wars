@@ -194,7 +194,7 @@ describe('sw2-4 — a real-fired torpedo detonates the port (real-speed coverage
     // story widens the radius (WYSIWYG) — so a straight-ahead torpedo never touches
     // it. The offset is DERIVED from the constant (guarded below), not hardcoded, so
     // it can't silently rot if PORT_HIT_RADIUS is re-tuned (it already moved 90→120).
-    const OFF_AXIS = PORT_HIT_RADIUS * 6 // 720u today — far outside any plausible sphere
+    const OFF_AXIS = PORT_HIT_RADIUS * 6 // 648u today — far outside any plausible sphere
     expect(OFF_AXIS).toBeGreaterThan(PORT_HIT_RADIUS)
     // An off-axis port can NEVER satisfy the cockpit-crash test: `stepTrench` only
     // scrolls z, so the port holds x=OFF_AXIS and its 3D distance to the cockpit is

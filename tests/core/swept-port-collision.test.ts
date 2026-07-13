@@ -49,6 +49,7 @@ import {
   PORT_HIT_RADIUS,
   PORT_APPROACH_WINDOW,
   PROJECTILE_TTL,
+  TRENCH_SCROLL_SPEED,
   type GameState,
   type Projectile,
 } from '../../src/core/state'
@@ -168,18 +169,34 @@ describe('sw4-4 — a fast bolt sweeps the exhaust port instead of tunnelling th
   it("sw4-1's restored 12,000 u/s bolt (200 u/frame) detonates the port", () => {
     // The exact shot this story exists to unblock: 12,000 u/s ÷ 60fps = 200 units/frame.
     //
-    // RE-SEATED BY sw5-4. This used to assert `STEP > PORT_DIAMETER` — "one frame carries
-    // it clean past the whole sphere" — which was true of the 140-unit sphere the AUTHORED
-    // octagon bought (2 × 70). The real ROM porthole is bigger: PORT_HIT_RADIUS is now 108,
-    // a 216-unit diameter, so a 200-unit step no longer straddles it. sw4-1's bolt was
-    // never going to tunnel through the port the cabinet actually has — it only tunnelled
-    // through the one we invented. That premise is therefore dropped rather than fudged.
+    // RE-SEATED BY sw5-4 — and CORRECTED, not just re-narrated. The first draft of this
+    // comment claimed that, since `STEP(200) > PORT_DIAMETER(216)` no longer holds now
+    // that PORT_HIT_RADIUS is 108, "sw4-1's bolt was never going to tunnel through the
+    // port the cabinet actually has." THAT CLAIM IS FALSE — IT STILL TUNNELS. Proof:
+    // `straddleState` places the bolt's frame-end sample at stepDist/2 = 100u behind the
+    // port's position AT THE START of the frame. But the port itself scrolls
+    // TRENCH_SCROLL_SPEED toward the bolt over that same frame — 500/60 ≈ 8.33u — so by
+    // the time the frame resolves, the true separation between the bolt's end sample and
+    // the port's (now-scrolled) position is 100 + 8.33 = 108.33u — a hair OUTSIDE
+    // PORT_HIT_RADIUS (108). A plain point-in-sphere snapshot on the bolt's end position
+    // genuinely misses by 0.33u; only the sweep still catches it. (Verified empirically:
+    // reverting sweptCollides to a point-in-sphere check on `pos` alone fails this exact
+    // test.) So the OLD premise — "one frame carries the bolt clean past the whole
+    // sphere" — no longer holds at this speed, but the port's own per-frame scroll
+    // reopens a razor-thin gap the sweep still has to close.
     //
     // What sw4-4 genuinely owns is untouched and still proven: the sweep catches a bolt
-    // that DOES overshoot the sphere, at 2×, 4× and 7× the diameter, in the it.each above.
-    // This case keeps its other half — the real shot, at the real speed, still wins.
+    // that overshoots the sphere by a wide margin at 2×, 4× and 7× the diameter, in the
+    // it.each above. This case keeps its other half — the real shot, at the real speed,
+    // still wins.
     const PORT_Z = -300
     const STEP = 200
+    // Anti-vacuous: pin the margin itself, in the ROM's own units. If a future tuning of
+    // PORT_HIT_RADIUS or TRENCH_SCROLL_SPEED erases this ~0.33u gap, THIS fires — rather
+    // than the assertions below silently degrading into a snapshot-equivalent no-op that
+    // would still pass, but for the wrong reason (the bolt landing inside the sphere on
+    // its own, with the sweep never actually exercised).
+    expect(STEP / 2 + TRENCH_SCROLL_SPEED * FRAME).toBeGreaterThan(PORT_HIT_RADIUS)
     const s0 = straddleState(PORT_Z, STEP)
     expect(s0.projectiles[0].vel).toEqual([0, 0, -12000]) // this really is sw4-1's bolt speed
     const s1 = stepGame(s0, NO_INPUT, FRAME)
