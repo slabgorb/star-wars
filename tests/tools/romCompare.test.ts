@@ -95,7 +95,10 @@ describe('pairModels', () => {
   // check (the old version of this test) cannot catch a reorder past index 0,
   // which would silently invalidate every edge index without either array
   // looking "wrong" at a glance. Assert full deep equality, not a spot check.
-  it.each(['TIE', 'TI1', 'TI2', 'TI3', 'RTH'])(
+  // sw5-5 adds STB and BNK: the ground objects now carry the ROM's own shared
+  // 15-point `.WP GND` table verbatim, so they deep-equal like the ship models
+  // and their edges become comparable at last. PORT is still pending (sw5-4).
+  it.each(['TIE', 'TI1', 'TI2', 'TI3', 'RTH', 'STB', 'BNK'])(
     '%s: the ROM vertices deep-equal the port vertices (only edges should drift)',
     (romName) => {
       const p = pairs.find((pair) => pair.romName === romName)!
@@ -179,48 +182,59 @@ describe('the punch-list (regression pin)', () => {
     expect(punchList('RTH')).toEqual({ onlyInRom: 12, onlyInPort: 44 })
   })
 
-  // sw5-1 takes the pin from 5 compared pairs to 8, gaining the three suspect
-  // ground objects. But it does NOT yet yield an edge drift count for them —
-  // and pretending otherwise would be the exact dishonesty this tool exists to
-  // prevent. Their PORT-side VERTICES are still wrong (the ROM exhaust port is
-  // 12 points in three concentric squares; ours is an 8-point octagon), so
-  // `pairOne`'s vertex-mismatch guard correctly refuses to diff edges: indices
-  // into two different vertex arrays cannot be compared. A `{0, 0}` here would
-  // read as "no drift — all good" when the truth is "not comparable yet".
+  // sw5-1 took the pin from 5 compared pairs to 8, gaining the three suspect
+  // ground objects — but could not yet yield an edge drift count for them: their
+  // PORT-side vertices were still the pre-ROM authored geometry, so `pairOne`'s
+  // vertex-mismatch guard correctly refused to diff (indices into two different
+  // vertex arrays cannot be compared).
   //
-  // sw5-4 (PORT) and sw5-5 (STB/BNK) fix the vertices. THEY are what turn these
-  // three into real edge diffs; this pin must then be updated to the drift
-  // counts, and its failure at that moment is the point.
+  // sw5-5 IS THAT FIX for STB and BNK. Both now carry the ROM's own shared
+  // 15-point `.WP GND` table verbatim, so the guard opens and the edges compare
+  // for real — and they come out CLEAN. PORT stays blocked until sw5-4.
   const verdict = (romName: string) => verdictFor(pairs.find((p) => p.romName === romName)!)
 
-  // Pin the REASON the diff is blocked, not merely the fact. `{onlyInRom: 0,
-  // onlyInPort: 0}` is true BY CONSTRUCTION once verticesMatch is false (pairOne
-  // hard-forces it), so asserting it proves nothing — adversarial review caught
-  // that. The vertex COUNTS are the real content: they distinguish "the port's
-  // octagon is still wrong" (the known defect sw5-4/sw5-5 fix) from "the ROM
-  // side regressed" (a bake bug), which a bare `verticesMatch === false` cannot.
+  // THE HEADLINE RESULT OF THIS STORY. Note what makes it trustworthy: a {0,0}
+  // drift is only meaningful BECAUSE verticesMatch is true (pairOne hard-forces
+  // {0,0} when it is false, which is why sw5-1 refused to pin one). Assert the
+  // verdict TEXT, not just the counts — '✓ edges match' is the one string the
+  // tool will not print unless a real comparison actually ran.
   it.each([
-    { romName: 'PORT', romVerts: 12, portVerts: 8, romEdges: 18 },
-    { romName: 'STB', romVerts: 15, portVerts: 12, romEdges: 13 },
-    { romName: 'BNK', romVerts: 15, portVerts: 6, romEdges: 8 },
+    { romName: 'STB', portName: 'Surface Tower', edges: 13 },
+    { romName: 'BNK', portName: 'Surface Bunker', edges: 8 },
   ])(
-    '$romName: has ROM edges now, but the diff stays blocked on the PORT\'s wrong vertex count',
-    ({ romName, romVerts, portVerts, romEdges }) => {
+    '$romName -> $portName: the port now matches the ROM exactly — 0 drift, edges compared for real',
+    ({ romName, portName, edges }) => {
       const p = pairs.find((pair) => pair.romName === romName)!
 
-      // The ROM side: real, recovered connectivity.
-      expect(p.rom!.hasDrawList, 'sw5-1 recovered its .WGD draw list').toBe(true)
-      expect(p.rom!.vertices.length, 'ROM vertex count').toBe(romVerts)
-      expect(p.rom!.edges.length, 'ROM edge count').toBe(romEdges)
+      expect(p.port!.name).toBe(portName)
+      expect(p.rom!.hasDrawList).toBe(true)
 
-      // The port side: still the pre-ROM authored geometry. THIS is the defect.
-      expect(p.port!.vertices.length, 'port vertex count — still wrong').toBe(portVerts)
+      // The guard is OPEN: the port carries the ROM's 15-point table verbatim.
+      expect(p.rom!.vertices.length).toBe(15)
+      expect(p.port!.vertices.length, 'the port adopts the shared ROM table').toBe(15)
+      expect(p.verticesMatch, 'so the edge diff is meaningful at last').toBe(true)
 
-      // ...so the edge diff is refused, honestly.
-      expect(p.verticesMatch).toBe(false)
-      expect(verdict(romName).text).toBe('vertices differ — edge diff not meaningful')
+      // And with a real comparison finally running, it is clean.
+      expect(punchList(romName)).toEqual({ onlyInRom: 0, onlyInPort: 0 })
+      expect(p.port!.edges.length).toBe(edges)
+      expect(verdict(romName).text).toBe('✓ edges match')
+      expect(verdict(romName).drift).toBe(false)
     },
   )
+
+  // PORT is sw5-4's story, not this one. Left blocked, and pinned as blocked, so
+  // that finishing STB/BNK cannot quietly imply the exhaust port was fixed too.
+  it('PORT: still blocked on the port\'s wrong vertex count — that is sw5-4, not sw5-5', () => {
+    const p = pairs.find((pair) => pair.romName === 'PORT')!
+    expect(p.rom!.hasDrawList, 'sw5-1 recovered its .WGD draw list').toBe(true)
+    expect(p.rom!.vertices.length, 'ROM vertex count').toBe(12)
+    expect(p.rom!.edges.length, 'ROM edge count').toBe(18)
+    // The ROM exhaust port is 12 points in concentric squares; ours is an
+    // 8-point octagon. THIS is the defect sw5-4 fixes.
+    expect(p.port!.vertices.length, 'port vertex count — still wrong').toBe(8)
+    expect(p.verticesMatch).toBe(false)
+    expect(verdict('PORT').text).toBe('vertices differ — edge diff not meaningful')
+  })
 
   it('pins 8 compared pairs, not 5', () => {
     const compared = pairs.filter((p) => p.rom?.hasDrawList && p.port)
