@@ -32,6 +32,7 @@ import {
   SURFACE_TOWER,
   TOWER_CAP,
   SURFACE_BUNKER,
+  GD_HEIGHT_OFFSET,
   EXHAUST_PORT,
   TRENCH_TURRET,
   TRENCH_SQUARE,
@@ -44,6 +45,7 @@ import { crosshairNdc, lockedEnemy, LOCK_RADIUS_NDC, FOV_Y } from '../core/gameR
 import {
   perspective,
   multiply,
+  rotationX,
   rotationZ,
   translation,
   scaling,
@@ -101,17 +103,49 @@ const ENEMY_MUZZLE_FLASH_SECONDS = 0.1
 //
 //   SURFACE — the cross-sections stand in the X/Y plane in object space; a -90°
 //   roll about Z lays them down so the relief rises in +Y from the y=0 floor.
-//   TOWER   — already authored upright (base in y=0, structure climbing +Y), so
-//   it needs no reorientation.
+//   TOWER   — the ROM authors ground objects Z-UP and height-recentred; see
+//   TOWER_ORIENT below, which is the whole bridge into our y-up world.
 //   TRENCH  — the floor squares, catwalk rails, and exhaust port are authored flat
-//   in the y=0 plane, so like the tower they need no reorientation; the camera
-//   skims just above the floor (story 8-5).
+//   in the y=0 plane, so they need no reorientation; the camera skims just above
+//   the floor (story 8-5).
 //
 // NOTE: structural tests can't catch orientation/scale — these MUST be eyeballed
 // in the dev server once the surface phase is reachable in play.
 export const SURFACE_ORIENT: Mat4 = rotationZ(-Math.PI / 2)
-export const TOWER_ORIENT: Mat4 = IDENTITY
 export const TRENCH_ORIENT: Mat4 = IDENTITY
+
+// The ROM → world presentation scale for the ground objects (story sw5-5).
+//
+// models.ts now holds the GROUND LASAR TOWER family in RAW ROM UNITS, as it
+// already did for every ship — which is what lets the contact sheet compare them
+// against the ROM at all. The ROM authors them at `.S = 30.*4` = 120 units per
+// design unit, so the base ring (r = 8) spans 960 raw units. The shipped game
+// draws that footprint at r = 32, and the maze spacing and turret hit radius all
+// assume it: 32/960 = 1/30. The tower gets TALLER (sw5-5 corrects its hex-misread
+// heights), never wider.
+export const GROUND_MODEL_SCALE = 1 / 30
+
+// The ground-object placement basis (story sw5-5). TOWER_ORIENT was IDENTITY only
+// because sw3-11 had hand-re-authored these models into the port's own frame; now
+// that they carry the ROM's data verbatim, this is what bridges the two. Applied
+// as `modelMatrix(pos, TOWER_ORIENT, GROUND_MODEL_SCALE)`, i.e. AFTER the scale:
+//
+//   1. rotationX(-90°) stands the model up. The ROM's up-axis is Z (x is fore/aft,
+//      y lateral); ours is Y. This maps (x, y, z) -> (x, z, -y).
+//   2. the lift undoes GD$MDT. The ROM recentres every ground object's height so
+//      that model z = 0 is the height the PLAYER flies at (its comment: "OFFSET
+//      HITE TO MID OF PLAYERS HITE"), which leaves the base ring at z = -GD$MDT.
+//      Adding GD$MDT back — at the presentation scale — seats the base on the y=0
+//      floor, where the camera and the maze expect it.
+//
+// That lift is 3840/30 = 128 world units, which is exactly SKIM_ALTITUDE: the ROM
+// has been telling us the ship's skim height all along. Derived here from the ROM
+// constant rather than from SKIM_ALTITUDE itself, so that retuning the flight
+// height (a play-balance knob) cannot silently sink the towers into the floor.
+export const TOWER_ORIENT: Mat4 = multiply(
+  translation(0, GD_HEIGHT_OFFSET * GROUND_MODEL_SCALE, 0),
+  rotationX(-Math.PI / 2),
+)
 
 // TIE display correction (story 8-13). The authentic model stacks its two
 // hexagonal solar panels along the object-space Y axis (panels at y=±208, lying
@@ -271,7 +305,7 @@ export function render(
       // tall YELLOW column wearing the WHITE cap — the tower's gun, where its
       // fireballs erupt — and bunker-kind sites are the squat RED shorty.
       // Column and cap share the tower's placement transform.
-      const towerMat = multiply(view, modelMatrix(tu.pos, TOWER_ORIENT))
+      const towerMat = multiply(view, modelMatrix(tu.pos, TOWER_ORIENT, GROUND_MODEL_SCALE))
       if (tu.kind === 'bunker') {
         drawWireframe(ctx, SURFACE_BUNKER, towerMat, proj, w, h, TURRET_GLOW)
       } else {
