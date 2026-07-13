@@ -84,7 +84,13 @@ import {
   TRENCH_SQUARE_SCORE,
   OBSTACLE_HIT_RADIUS,
 } from './trench-obstacles'
-import { TRENCH_VIEW_HALF_W, TRENCH_VIEW_FLOOR, TRENCH_VIEW_RATE } from './trench-channel'
+import {
+  TRENCH_VIEW_HALF_W,
+  TRENCH_VIEW_RATE,
+  TRENCH_EYE_MIN,
+  TRENCH_EYE_MAX,
+  TRENCH_EYE_SEAT,
+} from './trench-channel'
 
 const COCKPIT: Vec3 = [0, 0, 0]
 const ZERO: Vec3 = [0, 0, 0]
@@ -565,14 +571,20 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   // `events` carries the prologue's `fire` cue (story 8-7) and accumulates the
   // trench's own moments below; it rides every return path so the channel stays
   // a fresh per-frame list.
-  // Fly the pilotable viewpoint (story sw3-2): the yoke drives the eye each tick,
-  // clamped to the sub_703B band — ±TRENCH_VIEW_HALF_W lateral, TRENCH_VIEW_FLOOR..0
-  // vertical (the eye seats at the trench top and dives DOWN to dodge). Rides
-  // `base`, so it survives even the no-port safe-hold return below (afterObstacles
+  // Fly the pilotable viewpoint (story sw3-2, re-framed by sw5-6): the yoke drives the
+  // eye each tick, clamped to the ROM band — ±TRENCH_VIEW_HALF_W lateral, and vertically
+  // TRENCH_EYE_MIN..TRENCH_EYE_MAX as a HEIGHT ABOVE THE TRENCH FLOOR.
+  //
+  // The pilot flies that band BOTH ways. The old clamp was `Math.min(0, …)` against a
+  // negative dive-only band — he could only ever sink from his seat, and (because the
+  // channel's floor is y=0, not its top) sinking took the camera clean through the floor.
+  // Climbing is how he gets an angle on a target lying IN the floor.
+  //
+  // Rides `base`, so it survives even the no-port safe-hold return below (afterObstacles
   // spreads base); the trench catwalk collision tests the catwalk against it.
   const trenchView: Vec3 = [
     Math.max(-TRENCH_VIEW_HALF_W, Math.min(TRENCH_VIEW_HALF_W, state.trenchView[0] + aimX * TRENCH_VIEW_RATE * dt)),
-    Math.max(TRENCH_VIEW_FLOOR, Math.min(0, state.trenchView[1] + aimY * TRENCH_VIEW_RATE * dt)),
+    Math.max(TRENCH_EYE_MIN, Math.min(TRENCH_EYE_MAX, state.trenchView[1] + aimY * TRENCH_VIEW_RATE * dt)),
     0,
   ]
   // The walled channel scrolls toward the cockpit at the SAME rate the port does
@@ -948,10 +960,12 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     // Likewise the trench channel scroll, so a fresh (or jumped) trench always
     // opens with the corridor anchored at the cockpit (story 11-6).
     trenchScrollZ: 0,
-    // Seat the pilotable viewpoint at the centreline on every phase entry (story
-    // sw3-2), so a fresh trench opens un-dived — the overhead catwalk still bites
-    // until the pilot steers clear.
-    trenchView: [0, 0, 0],
+    // Seat the pilotable viewpoint on every phase entry (story sw3-2, re-framed by
+    // sw5-6): dead centre laterally, and vertically at TRENCH_EYE_SEAT — the height
+    // WSMAIN.MAC's `SMVG1B` drops the pilot to as he enters ("JUST ABOVE BOTTOM OF
+    // TRENCH"). So a fresh trench opens un-dived, riding low, with the overhead catwalk
+    // still biting until the pilot steers clear.
+    trenchView: [0, TRENCH_EYE_SEAT, 0],
     spawnTimer: phase === 'surface' ? TURRET_SPAWN_INTERVAL : SPAWN_INTERVAL,
     enemyFireCooldown: ENEMY_FIRE_INTERVAL,
   }

@@ -7,8 +7,8 @@
 // off_7B1E..7BFE); scores from ## Scoring tables (byte_9853 turrets,
 // byte_9850 squares).
 
-import type { TrenchObstacle } from './state'
-import { TRENCH_HALF_W } from './trench-channel'
+import { CATWALK_HIT_RADIUS, type TrenchObstacle } from './state'
+import { TRENCH_HALF_W, TRENCH_WALL_H, TRENCH_EYE_SEAT } from './trench-channel'
 import { createRng, nextInt, type Rng } from '@arcade/shared/rng'
 
 // --- Scores: TRUED against ## Scoring tables --------------------------------
@@ -48,6 +48,40 @@ export const OBSTACLE_HIT_RADIUS = 90 // PROVISIONAL(findings ## Trench catwalks
 
 const W = TRENCH_HALF_W
 
+// --- Furniture heights, re-anchored to the pinned trench (story sw5-6) ------
+//
+// These were absolute constants (60 / 120 / 200) hand-tuned against the old 320-tall wall.
+// Against the ROM's 4096-deep trench they all collapse into the bottom 5% — the "overhead"
+// catwalk ends up lying on the floor. None of them carries a ROM pin (the cabinet's wall
+// detail is a PRNG-picked shape script, not a grid), so they are re-anchored rather than
+// re-pinned: no invented numbers are dressed up as ROM data.
+//
+// WALL furniture scales with the WALL — turret and square keep exactly the proportions of
+// its height that they had (3/16 and 3/8, i.e. the old 60/320 and 120/320). Note the pilot
+// is clamped to ±511 inside ±1024 walls, so he can never reach them: these are things he
+// SHOOTS, not things he crashes into.
+//
+// The CATWALK is different in kind. It spans the channel, so it is the one piece of
+// furniture that can physically block the pilot — and its height was never really tuned to
+// the wall, it was tuned to the EYE (it sat 200 above an eye seated at 0). So it anchors to
+// the eye, not the wall. Two bounds fix it, and tests/core/trench-viewpoint.test.ts asserts
+// both behaviourally:
+//
+//   • it must BITE a seated pilot:  |CATWALK_Y − TRENCH_EYE_SEAT| < CATWALK_HIT_RADIUS
+//   • a full dive must CLEAR it:     CATWALK_Y − TRENCH_EYE_MIN  ≥ CATWALK_HIT_RADIUS
+//
+// which pins it to [752, 1008). Half a hit-radius above the seat sits mid-window, with
+// comfortable margin on both sides (bites by 120, clears by 376).
+
+/** Wall-mounted turret — 3/16 of the wall's height, as it was on the 320 wall. */
+const TURRET_Y = (TRENCH_WALL_H * 3) / 16 // 768
+/** Wall square — 3/8 of the wall's height, as it was on the 320 wall. */
+const SQUARE_Y = (TRENCH_WALL_H * 3) / 8 // 1536
+/** Overhead catwalk — anchored to the PILOT, not the wall: high enough above the dive
+ *  floor that a dive clears it, close enough to the entry seat that a hands-off run walks
+ *  straight into it. */
+const CATWALK_Y = TRENCH_EYE_SEAT + CATWALK_HIT_RADIUS / 2 // 888
+
 /**
  * Downrange stations, cockpit → far. PROVISIONAL layout: the ROM's off_7CC0 →
  * off_7B1E..7BFE records (findings ## Trench catwalks, turrets & wall squares)
@@ -65,14 +99,14 @@ const W = TRENCH_HALF_W
  * hand-authored pending a full geometry-decode pass.
  */
 export const TRENCH_OBSTACLE_STATIONS: readonly TrenchObstacle[] = [
-  { kind: 'turret', pos: [-W, 60, -900] }, // ROM row 1 ($B) — left wall only
-  { kind: 'square', pos: [W, 120, -1300] },
-  { kind: 'turret', pos: [W, 60, -1700] }, // ROM row 2 ($E) — right wall only
-  { kind: 'catwalk', pos: [0, 200, -2100] },
-  { kind: 'square', pos: [-W, 120, -2500] },
-  { kind: 'square', pos: [W, 120, -2900] },
-  { kind: 'turret', pos: [-W, 60, -3300] }, // ROM row 3 ($C) — both walls...
-  { kind: 'turret', pos: [W, 60, -3300] }, //  ...left+right at the same station
+  { kind: 'turret', pos: [-W, TURRET_Y, -900] }, // ROM row 1 ($B) — left wall only
+  { kind: 'square', pos: [W, SQUARE_Y, -1300] },
+  { kind: 'turret', pos: [W, TURRET_Y, -1700] }, // ROM row 2 ($E) — right wall only
+  { kind: 'catwalk', pos: [0, CATWALK_Y, -2100] },
+  { kind: 'square', pos: [-W, SQUARE_Y, -2500] },
+  { kind: 'square', pos: [W, SQUARE_Y, -2900] },
+  { kind: 'turret', pos: [-W, TURRET_Y, -3300] }, // ROM row 3 ($C) — both walls...
+  { kind: 'turret', pos: [W, TURRET_Y, -3300] }, //  ...left+right at the same station
 ]
 
 /**

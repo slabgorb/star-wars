@@ -13,6 +13,7 @@ import type { Vec3, Mat4 } from '@arcade/shared/math3d'
 import type { GameEvent } from './events'
 import { createRng, type Rng } from '@arcade/shared/rng'
 import { mazeForWave } from './surfaceMazes'
+import { TRENCH_EYE_SEAT } from './trench-channel'
 
 /** The three phases of an attack run, in order. */
 export type Phase = 'space' | 'surface' | 'trench'
@@ -624,7 +625,10 @@ export function initialState(seed = 1983): GameState {
     surfaceScrollZ: 0,
     surfaceMazeLaid: false,
     trenchScrollZ: 0,
-    trenchView: [0, 0, 0],
+    // The eye rides at the ROM's trench entry height above the floor (sw5-6) — see
+    // TRENCH_EYE_SEAT. A trench state built straight from initialState() (as the render
+    // suites do) is therefore already seated inside the band, not sitting on the floor.
+    trenchView: [0, TRENCH_EYE_SEAT, 0],
     phaseKills: 0,
     projectiles: [],
     enemies: [],
