@@ -105,9 +105,13 @@ const ENEMY_MUZZLE_FLASH_SECONDS = 0.1
 //   roll about Z lays them down so the relief rises in +Y from the y=0 floor.
 //   TOWER   — the ROM authors ground objects Z-UP and height-recentred; see
 //   TOWER_ORIENT below, which is the whole bridge into our y-up world.
-//   TRENCH  — the floor squares, catwalk rails, and exhaust port are authored flat
-//   in the y=0 plane, so they need no reorientation; the camera skims just above
-//   the floor (story 8-5).
+//   TRENCH  — the floor squares and catwalk rails are authored flat in the y=0
+//   plane, so they need no reorientation; the camera skims just above the floor
+//   (story 8-5). The exhaust port (sw5-4) reaches the same IDENTITY answer for a
+//   DIFFERENT reason: it's a ROM plate (`.WP PORT`) authored flat in the z=0
+//   plane, facing the pilot down -Z, which under IDENTITY already presents
+//   face-on — not because it shares the floor's plane, but because it's already
+//   oriented toward the camera.
 //
 // NOTE: structural tests can't catch orientation/scale — these MUST be eyeballed
 // in the dev server once the surface phase is reachable in play.

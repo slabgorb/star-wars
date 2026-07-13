@@ -560,40 +560,56 @@ export const TRENCH: Model3D = {
 }
 
 /**
- * The trench exhaust port — the run's target. Trued against the fidelity epic's
- * findings dump (fidelity epic task 4; findings ## Exhaust port & run outcome /
- * ## Trench geometry & limits / Open follow-ups #1): the port is a scripted
- * hit-test PLANE (the type-3 segment latches `DPbyte_92/93`, a Z-boundary, not a
- * drawn shape) — `Object_3D_Data.asm` has no vertex table named or addressed for
- * it. The nearest candidate in the vertex dump, `Object_12` @ `$6545` (12 verts,
- * Z=0, three concentric squares at corner magnitudes `$60/$A0/$100` = 96/160/256),
- * sits right after the trench's other fixtures (`Object_10` catwalk brace,
- * `Object_11` posts) — but the findings doc itself flags that identity an AGENT
- * INFERENCE ("targeting-reticle / lock-on box"), not a confirmed source name, so
- * it is not safe to claim as the port. The geometry therefore stays AUTHORED: a
- * small octagonal opening lying flat in the y=0 floor plane, ring-based from the
- * start (a single closed loop), per the epic's geometry-connectivity contract.
- * The symmetric (±64,±27)/(±27,±64) octagon keeps every vertex at one exact
- * integer radius, so it reads as a single ring and avoids floating-point drift.
- * Display orientation (recessing it into the trench floor / facing the run) is a
- * render concern applied in the shell, not baked into this object-space data.
- * PROVISIONAL(findings ## Trench geometry & limits) — no authentic vertex table
- * to port; see Open follow-ups #1.
+ * The trench exhaust port — the run's target. Authentic, from WSOBJ.MAC `.WP PORT`
+ * ("THERMAL EXHAUST PORT") and its `.WGD PORT` draw routine (sw5-4).
+ *
+ * This object was invented by hand until now, because the disassembly held no
+ * vertex table the port could be identified with. It did hold the geometry —
+ * `Object_12` @ `$6545`, "12 verts, Z=0, three concentric squares at $60/$A0/$100"
+ * — but nothing in the dump said what that object WAS, so the old comment here
+ * called the identification an inference and shipped an octagon instead. The 1983
+ * source settles it: the object is named PORT and its comment reads ";THERMAL
+ * EXHAUST PORT". The octagon is gone.
+ *
+ * TWELVE points in THREE CONCENTRIC SQUARES, flat in z=0 — a plate whose face
+ * looks down the trench at the pilot (the shell draws it under TRENCH_ORIENT =
+ * IDENTITY, so it presents face-on; it does NOT lie in the floor plane the way the
+ * old octagon did). The `.PH` rows are HEX under `.RADIX 16`, at `.S=8`:
+ *
+ *   .PH 0C,0C,0   ;0-3 INNER CIRCLE   0x0C * 8 =  96   the PORTHOLE — the hole
+ *   .PH 14,14,0   ;4-7 SUPPORT BERM   0x14 * 8 = 160   the raised lip around it
+ *   .PH 20,20,0   ;8-15 BASE          0x20 * 8 = 256   Death Star surface
+ *
+ * Read those as decimal and the base row lands on 160 — exactly the true berm —
+ * collapsing three squares into two. (tests/core/exhaust-port-rom.test.ts refutes
+ * the decimal reading arithmetically.)
+ *
+ * `.WGD PORT` strokes the plate in THREE PENS, and the pen changes are the ROM
+ * telling us which part is which: VGCGRN the outer base, VGCTRQ the inner berm,
+ * and VGCRED — commented ";PORTHOLE" — closing points 0-3 and nothing else. So the
+ * HOLE is the ±96 inner square; the berm and base are structure around it. That is
+ * what state.ts's PORT_HIT_RADIUS is tuned to, NOT the full 512-wide plate.
+ *
+ * Canvas strokes one colour per drawWireframe call, so the three pens collapse to
+ * one here — the same limitation that split SURFACE_TOWER from TOWER_CAP. Left as
+ * one model: no AC asks for the colours, and unlike the tower the port's draw
+ * routine has no white/base split to reconcile.
  */
 export const EXHAUST_PORT: Model3D = {
   name: 'Exhaust Port',
+  // `.WP PORT`, in ROM order — the edge indices below are indices into THIS array.
   vertices: [
-    [64, 0, 27],
-    [27, 0, 64],
-    [-27, 0, 64],
-    [-64, 0, 27],
-    [-64, 0, -27],
-    [-27, 0, -64],
-    [27, 0, -64],
-    [64, 0, -27],
+    [96, 96, 0], [96, -96, 0], [-96, 96, 0], [-96, -96, 0], //      0-3   porthole
+    [160, 160, 0], [160, -160, 0], [-160, 160, 0], [-160, -160, 0], // 4-7   berm
+    [256, 256, 0], [256, -256, 0], [-256, 256, 0], [-256, -256, 0], // 8-11  base
   ],
+  // `.WGD PORT`, hand-walked: PLOT 5 / DRAWTO 9,8,4 / BDRAWTO 6,10,11,7 (green) /
+  // DRAWTO 6,2 / BDRAWTO 6,4,0 / BDRAWTO 4,5,1 / BDRAWTO 5,7,3 (turquoise) /
+  // DRAWTO 2,0,1,3 (red — the porthole).
   edges: [
-    [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 0],
+    [5, 9], [9, 8], [8, 4], [6, 10], [10, 11], [11, 7], // outer base + its skirt
+    [7, 6], [6, 2], [6, 4], [4, 0], [4, 5], [5, 1], [5, 7], [7, 3], // inner berm
+    [3, 2], [2, 0], [0, 1], [1, 3], // the porthole, closed
   ],
 }
 

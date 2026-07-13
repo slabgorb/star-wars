@@ -199,19 +199,24 @@ describe('the punch-list (regression pin)', () => {
   // verdict TEXT, not just the counts — '✓ edges match' is the one string the
   // tool will not print unless a real comparison actually ran.
   it.each([
-    { romName: 'STB', portName: 'Surface Tower', edges: 13 },
-    { romName: 'BNK', portName: 'Surface Bunker', edges: 8 },
+    { romName: 'STB', portName: 'Surface Tower', verts: 15, edges: 13 },
+    { romName: 'BNK', portName: 'Surface Bunker', verts: 15, edges: 8 },
+    // sw5-4 — the exhaust port. The LAST blocked pair on the sheet: the port
+    // shipped an authored 8-vertex octagon where the ROM has twelve points in
+    // three concentric squares, so the vertex guard held the edge diff shut.
+    // Re-ported from `.WP PORT` / `.WGD PORT`, it opens and comes out clean.
+    { romName: 'PORT', portName: 'Exhaust Port', verts: 12, edges: 18 },
   ])(
     '$romName -> $portName: the port now matches the ROM exactly — 0 drift, edges compared for real',
-    ({ romName, portName, edges }) => {
+    ({ romName, portName, verts, edges }) => {
       const p = pairs.find((pair) => pair.romName === romName)!
 
       expect(p.port!.name).toBe(portName)
       expect(p.rom!.hasDrawList).toBe(true)
 
-      // The guard is OPEN: the port carries the ROM's 15-point table verbatim.
-      expect(p.rom!.vertices.length).toBe(15)
-      expect(p.port!.vertices.length, 'the port adopts the shared ROM table').toBe(15)
+      // The guard is OPEN: the port carries the ROM's own point table verbatim.
+      expect(p.rom!.vertices.length).toBe(verts)
+      expect(p.port!.vertices.length, 'the port adopts the ROM table').toBe(verts)
       expect(p.verticesMatch, 'so the edge diff is meaningful at last').toBe(true)
 
       // And with a real comparison finally running, it is clean.
@@ -222,18 +227,18 @@ describe('the punch-list (regression pin)', () => {
     },
   )
 
-  // PORT is sw5-4's story, not this one. Left blocked, and pinned as blocked, so
-  // that finishing STB/BNK cannot quietly imply the exhaust port was fixed too.
-  it('PORT: still blocked on the port\'s wrong vertex count — that is sw5-4, not sw5-5', () => {
-    const p = pairs.find((pair) => pair.romName === 'PORT')!
-    expect(p.rom!.hasDrawList, 'sw5-1 recovered its .WGD draw list').toBe(true)
-    expect(p.rom!.vertices.length, 'ROM vertex count').toBe(12)
-    expect(p.rom!.edges.length, 'ROM edge count').toBe(18)
-    // The ROM exhaust port is 12 points in concentric squares; ours is an
-    // 8-point octagon. THIS is the defect sw5-4 fixes.
-    expect(p.port!.vertices.length, 'port vertex count — still wrong').toBe(8)
-    expect(p.verticesMatch).toBe(false)
-    expect(verdict('PORT').text).toBe('vertices differ — edge diff not meaningful')
+  it('every compared pair on the sheet is now unblocked — no "vertices differ" left', () => {
+    // The epic's finish line, and the reason PORT could not simply be dropped from
+    // the sheet: with sw5-4 landed, EVERY ROM object that has both a draw list and
+    // a port counterpart is compared FOR REAL. A regression that reintroduced a
+    // vertex mismatch anywhere would restore a blocked verdict, and this fires.
+    const compared = pairs.filter((p) => p.rom?.hasDrawList && p.port)
+    for (const p of compared) {
+      expect(p.verticesMatch, `${p.romName} vertices`).toBe(true)
+      expect(verdict(p.romName).text, `${p.romName} verdict`).not.toBe(
+        'vertices differ — edge diff not meaningful',
+      )
+    }
   })
 
   it('pins 8 compared pairs, not 5', () => {

@@ -174,6 +174,11 @@ priority; filed **sw3-2**.
   physical target the bolt overlaps (`PORT_HIT_RADIUS=120`); ROM latches a type-3
   segment plane resolved at an `$800` window against a pre-set lock flag. Plays
   correctly; *Approximated, acceptable.*
+  > **⚠ SUPERSEDED (sw5-4):** the "flying octagon" half is no longer true — the
+  > port is now `WSOBJ.MAC`'s real `.WP PORT`/`.WGD PORT` object (12 vertices,
+  > 18 edges), not an authored shape, and `PORT_HIT_RADIUS` is 108 (it moved
+  > 120 → 70 → 108 across sw3-15/sw5-4). The scrolled-physical-target-vs-latched
+  > -plane approximation itself is untouched. Left as history above, not rewritten.
 - **Obstacle layout** — 8 hand-authored stations vs the `off_7Bxx` shape-script
   blobs; honestly self-documented PROVISIONAL, blocked on a ROM↔world-unit
   conversion. *Approximated.*
@@ -237,6 +242,11 @@ priority; filed **sw3-2**.
 - **Exhaust port** is an authored octagon with no confirmed ROM source
   (`Object_12`'s concentric squares are the untested nearest candidate).
   *Approximated, acceptable.*
+  > **⚠ SUPERSEDED (sw5-4):** settled, not just tested. `WSOBJ.MAC`'s `.WP PORT`
+  > (`;THERMAL EXHAUST PORT`) confirms `Object_12`'s three concentric squares
+  > ARE the exhaust port, with `.WGD PORT` as its own draw routine. `EXHAUST_PORT`
+  > is re-ported from that table verbatim; it is no longer an authored octagon.
+  > Left as history above, not rewritten.
 
 ---
 
