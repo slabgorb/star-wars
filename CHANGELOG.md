@@ -8,6 +8,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Entries describe what changed
 for the player. Purely internal work is summarised under *Internal*.
 
+## [0.0.13] - 2026-07-13
+
+### Changed
+- **The exhaust port is the shape the cabinet actually drew.** Where we had an eight-sided
+  octagon lying flat in the trench floor, the port is now twelve points in three concentric
+  squares, standing upright at the end of the trench.
+- **You now have to hit the porthole, not the plate.** The dark inner square is the target;
+  the rings around it are the lip of the port and the Death Star surface it sits in. The
+  shot window is measured against the hole itself, so it is wider than before but no longer
+  counts a hit anywhere on the surrounding plate.
+- **The Death Star surface stands at its original heights.** The laser towers and bunkers
+  were rebuilt from the cabinet's own vertex tables — the towers are the height the ROM
+  gives them, and the ring on top of the laser cannon is back.
+
+### Internal
+- Every ported model now carries the ROM's own draw routines, so the model contact sheet
+  compares our vectors against the cabinet's stroke for stroke instead of only vertex for
+  vertex. One transcribed edge is the 1983 ROM's own out-of-bounds read, kept as-is rather
+  than quietly corrected.
+
 ## [0.0.12] - 2026-07-12
 
 No player-visible changes. Documentation only.
