@@ -57,6 +57,7 @@ import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
 import type { GameEvent } from '../../src/core/events'
 import type { Vec3 } from '@arcade/shared/math3d'
+import { FIRE_AT_PORT } from '../support/aim'
 
 /** A live exhaust port at a world position — the hit-test reads `.pos`. */
 const portAt = (pos: Vec3): { pos: Vec3 } => ({ pos })
@@ -78,7 +79,8 @@ const FRAME = 1 / 60
 
 /** Trigger held, aim dead-centre, square aspect: the sim spawns a bolt at the
  *  cockpit with velocity aimDirection(0,0,1) * PROJECTILE_SPEED = [0,0,-5000]. */
-const FIRE: Input = { aimX: 0, aimY: 0, fire: true, aspect: 1 }
+// sw5-6: RE-SEATED — see tests/support/aim.ts. `aimY: 0` now points at empty sky, not the port.
+const FIRE: Input = FIRE_AT_PORT
 
 /** A world Z near the cockpit — deep inside ANY plausible approach window, so tests
  *  that want the RADIUS or the AIM (not the window) to decide the outcome can seat

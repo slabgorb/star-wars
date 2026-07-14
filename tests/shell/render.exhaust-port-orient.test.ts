@@ -60,7 +60,8 @@ vi.mock('../../src/shell/wireframe', async (importOriginal) => {
 
 import { drawWireframe, project } from '../../src/shell/wireframe'
 import { render } from '../../src/shell/render'
-import { initialState, type GameState } from '../../src/core/state'
+import { enterPhase } from '../../src/core/sim'
+import { initialState, EXHAUST_PORT_DISTANCE, type GameState } from '../../src/core/state'
 import { EXHAUST_PORT, type Model3D } from '../../src/core/models'
 import { transform, type Mat4, type Vec3 } from '@arcade/shared/math3d'
 
@@ -244,18 +245,23 @@ describe('sw5-6 — and it is still an aimable target (sw5-4\'s intent, preserve
   })
 })
 
-describe('sw5-6 AC-3 — the aim point does NOT move', () => {
-  it('the port still spawns dead centre, on the floor, at EXHAUST_PORT_DISTANCE', () => {
-    // AC-3 anticipated a difficulty change from RAISING the port. The ROM says the port was
-    // never meant to be raised — it belongs on the floor, which is exactly where spawnPort
-    // already puts it (y = 0). So the port's world position does not move, and the torpedo
-    // sphere (PORT_HIT_RADIUS, orientation-independent) is untouched.
+describe('sw5-6 AC-3 — the port does NOT move', () => {
+  it('the REAL spawnPort seats it dead centre, on the floor, at EXHAUST_PORT_DISTANCE', () => {
+    // ⚠ THIS TEST WAS VACUOUS IN ROUND 1 and the Thought Police was right to say so. It asserted
+    // `trenchScene(z).exhaustPort.pos` — a literal the FIXTURE ITSELF writes three lines up. It
+    // was checking my own hand-written `[0, 0, z]` against `[0, 0, …]`. It could not fail. It
+    // would have passed if the production spawner returned [999, 999, 0].
     //
-    // What DOES change is where the PILOT flies (60 → the ROM's 512..3840 band), and that
-    // is a real difficulty change — it is pinned in render.trench-eye.test.ts and called
-    // out in the session's Delivery Findings, not slipped in here.
-    const s = trenchScene(PORT_SPAWN_Z)
+    // The real spawner is what AC-3 is about, so drive the real spawner: `enterPhase(…, 'trench')`
+    // calls `spawnPort()` (sim.ts), and THAT is the value that must land on the floor centreline.
+    const s = enterPhase(initialState(1983), 'trench')
+    expect(s.exhaustPort, 'entering the trench spawns the port').not.toBeNull()
+
     expect(s.exhaustPort!.pos[0], 'BSVPORT: "Y WIDTH IN CENTER"').toBe(0)
     expect(s.exhaustPort!.pos[1], 'BSVPORT: "Z HITE ON BOTTOM OF TRENCH" — our floor is y=0').toBe(0)
+    expect(s.exhaustPort!.pos[2], 'seated at EXHAUST_PORT_DISTANCE downrange').toBe(-EXHAUST_PORT_DISTANCE)
+
+    // And the point of AC-3: the ROM never asked for the port to be RAISED, so it did not move.
+    // What moved is the PILOT (60 → the ROM's 512..3840 band) — pinned in render.trench-eye.test.ts.
   })
 })

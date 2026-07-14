@@ -65,6 +65,7 @@ import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
 import type { GameEvent } from '../../src/core/events'
 import type { Vec3 } from '@arcade/shared/math3d'
+import { FIRE_AT_PORT } from '../support/aim'
 
 /** A live exhaust port at a world position — the hit-test reads `.pos`. */
 const portAt = (pos: Vec3): { pos: Vec3 } => ({ pos })
@@ -88,7 +89,10 @@ const FRAME = 1 / 60
 // Trigger held, aim dead-centre, square aspect: the sim spawns a bolt at the
 // cockpit with velocity = aimDirection(0,0,1) * PROJECTILE_SPEED = [0,0,-5000],
 // flying straight down the trench. A REAL fired bolt, not a hand-placed one.
-const FIRE: Input = { aimX: 0, aimY: 0, fire: true, aspect: 1 }
+// sw5-6: RE-SEATED. A centred crosshair no longer points at the port — the pilot now flies 768
+// above the floor and the port lies IN it, so `aimY: 0` points at the vanishing point. FIRE_AT_PORT
+// puts the crosshair ON the target, which is what this suite always meant by "fire".
+const FIRE: Input = FIRE_AT_PORT
 
 /**
  * Fire ONE real bolt down the trench, then coast at a true 60fps, collecting the
