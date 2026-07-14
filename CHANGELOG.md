@@ -8,6 +8,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Entries describe what changed
 for the player. Purely internal work is summarised under *Internal*.
 
+## [0.0.16] - 2026-07-14
+
+### Changed
+- **The trench is a canyon, not a ditch.** Rebuilt from the cabinet's own cross-section
+  table, it is four times wider and twelve times deeper than before — the walls now tower
+  over you, and the ribs and the far end sit where the ROM puts them.
+- **The exhaust port is a hole in the trench floor.** It briefly stood upright facing the
+  cockpit; it now lies flat where you fly over it and drop the shot in. The dark square at
+  its centre is the target — the rings around it are the lip of the port and the Death Star
+  surface it sits in.
+- **The torpedo is earned on the approach.** Line up on the port as you close, and once
+  you are near enough the ship launches the shot home for you.
+
+### Fixed
+- **You can climb.** The cockpit was pinned to the roof of the trench and could only dive.
+  It now rides a band above the floor and moves freely up and down.
+- **Your gun rides with your ship.** Shots used to leave from a fixed point in the middle of
+  the trench, wherever you had actually flown to — so what you aimed at was not what you
+  hit. Every wall turret and wall square in the trench is now hittable, and the exhaust port
+  can no longer be won by aiming at empty sky.
+
+### Internal
+- The trench's width, wall height, rib spacing and draw distance had all been provisional
+  guesses; each is now pinned to a named constant in the original 1983 source, along with
+  the eye's vertical band. The ROM's third coordinate is *height*, not depth — reading it as
+  depth is what had stood the exhaust port on its edge.
+
+## [0.0.15] - 2026-07-13
+
+Version bump only.
+
+## [0.0.14] - 2026-07-13
+
+No player-visible changes. Documentation only.
+
 ## [0.0.13] - 2026-07-13
 
 ### Changed
