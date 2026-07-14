@@ -79,7 +79,9 @@ const PORT_DIAMETER = PORT_HIT_RADIUS * 2
 /**
  * The visible target's reach. RE-SEATED BY sw5-4: EXHAUST_PORT was an authored octagon
  * lying flat in the XZ plane (reach ~69.5); it is now the ROM's `PORT` — three
- * concentric squares flat in z=0, facing the pilot. The hole the player shoots is the
+ * concentric squares whose third coordinate is the ROM's HEIGHT axis, so the plate lies FLAT IN
+ * THE TRENCH FLOOR (sw5-6 corrected sw5-4, which read that third zero as depth and stood the plate
+ * on its edge). The hole the player shoots is the
  * innermost (`.WGD PORT`'s red `;PORTHOLE` pen); the berm and base are the lip and the
  * Death Star surface around the shaft. Derived from the model so this contract cannot
  * rot if it is ever re-ported again.

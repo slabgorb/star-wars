@@ -164,12 +164,23 @@ describe('sw5-6 — what you aim at is what you hit (trench obstacles)', () => {
 // ---------------------------------------------------------------------------
 
 describe('sw5-6 — the exhaust port is winnable from the pilot\'s seat', () => {
-  /** Fly the trench holding `yoke`, and report whether the run was won. */
+  /**
+   * Fire ONE bolt on the yoke, then coast — and report whether the run was won.
+   *
+   * ⚠ IT MUST BE ONE BOLT. This helper originally HELD the trigger for the whole approach, and
+   * the reviewer caught what that hid: with the trigger down, a bolt fired LATE — once the port
+   * has scrolled close — barely drops before it arrives, so it can blunder into the hit sphere
+   * even from the WRONG (floor-level) muzzle. Both port tests below therefore passed with the
+   * regression reintroduced, while this file's header claimed they could not.
+   *
+   * A single bolt, fired from the seat, has to actually be aimed. Now the claim is true.
+   */
   function run(yoke: Input, frames = 900): { won: boolean; portZatWin: number | null } {
     let s = trench({ exhaustPort: { pos: [0, 0, -EXHAUST_PORT_DISTANCE] } })
     for (let i = 0; i < frames; i++) {
       const portZ = s.exhaustPort?.pos[2] ?? null
-      const next = stepGame(s, yoke, DT)
+      // frame 0 pulls the trigger; every frame after releases it. One shot.
+      const next = stepGame(s, i === 0 ? yoke : { ...yoke, fire: false }, DT)
       // The run is WON when the port dies: the phase leaves the trench (clearRun) or the
       // death-star-destroyed beat fires.
       if (next.phase !== 'trench' || next.events.some((e) => e.type === 'death-star-destroyed')) {

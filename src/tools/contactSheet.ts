@@ -171,9 +171,10 @@ function drawModelCell(m: Model3D, r: { x: number; y: number; w: number; h: numb
 
   // vertex -> recentre -> display-orient -> spin -> fixed view tilt -> push back
   // (matrices compose right-to-left). The tilt lifts flat models out of edge-on
-  // and gives every model a 3/4 view: TRENCH lies flat in y=0, while EXHAUST_PORT
-  // (sw5-4) is a ROM plate flat in z=0 facing the pilot — a different plane, same
-  // need for the tilt. The final translation(-dist) is this cell's view matrix
+  // and gives every model a 3/4 view: TRENCH lies flat in y=0, and EXHAUST_PORT is a ROM plate
+  // flat in its own third coordinate — which is the ROM's HEIGHT axis, so in world terms it too
+  // lies in the FLOOR (sw5-6; sw5-4 misread that axis as depth and stood the plate on its edge).
+  // Same plane, same need for the tilt. The final translation(-dist) is this cell's view matrix
   // (camera at the origin).
   const recentre = translation(-center[0], -center[1], -center[2])
   const spun = multiply(rotationY(spinAngle), multiply(orientFor(m.name), recentre))
