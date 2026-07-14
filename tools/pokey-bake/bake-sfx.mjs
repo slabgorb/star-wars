@@ -103,12 +103,37 @@ function expandAlsoun({ audf, audc }) {
 // ── Star Wars 4-byte FX-record expander ───────────────────────────────────────
 // Star Wars stores each effect as per-channel *lists* of 4-byte records
 // `[count, duration, value, delta]` (NOT Tempest's single 6-byte ALSOUN record).
-// The sound IRQ runs at 4.096 ms; a record emits `count` values stepping by
-// `delta`, each held `duration` ticks, then the list advances. A `count=0`
-// record terminates the list and writes 0 to the register (so a volume list's
-// terminator silences the channel — that's what ends the effect). See
-// sfx-data.mjs and the cabinet's FX_Functions.asm (`Sound_FX_1`).
-const SW_BEAT = 0.004096; // sound-IRQ period (6532 timer, ~244 Hz)
+// A record emits `count` values stepping by `delta`, each held `duration` ticks,
+// then the list advances. A `count=0` record terminates the list and writes 0 to
+// the register (so a volume list's terminator silences the channel — that's what
+// ends the effect). See sfx-data.mjs and the cabinet's FX_Functions.asm.
+//
+// ── THE TICK IS 8.192 ms, NOT THE 4.096 ms SOUND IRQ ─────────────────────────
+// This constant was 0.004096 until sw6-4, on the reasonable-sounding belief that
+// the FX driver is walked by the sound IRQ. It is not. The IRQ is 4.096 ms, but
+// AUDDO — the FX driver — is GATED behind a one-bit test of the interrupt counter
+// (SNDAUX.MAC:165-168):
+//
+//     LDA $INTCT      ; incremented once per 4 ms IRQ (SNDAUX.MAC:102)
+//     LSRA            ; shift bit 0 into carry
+//     IFCC            ; ?8 MILL BOUNDARY?   <- the ROM's own words
+//     JSR AUDDO       ; THEN AUDIO SPECIAL EFFECTS
+//     ENDIF
+//
+// so it runs on every OTHER interrupt. Every effect baked at 4.096 ms was twice
+// as fast as the cabinet's — and it was invisible, because this constant scales
+// the TIME axis only and never touches AUDF: a sweep ran twice as fast through
+// the *identical* pitches. Nothing was transposed, so nothing sounded wrong; the
+// effects were merely short. That is why an ear signoff passed them.
+//
+// ⚠ DO NOT "correct" this to 16.384 ms on the strength of AUDDO's own header,
+// which says `AUDDO - UPDATE AUDIO EVERY 16 MILS` (SNDAUD.MAC:1084). That comment
+// is STALE. Its caller gates on ONE bit — 16 ms would need a two-bit test
+// (`ANDA #03`) — and AUDDO's body (SNDAUD.MAC:1086-1126) has NO internal divider:
+// one `DEC AU$TMR(X)` per call, per channel. Its tick IS its call rate.
+// A label's comment is not its caller. (sw6-1 learned the same lesson from PMBEN,
+// which is labelled ";BENS THEME (START OF TOWER)" and is the game-over theme.)
+export const SW_BEAT = 0.008192; // FX driver tick — the 8 ms boundary, not the 4 ms IRQ
 
 // Walk one register list → { steps: [[value, time], …], dur }.
 function expandRecords(records) {
@@ -223,12 +248,9 @@ function writeWav(path, samples, sampleRate) {
   writeFileSync(path, buf);
 }
 
-// ── main ──────────────────────────────────────────────────────────────────────
-mkdirSync(outDir, { recursive: true });
-console.log(`Baking ${SFX.length} SFX @ ${SAMPLE_RATE} Hz → ${outDir}\n`);
-let made = 0;
-let silent = 0;
-for (const spec of SFX) {
+// Bake one spec to samples. Exported so a test can exercise the expander without
+// writing any files — importing this module must never bake anything by itself.
+export function bakeSfx(spec) {
   // Authentic Star Wars entries carry a 4-byte-record `swfx` dispatch entry;
   // expand it to per-chip register events. (Tempest's `alsoun` form still works.)
   if (spec.swfx) {
@@ -242,11 +264,24 @@ for (const spec of SFX) {
     spec.durationMs = e.durationMs;
   }
   const { out, peak } = renderSfx(spec);
-  const path = join(outDir, `${spec.name}.wav`);
-  writeWav(path, out, SAMPLE_RATE);
-  made++;
-  const warn = peak < 1e-4 ? '  ⚠ SILENT — check register data' : '';
-  if (warn) silent++;
-  console.log(`  ✓ ${spec.name}.wav  ${(out.length / SAMPLE_RATE).toFixed(3)}s  peak=${peak.toFixed(3)}${warn}`);
+  return { samples: out, peak, sampleRate: SAMPLE_RATE, seconds: out.length / SAMPLE_RATE };
 }
-console.log(`\nBaked ${made} file(s), 16-bit mono WAV.${silent ? `  (${silent} silent — likely placeholder/empty data)` : ''}`);
+
+// ── main ──────────────────────────────────────────────────────────────────────
+// Guarded: this file is imported by bake-sfx.test.mjs. Without the guard, merely
+// importing it would bake every effect to disk as a side effect of the import.
+if (process.argv[1] && process.argv[1].endsWith('bake-sfx.mjs')) {
+  mkdirSync(outDir, { recursive: true });
+  console.log(`Baking ${SFX.length} SFX @ ${SAMPLE_RATE} Hz → ${outDir}\n`);
+  let made = 0;
+  let silent = 0;
+  for (const spec of SFX) {
+    const { samples, peak, seconds } = bakeSfx(spec);
+    writeWav(join(outDir, `${spec.name}.wav`), samples, SAMPLE_RATE);
+    made++;
+    const warn = peak < 1e-4 ? '  ⚠ SILENT — check register data' : '';
+    if (warn) silent++;
+    console.log(`  ✓ ${spec.name}.wav  ${seconds.toFixed(3)}s  peak=${peak.toFixed(3)}${warn}`);
+  }
+  console.log(`\nBaked ${made} file(s), 16-bit mono WAV.${silent ? `  (${silent} silent — likely placeholder/empty data)` : ''}`);
+}

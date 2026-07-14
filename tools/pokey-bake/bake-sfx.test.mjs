@@ -19,6 +19,7 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { SFX } from './sfx-data.mjs'
+import { SW_BEAT, bakeSfx } from './bake-sfx.mjs'
 
 const here = (rel) => fileURLToPath(new URL(rel, import.meta.url))
 
@@ -65,5 +66,84 @@ describe('pokey-bake sfx-data (AC2: >= 3 authentic SFX)', () => {
 describe('pokey-bake render tool (AC2)', () => {
   it('ships the bake-sfx.mjs render script', () => {
     expect(existsSync(here('./bake-sfx.mjs'))).toBe(true)
+  })
+})
+
+// ── sw6-4: THE CLOCK ─────────────────────────────────────────────────────────
+// Everything above this line is format-AGNOSTIC by design (see the header): it
+// pins that the effects EXIST, are named, and carry data. Nothing pinned their
+// TIMING — and so every shipped effect was baked at double speed for an entire
+// epic, with the suite green the whole way. Existence is not correctness.
+//
+// Three numbers are in play and two of them are wrong, so these tests REFUTE
+// rather than merely assert — the house rule, after this project was bitten
+// twice by a stale ROM label and twice by a radix misread.
+const IRQ = 0.004096 //         the sound board's interrupt period. Real — but not the FX tick.
+const FX_TICK = 0.008192 //     the FX tick: AUDDO runs on every OTHER interrupt.
+const AUDDO_HEADER = 0.016384 // what AUDDO's own STALE header comment implies.
+
+describe('sw6-4 — the FX driver ticks on the 8 ms boundary, not the 4 ms sound IRQ', () => {
+  it('walks the FX records at 8.192 ms', () => {
+    // SNDAUX.MAC:165-168 gates the call:
+    //     LDA $INTCT   ; incremented once per 4 ms IRQ (SNDAUX.MAC:102)
+    //     LSRA         ; shift bit 0 into carry
+    //     IFCC         ; ?8 MILL BOUNDARY?   <- the ROM's own words
+    //     JSR AUDDO    ; THEN AUDIO SPECIAL EFFECTS
+    expect(SW_BEAT).toBeCloseTo(FX_TICK, 9)
+  })
+
+  it('REFUTES the 4.096 ms sound IRQ — the FX driver is gated, not free-running', () => {
+    // The trap that shipped. 4.096 ms is a TRUE fact about the interrupt and a
+    // FALSE one about the FX driver: PKDR (music) and SPKIRQ (speech) are called
+    // on every interrupt, but `JSR AUDDO` sits inside the IFCC. Bake at the IRQ
+    // period and every effect is exactly twice as fast as the cabinet's.
+    expect(SW_BEAT).not.toBeCloseTo(IRQ, 9)
+    expect(SW_BEAT / IRQ).toBeCloseTo(2, 6) // precisely a factor of two — the whole bug
+  })
+
+  it("REFUTES AUDDO's own header, which claims 'EVERY 16 MILS' and is STALE", () => {
+    // SNDAUD.MAC:1084 — `.SBTTL AUDDO - UPDATE AUDIO EVERY 16 MILS`. Believe it and
+    // the effects come out 4x too SLOW. It is wrong on two independent counts:
+    //   1. Its caller consumes ONE bit (LSRA -> carry). A 16 ms gate would need a
+    //      two-bit test (ANDA #03).
+    //   2. AUDDO's body (SNDAUD.MAC:1086-1126) has NO internal divider — one
+    //      `DEC AU$TMR(X)` per call, per channel. Its tick IS its call rate.
+    // A label's comment is not its caller. sw6-1 learned this from PMBEN, labelled
+    // ';BENS THEME (START OF TOWER)' and fired only on the game-over path.
+    expect(SW_BEAT).not.toBeCloseTo(AUDDO_HEADER, 9)
+  })
+})
+
+describe('sw6-4 — the clock scales TIME ONLY, which is why an ear signoff missed it', () => {
+  // SW_BEAT sets how long each register value is HELD (stepDur = duration * SW_BEAT).
+  // It never touches AUDF. So the old bake ran every frequency sweep twice as fast
+  // through the IDENTICAL pitches: nothing was transposed, the envelopes were merely
+  // rushed. The effects sounded like SHORTER versions of the right sound, not higher
+  // ones — no wrongness to hear, only absence. An ear cannot catch that. A test can.
+  const byName = Object.fromEntries(SFX.map((s) => [s.name, s]))
+
+  // Measured at the corrected 8.192 ms tick. At the old 4.096 ms each was exactly
+  // half of these — a pure time scale, no pitch change.
+  const EXPECTED_SECONDS = {
+    player_fire: 0.446,
+    enemy_fire: 0.151,
+    enemy_explosion: 1.62,
+    player_explosion: 1.069,
+    wave_clear: 0.446,
+    spawn: 0.479,
+    terrain_crash: 0.888,
+  }
+
+  it('covers every effect the game fetches', () => {
+    expect(Object.keys(byName).sort()).toEqual(Object.keys(EXPECTED_SECONDS).sort())
+  })
+
+  it.each(Object.entries(EXPECTED_SECONDS))('holds %s for %ss at the corrected tick', (name, seconds) => {
+    const { samples, peak, seconds: got } = bakeSfx(byName[name])
+
+    expect(got).toBeCloseTo(seconds, 2)
+    expect(samples.length).toBeGreaterThan(0)
+    expect(peak).toBeGreaterThan(0.05) // a silent bake is the failure this epic exists to end
+    expect(peak).toBeLessThanOrEqual(1.0) // and a clipped one is the other
   })
 })
