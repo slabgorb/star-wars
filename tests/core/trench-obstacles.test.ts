@@ -22,6 +22,7 @@ import { initialState, TRENCH_SCROLL_SPEED, PROJECTILE_TTL, type GameState } fro
 import { stepGame, enterPhase } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
 import { createRng } from '@arcade/shared/rng'
+import { TRENCH_EYE_SEAT } from '../../src/core/trench-channel'
 
 describe('trench obstacles — spawn & scroll', () => {
   it('enterPhase(trench) seeds the run chain from the run RNG; other phases carry none', () => {
@@ -112,8 +113,12 @@ describe('trench obstacles — shooting & scoring', () => {
   it('cockpit contact with a CATWALK costs a shield and emits terrain-crash', () => {
     const s = enterPhase(initialState(), 'trench')
     const lives0 = s.lives
+    // Parked ON the cockpit. sw5-6 re-framed the eye: `trenchView` is now a height ABOVE
+    // the y=0 trench floor, seated at TRENCH_EYE_SEAT — so "at the cockpit" is the seat,
+    // not the origin. (Staged at y=0 this catwalk would sit on the FLOOR, 768 below the
+    // pilot, and correctly miss him.) The intent — contact crashes — is unchanged.
     const s1 = stepGame(
-      { ...s, mode: 'playing', trenchObstacles: [{ kind: 'catwalk', pos: [0, 0, -1] }] },
+      { ...s, mode: 'playing', trenchObstacles: [{ kind: 'catwalk', pos: [0, TRENCH_EYE_SEAT, -1] }] },
       NO_INPUT,
       1 / 60,
     )

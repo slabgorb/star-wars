@@ -1,5 +1,13 @@
 # ADR 0002 — Scene geometry for the Death Star surface and trench (procedural ground + walled channel)
 
+> ⚠ **SUPERSEDED IN PART BY sw5-6.** The trench geometry below is the OLD, unpinned geometry and
+> is kept as history. `TRENCH_HALF_W` is **1024** (`$400`), not ~256; `TRENCH_WALL_H` is **4096**
+> (`$1000`), not ~400; and `TRENCH_SKIM` **no longer exists** — the pilot's eye is `trenchView`,
+> a height above the y=0 floor clamped to the ROM's 512…3840 band. All four are pinned from
+> `WSBASE.MAC` / `WSMAIN.MAC`; see `src/core/trench-channel.ts` and
+> `docs/star-wars-1983-source-findings.md` § Open follow-ups #2.
+
+
 - **Status:** Proposed
 - **Date:** 2026-06-29
 - **Deciders:** Architect, product owner

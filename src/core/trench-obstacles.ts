@@ -7,8 +7,8 @@
 // off_7B1E..7BFE); scores from ## Scoring tables (byte_9853 turrets,
 // byte_9850 squares).
 
-import type { TrenchObstacle } from './state'
-import { TRENCH_HALF_W } from './trench-channel'
+import { CATWALK_HIT_RADIUS, type TrenchObstacle } from './state'
+import { TRENCH_HALF_W, TRENCH_WALL_H, TRENCH_EYE_SEAT } from './trench-channel'
 import { createRng, nextInt, type Rng } from '@arcade/shared/rng'
 
 // --- Scores: TRUED against ## Scoring tables --------------------------------
@@ -48,6 +48,51 @@ export const OBSTACLE_HIT_RADIUS = 90 // PROVISIONAL(findings ## Trench catwalks
 
 const W = TRENCH_HALF_W
 
+// --- Furniture heights, re-anchored to the pinned trench (story sw5-6) ------
+//
+// These were absolute constants (60 / 120 / 200) hand-tuned against the old 320-tall wall.
+// Against the ROM's 4096-deep trench they all collapse into the bottom 5% — the "overhead"
+// catwalk ends up lying on the floor. None of them carries a ROM pin (the cabinet's wall
+// detail is a PRNG-picked shape script, not a grid), so they are re-anchored rather than
+// re-pinned: no invented numbers are dressed up as ROM data.
+//
+// WALL furniture scales with the WALL — turret and square keep exactly the proportions of
+// its height that they had (3/16 and 3/8, i.e. the old 60/320 and 120/320). Note the pilot
+// is clamped to ±511 inside ±1024 walls, so he can never reach them: these are things he
+// SHOOTS, not things he crashes into.
+//
+// The CATWALK is different in kind. It spans the channel, so it is the one piece of
+// furniture that can physically block the pilot — and its height was never really tuned to
+// the wall, it was tuned to the EYE (it sat 200 above an eye seated at 0). So it anchors to
+// the eye, not the wall. Two bounds fix it, and tests/core/trench-viewpoint.test.ts asserts
+// both behaviourally:
+//
+//   • it must BITE a seated pilot:  |CATWALK_Y − TRENCH_EYE_SEAT| < CATWALK_HIT_RADIUS
+//   • a full dive must CLEAR it:     CATWALK_Y − TRENCH_EYE_MIN  ≥ CATWALK_HIT_RADIUS
+//
+// which pins it to [752, 1008). Half a hit-radius above the seat sits mid-window, with
+// comfortable margin on both sides (bites by 120, clears by 376).
+
+/** Wall-mounted turret — 3/16 of the wall's height, as it was on the 320 wall. This lands it at
+ *  exactly TRENCH_EYE_SEAT, so the seated pilot looks a turret dead in the eye: aim (0, 0). */
+const TURRET_Y = (TRENCH_WALL_H * 3) / 16 // 768
+/** Wall square — above the turret, but it must stay INSIDE THE PILOT'S AIM CONE from its own
+ *  station, or it is scenery he can see and never shoot.
+ *
+ *  The cone is the FOV: at range D the crosshair reaches ±D/f about the eye, with f = 1/tan(30°).
+ *  The nearest square station is 1300 downrange, so it reaches 1300/1.732 = 750 above the seat —
+ *  i.e. anything above ~1518 is UNAIMABLE the moment it appears. The old 3/8 (=1536) sat just past
+ *  that line and the square could never be shot. 5/16 keeps the square high on the wall with real
+ *  margin, and every station stays reachable (pinned in tests/core/trench-aim-wysiwyg.test.ts).
+ *
+ *  This is what "re-anchor the furniture" (AC-5) actually means: not just scaling it with the wall,
+ *  but keeping it a TARGET. */
+const SQUARE_Y = (TRENCH_WALL_H * 5) / 16 // 1280
+/** Overhead catwalk — anchored to the PILOT, not the wall: high enough above the dive
+ *  floor that a dive clears it, close enough to the entry seat that a hands-off run walks
+ *  straight into it. */
+const CATWALK_Y = TRENCH_EYE_SEAT + CATWALK_HIT_RADIUS / 2 // 888
+
 /**
  * Downrange stations, cockpit → far. PROVISIONAL layout: the ROM's off_7CC0 →
  * off_7B1E..7BFE records (findings ## Trench catwalks, turrets & wall squares)
@@ -64,15 +109,31 @@ const W = TRENCH_HALF_W
  * alternation. Exact Z spacing and the square/catwalk placements remain
  * hand-authored pending a full geometry-decode pass.
  */
+// The stations move OUT with the walls (story sw5-6). They were spaced for a ±256 trench; the
+// pinned trench is ±1024, and a wall object 900 units downrange on a ±1024 wall subtends 48.7°
+// off-axis — outside the frustum entirely. It is not a hard shot, it is OFF SCREEN.
+//
+// The aim cone is the FOV: the crosshair reaches |x|/D ≤ tan(FOV_Y/2)·aspect. At the narrowest
+// aspect we support (1:1) that is 0.577, so a wall object is only aimable beyond
+// TRENCH_HALF_W / 0.577 ≈ 1774. Seating the nearest station at 2·TRENCH_HALF_W puts every wall
+// object at ≤ 26.6° — comfortably inside the cone at ANY aspect ≥ 1, which also closes the
+// aspect-dependent reachability hole the reviewer flagged. Spacing is unchanged.
+//
+// Still PROVISIONAL (the ROM's off_7CC0 records give no station coordinates) — re-anchored, not
+// pinned. tests/core/trench-aim-wysiwyg.test.ts holds them to the only contract that matters: the
+// pilot can point at every one of them.
+const NEAR = 2 * TRENCH_HALF_W // 2048 — the closest a wall object may stand and still be aimable
+const GAP = 400
+
 export const TRENCH_OBSTACLE_STATIONS: readonly TrenchObstacle[] = [
-  { kind: 'turret', pos: [-W, 60, -900] }, // ROM row 1 ($B) — left wall only
-  { kind: 'square', pos: [W, 120, -1300] },
-  { kind: 'turret', pos: [W, 60, -1700] }, // ROM row 2 ($E) — right wall only
-  { kind: 'catwalk', pos: [0, 200, -2100] },
-  { kind: 'square', pos: [-W, 120, -2500] },
-  { kind: 'square', pos: [W, 120, -2900] },
-  { kind: 'turret', pos: [-W, 60, -3300] }, // ROM row 3 ($C) — both walls...
-  { kind: 'turret', pos: [W, 60, -3300] }, //  ...left+right at the same station
+  { kind: 'turret', pos: [-W, TURRET_Y, -NEAR] }, // ROM row 1 ($B) — left wall only
+  { kind: 'square', pos: [W, SQUARE_Y, -(NEAR + GAP)] },
+  { kind: 'turret', pos: [W, TURRET_Y, -(NEAR + 2 * GAP)] }, // ROM row 2 ($E) — right wall only
+  { kind: 'catwalk', pos: [0, CATWALK_Y, -(NEAR + 3 * GAP)] },
+  { kind: 'square', pos: [-W, SQUARE_Y, -(NEAR + 4 * GAP)] },
+  { kind: 'square', pos: [W, SQUARE_Y, -(NEAR + 5 * GAP)] },
+  { kind: 'turret', pos: [-W, TURRET_Y, -(NEAR + 6 * GAP)] }, // ROM row 3 ($C) — both walls...
+  { kind: 'turret', pos: [W, TURRET_Y, -(NEAR + 6 * GAP)] }, //  ...left+right at the same station
 ]
 
 /**

@@ -571,10 +571,29 @@ export const TRENCH: Model3D = {
  * source settles it: the object is named PORT and its comment reads ";THERMAL
  * EXHAUST PORT". The octagon is gone.
  *
- * TWELVE points in THREE CONCENTRIC SQUARES, flat in z=0 — a plate whose face
- * looks down the trench at the pilot (the shell draws it under TRENCH_ORIENT =
- * IDENTITY, so it presents face-on; it does NOT lie in the floor plane the way the
- * old octagon did). The `.PH` rows are HEX under `.RADIX 16`, at `.S=8`:
+ * TWELVE points in THREE CONCENTRIC SQUARES, all at third-component 0 — and that third
+ * component is the ROM's HEIGHT axis, so this is a HORIZONTAL PLATE THAT LIES FLAT IN THE
+ * TRENCH FLOOR. It is a hole in the floor, which is exactly where the old octagon was: the
+ * octagon's PLANE was right all along; only its shape was wrong.
+ *
+ * ⚠ CORRECTED BY sw5-6 — and this comment is the reason the correction was needed.
+ * It used to say the plate "looks down the trench at the pilot … it does NOT lie in the floor
+ * plane the way the old octagon did", and the shell duly drew it under TRENCH_ORIENT = IDENTITY.
+ * That maps the ROM's HEIGHT axis onto our DEPTH axis and stands the plate on its edge — half of
+ * it buried below the floor. The ROM says so twice, and both were in this file's reach:
+ *
+ *   • `.MACRO .PGND .A,.B,.C ;OFFSET HITE TO MID OF PLAYERS HITE` applies the HEIGHT offset
+ *     GD$MDT to the THIRD component. Third = height.
+ *   • WSBASE.MAC `BSVPORT` seats the object: `LDD #-1000 / STD M.GD+4 ;Z HITE ON BOTTOM OF
+ *     TRENCH`, `LDD #0 / STD M.GD+2 ;Y WIDTH IN CENTER`.
+ *
+ * render.ts's own TOWER_ORIENT already stated the convention in English ("The ROM's up-axis is Z
+ * (x is fore/aft, y lateral); ours is Y") — the port simply was not given the same bridge. It is
+ * now: PORT_ORIENT = rotationX(-90°). THE VERTICES BELOW ARE UNCHANGED and must stay 1:1 with the
+ * ROM (romCompare deep-compares them, and PORT_HIT_RADIUS is bound to the porthole in these
+ * units). Orientation is the SHELL's job — never re-seat this table to suit a viewing angle.
+ *
+ * The `.PH` rows are HEX under `.RADIX 16`, at `.S=8`:
  *
  *   .PH 0C,0C,0   ;0-3 INNER CIRCLE   0x0C * 8 =  96   the PORTHOLE — the hole
  *   .PH 14,14,0   ;4-7 SUPPORT BERM   0x14 * 8 = 160   the raised lip around it

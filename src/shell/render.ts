@@ -105,18 +105,45 @@ const ENEMY_MUZZLE_FLASH_SECONDS = 0.1
 //   roll about Z lays them down so the relief rises in +Y from the y=0 floor.
 //   TOWER   — the ROM authors ground objects Z-UP and height-recentred; see
 //   TOWER_ORIENT below, which is the whole bridge into our y-up world.
-//   TRENCH  — the floor squares and catwalk rails are authored flat in the y=0
-//   plane, so they need no reorientation; the camera skims just above the floor
-//   (story 8-5). The exhaust port (sw5-4) reaches the same IDENTITY answer for a
-//   DIFFERENT reason: it's a ROM plate (`.WP PORT`) authored flat in the z=0
-//   plane, facing the pilot down -Z, which under IDENTITY already presents
-//   face-on — not because it shares the floor's plane, but because it's already
-//   oriented toward the camera.
+//   TRENCH  — the floor squares and catwalk rails are AUTHORED here (not ported),
+//   flat in the y=0 plane, so they need no reorientation (story 8-5).
+//   PORT    — the exhaust port is NOT trench furniture: it is a ROM GROUND OBJECT
+//   (`.WP PORT`, `.S=8 ;GROUND OBJECT SCALING`, drawn by the cabinet with the
+//   bunker's own colour and scale registers), so it needs the SAME up-axis bridge
+//   the tower family does. See PORT_ORIENT below.
 //
 // NOTE: structural tests can't catch orientation/scale — these MUST be eyeballed
 // in the dev server once the surface phase is reachable in play.
 export const SURFACE_ORIENT: Mat4 = rotationZ(-Math.PI / 2)
 export const TRENCH_ORIENT: Mat4 = IDENTITY
+
+// The exhaust port's placement basis (story sw5-6).
+//
+// sw5-4 drew the port under TRENCH_ORIENT = IDENTITY, believing `.WP PORT`'s twelve
+// zeros meant "flat in z, facing the pilot down −Z". They do not. The ROM's THIRD
+// coordinate is HEIGHT — its own macro says so, `.MACRO .PGND .A,.B,.C ;OFFSET HITE TO
+// MID OF PLAYERS HITE` applying GD$MDT to the third component — and TOWER_ORIENT below
+// already states the convention out loud. Twelve points with zero HEIGHT is a HORIZONTAL
+// plate, and WSBASE.MAC `BSVPORT` lays it on the floor in as many words:
+//
+//     LDD #-1000
+//     STD M.GD+4        ;Z HITE ON BOTTOM OF TRENCH
+//     LDD #0
+//     STD M.GD+2        ;Y WIDTH IN CENTER
+//
+// So the port is a hole in the trench FLOOR — where the authored octagon was all along.
+// Under IDENTITY the ROM's height axis landed on our DEPTH axis, standing the plate on
+// its edge with half of it buried below the floor. This is that missing remap.
+//
+// It is TOWER_ORIENT's rotation WITHOUT the lift and WITHOUT the scale:
+//   - no lift:  `.PH` rows carry no `-GD$MDT` recentring (unlike `.PGND`), so there is
+//     nothing to undo — the plate is authored at height 0 and belongs at the floor.
+//   - no scale: the port is drawn 1:1, which is what binds PORT_HIT_RADIUS (108, world
+//     units) to the porthole's 96 (model units). GROUND_MODEL_SCALE would break that.
+//
+// The port is three concentric SQUARES (|x| = |y| at every point), so it is 4-fold
+// symmetric about the vertical and the rotation's horizontal-axis swap is invisible.
+export const PORT_ORIENT: Mat4 = rotationX(-Math.PI / 2)
 
 // The ROM → world presentation scale for the ground objects (story sw5-5).
 //
@@ -164,11 +191,12 @@ export const TOWER_ORIENT: Mat4 = multiply(
 // faces the cockpit before sign-off.
 export const TIE_ORIENT: Mat4 = rotationZ(Math.PI / 2)
 
-// The cockpit skims just above the trench floor. This is now the CAMERA's height
-// (see `cameraView`) — the eye rides above the y=0 floor — not a world-shift
-// constant. The floor and port keep their true sim-state world positions; the
-// camera lifts the view, so the port still scrolls up the channel inside it.
-const TRENCH_SKIM = 60
+// TRENCH_SKIM (a fixed 60-unit cockpit skim, added to the eye here) is GONE (sw5-6). It
+// was the fudge that hid a frame collision: the channel builds its floor at y=0, but the
+// pilotable band was transcribed in the ROM's frame (top = 0) as a NEGATIVE dive, so
+// `TRENCH_SKIM + trenchView[1]` ranged over y ∈ [−3268, +60] — the pilot spent most of the
+// band flying UNDERNEATH the trench. The band is now a height ABOVE the floor
+// (TRENCH_EYE_MIN..TRENCH_EYE_MAX) and `state.trenchView` IS the eye. Nothing to add.
 const PORT_GLOW = GLOW_FOR['Exhaust Port'] // exhaust-port target amber (shared)
 
 // Where the shell seats the Death Star surface in Z (story 8-11). The relief is
@@ -234,7 +262,8 @@ export function cameraView(state: GameState): Mat4 {
   // player sees. `trenchView` is a collision-world offset (z unused); added onto the
   // display skim, kept separate from it.
   if (state.phase === 'trench')
-    return viewMatrix([state.trenchView[0], TRENCH_SKIM + state.trenchView[1], state.trenchView[2]], IDENTITY)
+    // `trenchView` IS the eye: lateral offset, height above the y=0 trench floor (sw5-6).
+    return viewMatrix(state.trenchView, IDENTITY)
   return IDENTITY // space: the camera sits at the origin looking down −Z
 }
 
@@ -340,7 +369,7 @@ export function render(
     // The exhaust port still rides up the channel at its true sim world position.
     const { port } = trenchPlacement(state)
     if (state.exhaustPort) {
-      drawWireframe(ctx, EXHAUST_PORT, multiply(view, modelMatrix(port, TRENCH_ORIENT)), proj, w, h, PORT_GLOW)
+      drawWireframe(ctx, EXHAUST_PORT, multiply(view, modelMatrix(port, PORT_ORIENT)), proj, w, h, PORT_GLOW)
     }
   } else {
     // Wave 1 — the space phase. The Death Star body looms far down −Z and grows as

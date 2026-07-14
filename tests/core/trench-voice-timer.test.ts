@@ -45,6 +45,7 @@ import type { GameEvent, SpeechLine } from '../../src/core/events'
 import { stepGame, enterPhase } from '../../src/core/sim'
 import { initialState, PROJECTILE_TTL, type GameState } from '../../src/core/state'
 import { NO_INPUT } from '../../src/core/input'
+import { TRENCH_EYE_SEAT } from '../../src/core/trench-channel'
 
 const DT = 1 / 60
 
@@ -280,13 +281,15 @@ describe('a cue rides every return path — coexists with crash / port-kill even
   it('fires alongside a catwalk crash on the SAME frame (obstacle-crash path)', () => {
     // A synthetic catwalk parked at the cockpit forces the crash branch on this
     // step, while the timer hits 16. The cue must ride the crash return path too.
+    // sw5-6: "at the cockpit" is TRENCH_EYE_SEAT — the eye is now a height above the
+    // y=0 trench floor, so a catwalk at y=0 would sit on the floor and miss the pilot.
     const trench = enterPhase(initialState(1983), 'trench')
     const s0: GameState = {
       ...trench,
       mode: 'playing',
       wave: 2,
       trenchTimer: T_LUKE - 1,
-      trenchObstacles: [{ kind: 'catwalk', pos: [0, 0, -1] }],
+      trenchObstacles: [{ kind: 'catwalk', pos: [0, TRENCH_EYE_SEAT, -1] }],
     }
     const out = stepGame(s0, NO_INPUT, DT)
     expect(spokenLines(out)).toContain('lukeTrustMe') // the cue survived the crash return

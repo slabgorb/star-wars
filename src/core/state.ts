@@ -13,6 +13,7 @@ import type { Vec3, Mat4 } from '@arcade/shared/math3d'
 import type { GameEvent } from './events'
 import { createRng, type Rng } from '@arcade/shared/rng'
 import { mazeForWave } from './surfaceMazes'
+import { TRENCH_EYE_SEAT } from './trench-channel'
 
 /** The three phases of an attack run, in order. */
 export type Phase = 'space' | 'surface' | 'trench'
@@ -250,11 +251,12 @@ export const TIE_DEATH_SPREAD = 520
 /** Hit sphere around the cockpit for enemy contact and fire. */
 export const COCKPIT_HIT_RADIUS = 80
 /**
- * Contact sphere for a trench catwalk reaching the cockpit (story 14-7). A
- * catwalk hangs at y=200 above the cockpit centreline and only its z advances as
- * it scrolls, so its closest approach is sqrt(200² + 0²) = 200 units at z=0 —
- * beyond COCKPIT_HIT_RADIUS (80), which is why the crash never fired. Its own
- * radius must span that fixed vertical offset PLUS a margin: at exactly 200 the
+ * Contact sphere for a trench catwalk reaching the cockpit (story 14-7; heights re-anchored
+ * by sw5-6). The catwalk hangs ABOVE THE SEATED PILOT and only its z advances as it scrolls, so
+ * its closest approach is that fixed vertical offset — CATWALK_Y − TRENCH_EYE_SEAT, which
+ * trench-obstacles.ts owns and keeps at half this radius. It is far beyond COCKPIT_HIT_RADIUS
+ * (80), which is why the crash never fired on that sphere. This radius must span the offset PLUS
+ * a margin: with no margin at all the
  * hit shell is the razor-thin z=0 plane, which the discrete ~8.3 u/frame scroll
  * can skip on floating-point drift. 240 opens a ~16-frame window around z=0 while
  * staying far below the ~2090-unit spawn distance, so the catwalk crashes as it
@@ -431,6 +433,45 @@ export const PORT_HIT_RADIUS = 108
  *  so the finish demands timing, not just aim (sw3-15). Named authentic-FEEL like
  *  the other Wave 3 constants — no ROM↔world-unit scale is recovered. */
 export const PORT_APPROACH_WINDOW = 800
+/**
+ * How close a LASER must come to the porthole to ARM the proton torpedo (story sw5-6).
+ *
+ * This is the cabinet's own "close enuf", and it is a real ROM number, not a feel constant.
+ * `WSLAZR.MAC` tests the laser's aim against a BOX around the porthole and, if it lands
+ * inside, hands the shot to the machine:
+ *
+ *     LDA BS.PFL / IFNE            ;?EXHAUST PORT ON?
+ *     LDA PT.LZF / IFEQ            ;?PROTON TORP STILL PRIMED?
+ *     LDD TMPTY / ADDD #200 / IFGE ;?WITHIN LEFT EDGE?
+ *                 SUBD #400 / IFLE ;?WITHIN RIGHT EDGE?
+ *     LDD TMPTX / SUBD BS.PLC      ;GET DELTA FROM PORTHOLE LOC
+ *                 ADDD #200 / IFGE ;?ABOVE BOTTOM EDGE?
+ *                 SUBD #400 / IFLE ;?BELOW TOP EDGE?
+ *     LDA #1 / STA PT.LZF          ;SET LAZAR FIRE FLAG
+ *
+ * `+$200 >= 0 && −$200 <= 0` is a ±$200 range test, so the box is ±512 about the hole.
+ * Once armed, `WSLAZR` launches the torpedo (`JSR FRPTGN ;THEN LAUNCH DIRECT HIT PROTON
+ * TORPS`) and `WSGUNS.MAC MVPTGN` funnels it in — its height above the floor clamped to the
+ * forward distance D, its lateral offset to D/16, stopping dead above the porthole. As D → 0
+ * both clamps drive to zero: it cannot miss.
+ *
+ * So the PRECISION LIVES IN THE ARMING, not the terminal — which is the whole reason the
+ * cabinet's pilot never has to make the 43.8°-down shot into his own floor that our 60° FOV
+ * forbids. He only has to get close; the machine flies it home.
+ *
+ * ⚠ WE DO **NOT** TRANSPLANT THE ±$200, and the reason matters. The ROM's box is measured
+ * against `TMPTX` — the endpoint of a laser drawn a fixed `$7000` (28,672 units) ahead of the
+ * ship — so it encodes the cabinet's engagement STANDOFF, not a tolerance around the hole. Our
+ * whole trench is 2,400 units long; there is no $7000 standoff here to measure against, and
+ * dropping 512 in as a proximity radius would let a shot out on the SUPPORT BERM (±160) or the
+ * OUTER BASE (±256) win the run — which sw5-4 pinned as a MISS, from this same source. Two ROM
+ * numbers from the same machine, and the one that survives our scale is the porthole.
+ *
+ * So the ARMING RADIUS IS THE PORTHOLE: `PORT_HIT_RADIUS` (108, tuned by sw5-4 to the ROM's ±96
+ * hole). What sw5-6 takes from `WSLAZR`/`MVPTGN` is the STRUCTURE, which is the load-bearing
+ * part — **arm early, resolve late** — not a constant that does not survive the crossing. Logged
+ * as a deviation.
+ */
 /** Awarded on top of TRENCH_BONUS for a port kill with no prior trench shots —
  *  the arcade's "USE THE FORCE" bonus (findings ## Exhaust port & run outcome:
  *  the type-4 segment's one-shot `byte_4B36` latch fires `sub_97E3`, the
@@ -520,13 +561,31 @@ export interface GameState {
    * read `mod RIB_Z` by the trenchChannel generator and reset to 0 on every phase
    * entry. */
   trenchScrollZ: number
-  /** The pilotable trench viewpoint (Wave 3, story sw3-2) — the ship's eye in the
-   * trench's collision world, flown by the yoke and clamped to the `sub_703B`
-   * band (TRENCH_VIEW_HALF_W lateral, TRENCH_VIEW_FLOOR..0 vertical). Seats at the
-   * centreline origin [0,0,0] on every phase entry (so the overhead catwalk still
-   * bites an un-piloted run); the trench catwalk collision tests against THIS, not
-   * a fixed cockpit, so a dive makes catwalks dodgeable. z is unused (always 0). */
+  /** The pilotable trench viewpoint (story sw3-2, re-framed by sw5-6) — the SHIP: the pilot's
+   * eye, the muzzle his bolts leave from, and the point the catwalk is tested against.
+   *
+   * `[0]` is lateral, clamped to ±TRENCH_VIEW_HALF_W (the ROM's ±$1FF). `[1]` is the eye's
+   * HEIGHT ABOVE THE y=0 TRENCH FLOOR, clamped to [TRENCH_EYE_MIN, TRENCH_EYE_MAX] (512..3840,
+   * the ROM's band) and seated at TRENCH_EYE_SEAT on every phase entry — the height WSMAIN.MAC's
+   * `SMVG1B` drops the pilot to as he enters ("JUST ABOVE BOTTOM OF TRENCH"). `[2]` is unused
+   * (always 0).
+   *
+   * Before sw5-6 this was a NEGATIVE dive-only offset added to a shell constant, which summed to
+   * a camera 3268 units UNDER the floor; and the gun did not move with it, so what you aimed at
+   * was not what you hit. Both are fixed: this IS the ship. */
   trenchView: Vec3
+  /** The proton torpedo is armed and running (story sw5-6) — the ROM's `PT.LIV`.
+   *
+   * The player fires ordinary aimed LASERS, which is what kills turrets and squares. When one
+   * lands within PORT_ARM_RADIUS of the porthole, `WSLAZR.MAC` hands the shot to the machine
+   * (`JSR FRPTGN ;THEN LAUNCH DIRECT HIT PROTON TORPS`) and this latches. `WSGUNS.MAC MVPTGN`
+   * then funnels the torpedo into the hole, and `WSMAIN.MAC` reads the flag at the end-wall
+   * window to decide HIT or MISS. So the shot is EARNED early, at a range the yoke can actually
+   * reach, and RESOLVES late, inside the ROM's $800 end-wall gate. Reset on every phase entry.
+   *
+   * (Phrasing note: the pure-core purity guard scans this file as TEXT for a DOM global followed
+   * by a dot, so that word cannot end a sentence here — even inside a comment.) */
+  portTorpedoArmed: boolean
   /** Enemies destroyed in the CURRENT phase; clears the phase at its quota,
    * then resets to 0 on the transition into the next phase. */
   phaseKills: number
@@ -624,7 +683,10 @@ export function initialState(seed = 1983): GameState {
     surfaceScrollZ: 0,
     surfaceMazeLaid: false,
     trenchScrollZ: 0,
-    trenchView: [0, 0, 0],
+    // The eye rides at the ROM's trench entry height above the floor (sw5-6) — see
+    // TRENCH_EYE_SEAT. A trench state built straight from initialState() (as the render
+    // suites do) is therefore already seated inside the band, not sitting on the floor.
+    trenchView: [0, TRENCH_EYE_SEAT, 0],
     phaseKills: 0,
     projectiles: [],
     enemies: [],
@@ -633,6 +695,7 @@ export function initialState(seed = 1983): GameState {
     exhaustPort: null,
     trenchObstacles: [],
     trenchShotsFired: 0,
+    portTorpedoArmed: false,
     trenchTimer: 0,
     forceBonusAwardedAt: null,
     deathStarDestroyedAt: null,

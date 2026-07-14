@@ -87,7 +87,8 @@ const BERM_HALF_WIDTH = 160 //                               0x14 * 8
 const BASE_HALF_WIDTH = 256 //                               0x20 * 8
 
 /** The ring magnitudes the PORT MODEL actually ships, in the plane the ROM plate
- *  lies in (x/y — it is flat in z, facing the pilot). Compared against the ROM
+ *  spans (its two horizontal axes — the ROM's THIRD component is HEIGHT, and all twelve points
+ *  sit at 0, so the plate lies FLAT IN THE FLOOR; sw5-6). Compared against the ROM
  *  constants above rather than used in their place. */
 const MODEL_RINGS = [...new Set(EXHAUST_PORT.vertices.map((v) => Math.abs(v[0])))].sort(
   (a, b) => a - b,

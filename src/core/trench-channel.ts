@@ -19,54 +19,95 @@
 import type { Vec3 } from '@arcade/shared/math3d'
 import type { Model3D } from './models'
 
-/** Half the channel width: the floor rails and the two side walls sit at
- *  x = ±this. Narrow — a corridor you fly down, not the open surface.
- *  findings (docs/star-wars-1983-source-findings.md ## Trench geometry &
- *  limits): two conflicting ROM candidates and no documented ROM-unit↔our-unit
- *  conversion to arbitrate them (`Obj_Trench_Squares` outer ring ±$100=256 vs
- *  `sub_8735`'s left/right wall pass MReg3D=±$400=1024) — kept as our existing
- *  world-scale anchor; RIB_Z/TRENCH_FAR below are scaled off it using the ROM's
- *  OWN ratios. See ## Open follow-ups. */
-export const TRENCH_HALF_W = 256 // PROVISIONAL(findings ## Trench geometry & limits) — not pinned, see Open follow-ups
-/** Height the side walls rise from the y=0 floor to the top rails — taller than
- *  the cockpit skim (render TRENCH_SKIM) so the walls tower into a trench.
- *  findings: not pinned — `sub_703B`'s vertical viewpoint clamp (−257…−3583) is
- *  the camera's travel range inside the trench, not the walls' static height.
- *  Kept provisional; see ## Open follow-ups. */
-export const TRENCH_WALL_H = 320 // PROVISIONAL(findings ## Trench geometry & limits) — not pinned, see Open follow-ups
-/** Spacing between the lateral ribs (floor + wall rungs) — also the scroll period.
- *  findings: `sub_87CB` (the side-wall vertical-line recursion) clamps its Z
- *  window to $800 (2048) — 2× the wall half-width $400 (1024) from `sub_8735`'s
- *  left/right wall pass. Applying that 2:1 ratio to our TRENCH_HALF_W anchor. */
-export const RIB_Z = 512
-/** Far cutoff: the channel recedes from the cockpit out to z ≈ −TRENCH_FAR (the
- *  vanishing point), well beyond the exhaust port's spawn (EXHAUST_PORT_DISTANCE)
- *  and inside the render far-clip plane.
- *  findings: `sub_87CB` culls the side-wall vertical-line recursion past
- *  camera + $7000 (28672) — 28× the wall half-width $400 (1024) from
- *  `sub_8735`. Applying that 28:1 ratio to our TRENCH_HALF_W anchor. */
-export const TRENCH_FAR = 7168
-
-// --- sub_703B pilotable viewpoint band (story sw3-2) ------------------------
+// --- The trench, pinned from WSBASE.MAC (story sw5-6) -----------------------
 //
-// ROM `sub_703B` flies the trench viewpoint within a clamped band — ±511
-// lateral, −257…−3583 vertical — so the pilot can dive under a catwalk instead
-// of eating a guaranteed shield. As with RIB_Z / TRENCH_FAR above, the ROM↔our
-// unit conversion is unresolved, so these are scaled off the TRENCH_HALF_W=256
-// anchor using the ROM's OWN ratios and named PROVISIONAL.
+// These two anchors sat PROVISIONAL for four stories on the belief that the ROM offered
+// "two conflicting candidates and no ROM-unit↔our-unit conversion to arbitrate them". It
+// offers neither. WSBASE.MAC § VIEW STARBASE draws the trench, and `TBSBL` ("BASE BOTTOM
+// LINES") IS the cross-section — each row a (lateral, height) pair:
+//
+//     .WORD -400,0          ;TOP LEFT PANEL
+//     .WORD  400,0          ;TOP OF RIGHT PANEL
+//     .WORD -400,-1000      ;FAR LEFT BOTTOM
+//     .WORD -200,-1000      ;LEFT THIRD
+//     .WORD  200,-1000      ;RIGHT THIRD
+//     .WORD  400,-1000      ;FAR RIGHT BOTTOM
+//
+// Corroborated by `BSVSID` (`LDD #-400 ;LEFT SIDE` / `LDD #400 ;RIGHT SIDE`) and `BSVSDW`
+// (`LDD #-1000 ;BOTTOM EDGE`, `;LIMIT TO BOTTOM`). So: walls at ±$400, top at height 0,
+// floor at -$1000.
+//
+// ⚠ THE LITERALS ARE HEX. WSBASE.MAC is `.RADIX 16` and carries no `.RADIX` line to warn
+// you — the same trap that bit sw3-11 and sw5-5. The file proves itself twice from the
+// inside: DOFAR's `;PAINFUL MATH -- 8000 WRAPAROUND HANDLER` (only 0x8000 is the signed-16
+// wrap point) and `CMPD #7000`, the same far cull the disassembly independently reports as
+// $7000. Read as decimal the trench comes out wider than it is tall — a ditch. It is a
+// CANYON: 2048 across, 4096 deep.
+//
+// The old ±256 came from `Obj_Trench_Squares` — trench FURNITURE sitting ON the floor, not
+// the trench. That it coincides with the exhaust port's own base half-width (also 256) is
+// a coincidence of two unrelated objects, and sw5-4 mistook it for corroboration.
+//
+// FRAME: we keep the FLOOR at y = 0 and let the walls rise to +TRENCH_WALL_H. That is the
+// ROM's frame with the origin slid to the floor — relative geometry, which is what fidelity
+// means, is preserved exactly, and it agrees with what trenchChannel, spawnPort and the
+// surface phase already do.
 
-/** Lateral half-travel of the viewpoint about the centreline (±X). ROM clamps to
- *  ±$1FF (511) ≈ ±$200, i.e. 2× the $100 (256) `Obj_Trench_Squares` ring that
- *  anchors TRENCH_HALF_W — so 2× our anchor. PROVISIONAL. */
-export const TRENCH_VIEW_HALF_W = 2 * TRENCH_HALF_W // 512
-/** How deep the viewpoint can dive below the centreline (−Y). The eye seats at
- *  the trench top (y=0, where the overhead catwalk still bites) and dives to this
- *  floor. ROM's −257…−3583 vertical clamp spans $0D00 (3328) ≈ 13× the $100 (256)
- *  anchor — so −13× our anchor. PROVISIONAL. */
-export const TRENCH_VIEW_FLOOR = -13 * TRENCH_HALF_W // -3328
-/** Yoke → viewpoint velocity (world units/second). Chosen to sweep the lateral
- *  band in ~0.4s and bottom out a full dive in ~2.8s — snappy enough to dodge a
- *  catwalk mid-crossing. No symbolic ROM rate recovered; PROVISIONAL. */
+/** Half the channel width — the floor rails and both side walls sit at x = ±this.
+ *  ROM: `$400` (WSBASE.MAC `TBSBL`; `BSVSID` `LDD #-400 ;LEFT SIDE`). */
+export const TRENCH_HALF_W = 0x400 // 1024
+/** Height the side walls rise from the y=0 floor to the top rails.
+ *  ROM: `$1000` — `TBSBL`'s bottom lines sit that far below its top rails, and `BSVSDW`
+ *  clamps the wall's vertical run to `#-1000` (";LIMIT TO BOTTOM"). */
+export const TRENCH_WALL_H = 0x1000 // 4096
+/** Spacing between the lateral ribs (floor + wall rungs) — also the scroll period.
+ *  ROM: the SHORT wedge is `#800` (WSBASE.MAC `DOFAR`/`NWFAR`/`BSVSID`), the unit the
+ *  cabinet builds its trench out of. This was already derived as "2× the wall half-width";
+ *  with the half-width pinned at $400 that ratio now lands on the ROM's own $800. */
+export const RIB_Z = 0x800 // 2048
+/** Far cutoff: the channel recedes to z ≈ −TRENCH_FAR.
+ *  ROM: `#7000` — the distance past which BSVBOT/BSVFAR/BSVPORT stop drawing ("?CLOSE ENUF
+ *  TO SEE?"). Also already derived as "28× the wall half-width"; pinning the half-width
+ *  lands it on the ROM's own $7000. */
+export const TRENCH_FAR = 0x7000 // 28672
+
+// --- The pilotable viewpoint band (stories sw3-2, re-framed by sw5-6) -------
+//
+// sw3-2 transcribed the ROM's clamp in the ROM's frame — where the trench TOP is height 0
+// and the floor is below it — as a NEGATIVE, dive-only band. That collided head-on with the
+// channel above, which builds the floor at y=0: render.ts added the two together and flew
+// the camera to y = −3268, thousands of units UNDER the trench. sw5-6 re-frames the band as
+// a HEIGHT ABOVE THE FLOOR, which is the same physical band with the origin at the floor.
+//
+//   WSMAIN.MAC `S1MVBS` — lateral: `CMPD #1FF` / `CMPD #-1FF`.
+//   WSMAIN.MAC `SMVG1B` — the ground→trench entry, in the ROM's own words:
+//       CMPD #-0E00+100      ;JUST ABOVE BOTTOM OF TRENCH
+//       IFGT
+//       SUBD #100
+//       STD M$TZ+M.S1        ;DROP PLAYER INTO TRENCH
+//   so the down limit is −$E00 and the up limit −$100, inside a $1000-deep trench. The
+//   disassembly's −257…−3583 (sub_703B) is exactly that band read exclusively.
+//
+// The pilot flies the band BOTH ways. The old `Math.min(0, …)` clamp let him only sink.
+
+/** Lateral half-travel of the eye about the centreline. ROM: `$1FF` (WSMAIN.MAC `S1MVBS`).
+ *  Note this is strictly INSIDE the walls: ±511 in a ±1024 trench leaves 513 units of side
+ *  clearance, so the cabinet's pilot can never crash into a wall — wall furniture is
+ *  shoot-only, and only the channel-spanning catwalk can physically block him. */
+export const TRENCH_VIEW_HALF_W = 0x1ff // 511
+/** The eye's lowest height above the trench floor — the ROM's minimum ground clearance.
+ *  `$1000 − $E00`. The surface phase enforces the same number (WSMAIN.MAC `GD$MNT == 200`):
+ *  the cabinet never lets the ship closer than 512 units to the ground, in either phase. */
+export const TRENCH_EYE_MIN = TRENCH_WALL_H - 0xe00 // 512
+/** The eye's highest height above the trench floor. `$1000 − $100`. */
+export const TRENCH_EYE_MAX = TRENCH_WALL_H - 0x100 // 3840
+/** Where the eye seats on trench entry. `SMVG1B` drops the pilot until he is at or below
+ *  −$E00+$100 — "JUST ABOVE BOTTOM OF TRENCH" — so he enters riding LOW in the channel and
+ *  must CLIMB to see over anything. He does not start halfway up the wall. */
+export const TRENCH_EYE_SEAT = TRENCH_WALL_H - (0xe00 - 0x100) // 768
+/** Yoke → viewpoint velocity (world units/second). Chosen to sweep the lateral band in
+ *  ~0.4s and cross the full vertical band in ~2.8s — snappy enough to dodge a catwalk
+ *  mid-crossing. No symbolic ROM rate recovered; PROVISIONAL. */
 export const TRENCH_VIEW_RATE = 1200
 
 /**
