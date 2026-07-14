@@ -155,8 +155,19 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   const projectiles = advance(state.projectiles, dt)
   let fireCooldown = state.fireCooldown - dt
   if (input.fire && fireCooldown <= 0) {
+    // THE GUN IS ON THE SHIP (story sw5-6). In the trench the ship is `trenchView` — the pilot
+    // flies 512..3840 above the floor — so a bolt must leave from THERE, not from the world
+    // origin. Spawning at [0,0,0] while the eye rode 768 units higher put the crosshair ray and
+    // the bolt ray on parallel lines 768 apart: every wall turret and square became unhittable
+    // (they sit at eye height, so the crosshair landed dead on them and the bolt sailed
+    // underneath), while the port was won by aiming at empty sky. What you aim at is what you hit.
+    //
+    // ROM: `WSGUNS.MAC FRPTGN` spawns the shot at the ship — `LDD M$TX / ADDD #100 ;JUST A BIT IN
+    // FRONT`, `LDD M$TY` (lateral), `LDD M$TZ` (height). Other phases keep the fixed cockpit: their
+    // camera and collision world already share the origin.
+    const muzzle: Vec3 = state.phase === 'trench' ? [...state.trenchView] as Vec3 : ([...COCKPIT] as Vec3)
     projectiles.push({
-      pos: [...COCKPIT] as Vec3,
+      pos: muzzle,
       vel: scale(aimDirection(aimX, aimY, input.aspect), PROJECTILE_SPEED),
       ttl: PROJECTILE_TTL,
     })
@@ -639,12 +650,13 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
       // right at the cockpit's doorstep can scroll past z=0 in the same step
       // that carries it through the cockpit's hit sphere, and the crash must
       // still register rather than being silently despawned. Uses
-      // CATWALK_HIT_RADIUS, not COCKPIT_HIT_RADIUS: the catwalk hangs at y=200
-      // above the centreline, so an 80-unit cockpit sphere never reached it and
-      // the crash was dead code (story 14-7).
-      // Tests against the pilotable `trenchView`, not the fixed COCKPIT (story
-      // sw3-2): an un-piloted eye seats at [0,0,0] (dist 200 < 240 → still bites),
-      // but a dive opens clearance beneath the catwalk so it becomes dodgeable.
+      // CATWALK_HIT_RADIUS, not COCKPIT_HIT_RADIUS: the catwalk hangs above the pilot, well
+      // outside an 80-unit cockpit sphere, so the crash was dead code (story 14-7).
+      // Tests against the pilotable `trenchView` — the SHIP — not a fixed cockpit point (sw3-2,
+      // re-anchored by sw5-6): a hands-off pilot rides at TRENCH_EYE_SEAT and the catwalk is
+      // seated within one hit radius of it, so it still bites; a dive to TRENCH_EYE_MIN opens
+      // more than a hit radius of clearance beneath it, so it stays dodgeable. Both bounds are
+      // asserted behaviourally in tests/core/trench-viewpoint.test.ts.
       if (collides(pos, trenchView, CATWALK_HIT_RADIUS)) {
         crashedCatwalk = true
         events.push({ type: 'terrain-crash' })
@@ -696,23 +708,42 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   // that merely crosses the port far up the channel — the entry-shot that used
   // to win every run — is outside the window and cannot count.
   const inApproachWindow = port[2] >= -PORT_APPROACH_WINDOW
-  const hitBolt = inApproachWindow
-    ? afterObstacles.projectiles.findIndex((b) =>
-        // Swept, not snapshot: test the bolt's whole path THIS frame — from the
-        // pre-advance start (`pos − vel·dt`) to its current `pos` — against the
-        // 108u port sphere (216u diameter, sw5-4). `advance` (above) has already
-        // moved the bolt this tick, so a point-in-sphere check on `pos` alone can
-        // tunnel: a bolt whose step outpaces the sphere — including sw4-1's
-        // 12,000 u/s bolt, once the port's own per-frame scroll narrows the
-        // margin (see tests/core/swept-port-collision.test.ts) — passes between
-        // two consecutive frame samples and hits nothing. The segment test
-        // catches the crossing WITHOUT widening PORT_HIT_RADIUS and stays inside
-        // the same $800 approach-window gate (sw4-4).
-        sweptCollides(port, sub(b.pos, scale(b.vel ?? ZERO, dt)), b.pos, PORT_HIT_RADIUS),
-      )
-    : -1
-  if (hitBolt >= 0) {
-    const liveBolts = afterObstacles.projectiles.filter((_, i) => i !== hitBolt)
+
+  // --- ARM: the laser earns the shot; the machine takes it (story sw5-6) ------
+  //
+  // The pilot flies 768 above the floor and the porthole lies IN the floor, so inside the $800
+  // window the port sits 43.8° below him — past the 30° the 60° FOV allows. He physically cannot
+  // make that shot, and the cabinet never asked him to. `WSLAZR.MAC` tests his LASER against a
+  // ±$200 box around the hole ("?LAZAR GOT CLOSE ENUF TO FIRE PROTON TORPS?") and, if it lands
+  // inside, launches the torpedo for him — `JSR FRPTGN ;THEN LAUNCH DIRECT HIT PROTON TORPS`.
+  // `MVPTGN` then funnels it home (height above floor ≤ D, lateral ≤ D/16, stopping above the
+  // porthole), and `WSMAIN.MAC` reads the flag at the end-wall window to call it.
+  //
+  // So the shot is EARNED EARLY — out where the port is still a reachable ~17.7° and the yoke can
+  // point at it — and RESOLVES LATE, inside the ROM's $800 gate: precision lives in the ARMING.
+  //
+  // Swept, not snapshot, and for the same reason as the old terminal test: `advance` has already
+  // moved the bolt this tick, so a 12,000 u/s bolt can step clean over the box between two frames.
+  const armingBolt = afterObstacles.projectiles.findIndex((b) =>
+    sweptCollides(port, sub(b.pos, scale(b.vel ?? ZERO, dt)), b.pos, PORT_HIT_RADIUS),
+  )
+  const armed = afterObstacles.portTorpedoArmed || armingBolt >= 0
+  // The arming laser is CONSUMED — the ROM latches PT.LZF to $FF ("MARK THAT PROTON TORP HAS
+  // FIRED") so one run arms one torpedo, and the bolt becomes the torpedo rather than flying on.
+  const boltsAfterArming =
+    !afterObstacles.portTorpedoArmed && armingBolt >= 0
+      ? afterObstacles.projectiles.filter((_, i) => i !== armingBolt)
+      : afterObstacles.projectiles
+
+  // --- RESOLVE: a DIRECT HIT, once the port reaches the window ----------------
+  //
+  // The torpedo cannot miss (MVPTGN's funnel drives both offsets to zero), so the outcome is the
+  // flag, read at the window — exactly WSMAIN's `LDA PT.LIV` at `SUBD #0800`. The $800 gate that
+  // sw3-15 pinned still holds: an armed run does not win at the trench mouth, it wins at the wall.
+  const detonates = armed && inApproachWindow
+  if (detonates) {
+    // The arming laser is already gone (it became the torpedo); everything still in flight rides on.
+    const liveBolts = boltsAfterArming
     // "Use the Force": a clean run — no trench shots before the killing torpedo
     // itself — awards FORCE_BONUS on top of TRENCH_BONUS (fidelity epic, task 4;
     // findings ## Exhaust port & run outcome, the type-4 marker's one-shot latch).
@@ -761,14 +792,25 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
       gameOver: lives <= 0,
       mode: lives <= 0 ? 'gameover' : afterObstacles.mode,
       exhaustPort: spawnPort(), // another pass down the trench
+      // A fresh port is a fresh torpedo: the ROM re-primes both flags the moment a new porthole
+      // comes into sight (WSBASE.MAC, at `STD BS.PLC ;LOCATION OF THE PORT` — `STA PT.LZF ;NO
+      // FIRE VIA LAZAR YET` / `STA PT.LIV ;PROTON TORP NOT LIVE YET`). Without this an armed run
+      // that MISSED would carry its lock into the next pass and win it unearned.
+      portTorpedoArmed: false,
       // Stamp the miss so the shell can show a distinct "you missed" tell for a
       // beat (sw2-4), separate from the terrain-crash cue above.
       exhaustPortMissedAt: t,
     }
   }
 
-  // Otherwise the port keeps scrolling in toward the cockpit.
-  return { ...afterObstacles, exhaustPort: { pos: port } }
+  // Otherwise the port keeps scrolling in toward the cockpit — carrying the torpedo latch and
+  // the surviving bolts (the arming laser, if there was one, BECAME the torpedo and is gone).
+  return {
+    ...afterObstacles,
+    exhaustPort: { pos: port },
+    projectiles: boltsAfterArming,
+    portTorpedoArmed: armed,
+  }
 }
 
 // --- Wave/phase progression -------------------------------------------------

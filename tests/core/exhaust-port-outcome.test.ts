@@ -66,6 +66,7 @@ import { NO_INPUT, type Input } from '../../src/core/input'
 import type { GameEvent } from '../../src/core/events'
 import type { Vec3 } from '@arcade/shared/math3d'
 import { FIRE_AT_PORT } from '../support/aim'
+import { EXHAUST_PORT_DISTANCE } from '../../src/core/state'
 
 /** A live exhaust port at a world position — the hit-test reads `.pos`. */
 const portAt = (pos: Vec3): { pos: Vec3 } => ({ pos })
@@ -184,8 +185,16 @@ describe('sw2-4 — a real-fired torpedo detonates the port (real-speed coverage
     // $800 end-wall window, so the port is placed near the cockpit — well inside it —
     // rather than the mid-trench -1500 this predates the window gate; the no-tunnel
     // coverage (real speed through a small sphere) is unchanged, and tighter if anything.
-    const base = trench(portAt([0, 0, -300]))
-    const { state, events } = fireAndFollowPort(base)
+    // ⚠ RE-SEATED BY sw5-6 (user-approved). This staged the port at -300 — inside the window —
+    // and fired. That is now an IMPOSSIBLE shot: the pilot flies 768 above a floor-mounted
+    // porthole, so at 300 units the hole is 68.7° below him against a 30° cone. The ROM never
+    // asked for that shot; WSLAZR arms the torpedo when a laser gets close enuf, and WSMAIN reads
+    // the flag at the window. So the port is seated where the shot can actually be THREADED, and
+    // the run is followed to the window. The intent is untouched and, if anything, stronger: a
+    // 12,000 u/s bolt still has to register against a small sphere at a true 60fps — the arming
+    // test is swept for exactly that reason — and it now flies the whole trench to do it.
+    const base = trench(portAt([0, 0, -EXHAUST_PORT_DISTANCE]))
+    const { state, events } = fireAndFollowPort(base, 320)
     expect(state.exhaustPort).toBeNull() // detonated, not tunneled through
     expect(state.phase).toBe('space') // the winning shot cleared the run
     expect(events.some((e) => e.type === 'death-star-destroyed')).toBe(true)
@@ -354,9 +363,12 @@ describe('sw2-4 — outcome feedback preserves core purity & determinism', () =>
     // sw3-15: re-seated in-window — the hit/miss now resolves only in the ROM's
     // narrow $800 end-wall window; -1500 is outside it, so a full-trench shot no
     // longer resolves in a kill. -300 places the port where the run actually wins.
-    const mk = (): GameState => trench(portAt([0, 0, -300]), {}, 7)
-    const a = fireAndFollowPort(mk())
-    const b = fireAndFollowPort(mk())
+    // sw5-6: seated at spawn distance for the same reason as the real-speed test above — a shot
+    // into the window is geometrically impossible now, so the kill is EARNED at entry and RESOLVES
+    // at the window. Determinism is what this test is about, and it is unaffected.
+    const mk = (): GameState => trench(portAt([0, 0, -EXHAUST_PORT_DISTANCE]), {}, 7)
+    const a = fireAndFollowPort(mk(), 320)
+    const b = fireAndFollowPort(mk(), 320)
     expect(a.events).toEqual(b.events)
     // Full terminal-state equality — catches an impure source in the new stamps
     // (a wall-clock/random timestamp would diverge here while the events matched).
