@@ -34,7 +34,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { TRACKS, MUSIC_SOURCE } from './music-data.mjs'
-import { decodeVoice } from './pm-player.mjs'
+import { decodeVoice, NOTTAB } from './pm-player.mjs'
 
 const here = (rel) => fileURLToPath(new URL(rel, import.meta.url))
 
@@ -144,6 +144,63 @@ const RR1_ORACLE = [
   [0x42, 0x14], // F5D
 ]
 
+// ── AC-3 ORACLE #2: SW4V1 (towers, voice 1), hand-transcribed from SWMUS.MAC:2515 ──
+//
+// RR1 (above) is a straight tune: it never transposes. SW4V1 is the one that does, and
+// it is also the voice whose PHASE MAPPING this story originally got wrong — so the
+// riskiest voice in the corpus had the least coverage. Its `.CKEY -12.` sits INSIDE the
+// `.LOOP 2`, so the key COMPOUNDS across the two passes (0, then −12, ending at −24)
+// before `.NKEY 0` puts it back. Nothing else in the corpus exercises that.
+//
+//   SW4V1:  ;.NRATE 96.    .BYTE 80, 96.
+//           ;.AENV  1      .BYTE 87, 1
+//           ;.NVOL  MP     .BYTE 82, 5
+//           ;.CVOL  1      .BYTE 83, 1
+//           ;.LOOP  2      .BYTE 8E, 2
+//           ;.NOTE  G5C,G5C,G5DT,G5C,G5C,G5D,AF5C,AF5C,AF5D,BF5C,BF5C,BF5D
+//                          .BYTE 044,016 / 044,016 / 044,014 / 044,017 / 044,016 / 044,014
+//                                045,016 / 045,016 / 045,014 / 047,016 / 047,016 / 047,014
+//           ;.CKEY  -12.   .BYTE 85, -12.      <- DECIMAL (the trailing dot). Hex would be −18.
+//           ;.ENDL         .BYTE 8F, 0
+//           ;.NKEY  0      .BYTE 84, 0         <- undoes the compounded −24
+//           ;.NVOL  M      .BYTE 82, 7
+//           ;.AENV  3      .BYTE 87, 3
+//           ;.NOTE  R1H,R1H          .BYTE 00,080 / 00,080
+//           ;.NOTE  R1H,R1E,D5E,G5E,C6E
+//                          .BYTE 00,080 / 00,020 / 03f,020 / 044,020 / 049,020
+//
+// Pitch byte = octave*12 + semitone + 1:
+//   G5 = 0x44   AF5 (G#5) = 0x45   BF5 (A#5) = 0x47   C6 = 0x49   D5 = 0x3f
+// Transposed down a twelfth: G5 -> 0x38, AF5 -> 0x39, BF5 -> 0x3b.
+const G5 = 0x44
+const AF5 = 0x45
+const BF5 = 0x47
+const C6 = 0x49
+const D5 = 0x3f
+const REST = 0x00
+const down12 = (n) => n - 12
+
+const SW4V1_ORACLE = [
+  // .LOOP 2, pass 1 — key 0, so the notes sound exactly as written
+  [G5, 0x16], [G5, 0x16], [G5, 0x14], [G5, 0x17], [G5, 0x16], [G5, 0x14],
+  [AF5, 0x16], [AF5, 0x16], [AF5, 0x14],
+  [BF5, 0x16], [BF5, 0x16], [BF5, 0x14],
+  // .CKEY -12  -> key = -12
+
+  // .LOOP 2, pass 2 — the SAME bytes, sounding an octave lower
+  [down12(G5), 0x16], [down12(G5), 0x16], [down12(G5), 0x14],
+  [down12(G5), 0x17], [down12(G5), 0x16], [down12(G5), 0x14],
+  [down12(AF5), 0x16], [down12(AF5), 0x16], [down12(AF5), 0x14],
+  [down12(BF5), 0x16], [down12(BF5), 0x16], [down12(BF5), 0x14],
+  // .CKEY -12 again -> key = -24, and .ENDL exits
+
+  // .NKEY 0 — the key is RESET, so these sound absolute again. If .NKEY were treated
+  // as relative (or ignored), every note below would come out 24 semitones flat, and
+  // two of them would fall clean off the bottom of NOTTAB.
+  [REST, 0x80], [REST, 0x80], [REST, 0x80], [REST, 0x20],
+  [D5, 0x20], [G5, 0x20], [C6, 0x20],
+]
+
 const trackNames = () => Object.keys(TRACKS)
 const segmentsOf = (t) => TRACKS[t].segments
 const allVoices = () => trackNames().flatMap((t) => segmentsOf(t).flatMap((s) => s.voices))
@@ -235,6 +292,33 @@ describe('sw6-1 AC-3 — ORACLE: the bytes decode to the notes the 1983 author w
     expect(got).toEqual(RR1_ORACLE)
   })
 
+  it('reproduces SW4V1 (towers, voice 1) — the COMPOUNDING transposition, note-for-note', () => {
+    // The riskiest voice in the corpus: the only one that transposes, compounding
+    // `.CKEY -12` inside a `.LOOP 2` and then resetting with `.NKEY 0`. Get the loop
+    // wrong and pass 2 sounds in the wrong octave; get `.NKEY` wrong and the tail is
+    // 24 semitones flat; read `-12.` as hex and every transposed note is a tritone out.
+    const sw4v1 = decodeVoice(TRACKS.towers.segments[0].voices[0])
+    const got = sw4v1.notes.slice(0, SW4V1_ORACLE.length).map((n) => [n.note, n.duration])
+    expect(got).toEqual(SW4V1_ORACLE)
+  })
+
+  it('reads SW4V1 .CKEY -12. as DECIMAL — the hex reading transposes by a tritone', () => {
+    // The radix trap on the transposition itself. `.BYTE 85, -12.` carries the trailing
+    // dot, so it is decimal 12. Read as hex it is 18 — an octave and a tritone — and
+    // the second pass of the loop would still be *music*, just in the wrong key.
+    const sw4v1 = decodeVoice(TRACKS.towers.segments[0].voices[0])
+    const pass2 = sw4v1.notes[12] // first note of the loop's second pass
+    expect(pass2.note).toBe(G5 - 12) // 0x38
+    expect(pass2.note).not.toBe(G5 - 0x12) // 0x32 — the hex misreading
+  })
+
+  it('holds the volume the author set: .NVOL 5 then .CVOL +1, and .NVOL 7 after the loop', () => {
+    // `.CVOL` is signed, and the loop's notes sit a step above the opening volume.
+    const sw4v1 = decodeVoice(TRACKS.towers.segments[0].voices[0])
+    expect(sw4v1.notes[0].volume).toBe(6) // NVOL 5, CVOL +1
+    expect(sw4v1.notes[24].volume).toBe(7) // NVOL 7, after .ENDL
+  })
+
   it('opens the trench voice at the tempo the author set: .NRATE 152 (DECIMAL)', () => {
     const rr1 = decodeVoice(TRACKS.trench.segments[0].voices[0])
     expect(rr1.tempo).toBe(152)
@@ -259,6 +343,25 @@ describe('sw6-1 AC-3 — ORACLE: the bytes decode to the notes the 1983 author w
     // stream is ambiguous.
     for (const voice of allVoices())
       for (const { note } of decodeVoice(voice).notes) expect(note).toBeLessThan(0x80)
+  })
+
+  it('sounds every note in the corpus ON the table — nothing quietly becomes a rest', () => {
+    // The player now THROWS on a note that falls off NOTTAB, so this asserts the
+    // margin exists rather than trusting it. Every effective (transposed) note in all
+    // 24 voices must be a real entry, and every non-rest must have a real divisor —
+    // otherwise it would sound as silence and the tune would still "work".
+    const effective = allVoices().flatMap((v) => decodeVoice(v).notes.map((n) => n.note))
+
+    for (const note of effective) {
+      expect(note).toBeGreaterThanOrEqual(0)
+      expect(note).toBeLessThan(NOTTAB.length)
+      if (note !== 0) expect(NOTTAB[note]).toBeGreaterThan(0)
+    }
+
+    // and the margin, stated out loud: the corpus lives well inside the table (C2..C6).
+    const sounded = effective.filter((n) => n !== 0)
+    expect(Math.min(...sounded)).toBe(25)
+    expect(Math.max(...sounded)).toBe(73)
   })
 
   it('gives every one of the 24 voices real music, terminated properly', () => {

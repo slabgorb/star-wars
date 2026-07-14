@@ -55,7 +55,16 @@ export const emuClockHz = (sampleRate) => sampleRate * DIVIDER[sampleRate]
 // pokey.js is written for an AudioWorklet: it references the globals `sampleRate` and
 // `currentFrame`, extends AudioWorkletProcessor, and calls registerProcessor at top
 // level. Satisfy those in a sandbox and pull the class out.
+//
+// Cached per sample rate: the class closes over the sandbox's `sampleRate`, so one
+// context per rate. All of pokey.js's module scope is `const` (filter tables and class
+// declarations) — every mutable value lives on the instance — so two bakes sharing a
+// class cannot leak state into each other, and the determinism test proves it.
+const pokeyClassByRate = new Map()
 function loadPokeyClass(sampleRate) {
+  const cached = pokeyClassByRate.get(sampleRate)
+  if (cached) return cached
+
   const src =
     readFileSync(join(__dirname, '..', 'pokey-bake', 'vendor', 'pokey.js'), 'utf8') + '\n;globalThis.__POKEY = POKEY;'
   const sandbox = {
@@ -69,6 +78,8 @@ function loadPokeyClass(sampleRate) {
   vm.createContext(sandbox)
   vm.runInContext(src, sandbox, { filename: 'vendor/pokey.js' })
   if (typeof sandbox.__POKEY !== 'function') throw new Error('failed to load POKEY from vendor/pokey.js')
+
+  pokeyClassByRate.set(sampleRate, sandbox.__POKEY)
   return sandbox.__POKEY
 }
 
@@ -181,16 +192,29 @@ function toWav(samples, sampleRate) {
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
 if (process.argv[1] && process.argv[1].endsWith('bake-music.mjs')) {
+  // Parsed against a KNOWN flag set. The obvious shortcut — "a positional is any arg
+  // not starting with `--` whose predecessor doesn't either" — cannot tell a boolean
+  // flag from a value-taking one, so `--no-clock-correct dist/` silently ate `dist/`
+  // as though it were the flag's value and baked to the default out/ instead.
+  const VALUE_FLAGS = { '--rate': 'rate', '--only': 'only', '--suffix': 'suffix' }
   const argv = process.argv.slice(2)
-  const flag = (name, dflt) => {
-    const i = argv.indexOf(name)
-    return i === -1 ? dflt : argv[i + 1]
+  const opts = { rate: '48000', only: null, suffix: '', clockCorrect: true }
+  const positionals = []
+
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i]
+    if (a === '--no-clock-correct') opts.clockCorrect = false
+    else if (VALUE_FLAGS[a]) {
+      if (i + 1 >= argv.length) throw new Error(`bake-music: ${a} needs a value`)
+      opts[VALUE_FLAGS[a]] = argv[++i]
+    } else if (a.startsWith('--')) throw new Error(`bake-music: unknown flag ${a}`)
+    else positionals.push(a)
   }
-  const sampleRate = Number(flag('--rate', 48000))
-  const only = flag('--only', null)
-  const suffix = flag('--suffix', '')
-  const clockCorrect = !argv.includes('--no-clock-correct')
-  const outDir = argv.find((a, i) => !a.startsWith('--') && !argv[i - 1]?.startsWith('--')) || join(__dirname, 'out')
+  if (positionals.length > 1) throw new Error(`bake-music: expected at most one output dir, got ${positionals.length}`)
+
+  const sampleRate = Number(opts.rate)
+  const { only, suffix, clockCorrect } = opts
+  const outDir = positionals[0] || join(__dirname, 'out')
 
   mkdirSync(outDir, { recursive: true })
 

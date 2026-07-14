@@ -118,9 +118,26 @@ describe('sw6-1 AC-2 — the player implements every opcode the four tunes reach
     expect(v.notes.map((n) => n.note)).toEqual([F5, F5, F5, D5])
   })
 
+  it('wraps .LOOP 0 to 256 passes, because PKEL decrements an 8-BIT register', () => {
+    // `DEC VLC / LBEQ done` on a byte: 0 - 1 = 255, which is not zero, so the body
+    // runs 256 times. No shipped tune uses `.LOOP 0` — but the friendlier reading
+    // ("a count of zero means skip the body") is a silent divergence from the ROM,
+    // and this file claims to BE the ROM.
+    const v = decodeVoice([OP.LOOP, 0, F5, 0x16, OP.ENDL, 0, ...ENDT])
+    expect(v.notes).toHaveLength(256)
+  })
+
   it('takes the tempo from .NRATE', () => {
     const v = decodeVoice([OP.NRATE, 152, F5, 0x16, ...ENDT])
     expect(v.tempo).toBe(152)
+  })
+
+  it('reports the settings in effect at the FIRST note, not the last', () => {
+    // The voice evolves: SW4V1 opens on .AENV 1 and ends on .AENV 3. Reporting the
+    // final value while the doc promises the opening one is a lie a single-op test
+    // stream can never catch, because in a one-note stream they are the same value.
+    const v = decodeVoice([OP.AENV, AENV.SDR, F5, 0x16, OP.AENV, AENV.QKR, D5, 0x16, ...ENDT])
+    expect(v.ampEnvelope).toBe(AENV.SDR)
   })
 
   it('takes the initial envelopes from .FENV / .AENV', () => {
@@ -182,6 +199,53 @@ describe('sw6-1 AC-2 — an opcode the player does NOT implement must THROW, nev
       expect(() => decodeVoice([op, operand, F5, 0x16, ...ENDT]), `.${name} must be implemented`).not.toThrow()
     }
     expect(() => decodeVoice([OP.LOOP, 2, F5, 0x16, OP.ENDL, 0, ...ENDT]), '.LOOP/.ENDL must be implemented').not.toThrow()
+  })
+})
+
+describe('sw6-1 AC-2 — a note that falls OFF NOTTAB must throw, not become a rest', () => {
+  // The nastiest shape of the silent no-op, because the fallback is not "nothing" —
+  // it is NOTTAB[0], the REST divisor, which force-mutes the channel. A note that
+  // walked off the table would not crash, would not warn, and would not even sound
+  // wrong: it would sound like a rest, inside a tune, and the bake would still report
+  // a healthy peak. Silence mistaken for correctness is the bug this epic exists to end.
+  //
+  // And it is reachable by TRANSPOSITION, not just by corrupt data: `.CKEY` is signed
+  // and COMPOUNDS inside a `.LOOP` — the shipped towers/SW4 voices step −12 then −24
+  // over two passes before `.NKEY 0` resets them.
+  it('throws when .CKEY walks a note below the table, rather than falling silent', () => {
+    // -30 per pass, compounding: 66 -> 36 -> 6 -> -24, and -24 is not a note.
+    const walkOff = [OP.LOOP, 4, F5, 0x16, OP.CKEY, -30, OP.ENDL, 0, ...ENDT]
+    expect(() => decodeVoice(walkOff)).toThrow(/NOTTAB/i)
+  })
+
+  it('throws when .CKEY walks a note above the table', () => {
+    expect(() => decodeVoice([OP.CKEY, 40, F5, 0x16, ...ENDT])).toThrow(/NOTTAB/i)
+  })
+
+  it('names the note AND the key offset, so the tune that did it is findable', () => {
+    // A bare "index out of range" would send the next reader to the wrong file.
+    try {
+      decodeVoice([OP.CKEY, -70, F5, 0x16, ...ENDT])
+      throw new Error('expected decodeVoice to throw')
+    } catch (e) {
+      expect(e.message).toMatch(/-70/) // the key
+      expect(e.message).toMatch(new RegExp(String(F5))) // the note as written
+      expect(e.message).toMatch(/-4\b/) // what it actually sounded as
+    }
+  })
+
+  it('does NOT throw for a transposition that stays on the table', () => {
+    // The mirror image: the guard must not be so eager that it rejects real music.
+    // The shipped corpus's lowest effective note is 25 and its highest is 73.
+    expect(() => decodeVoice([OP.CKEY, -12, F5, 0x16, ...ENDT])).not.toThrow()
+    expect(() => decodeVoice([OP.NKEY, 0, F5, 0x16, ...ENDT])).not.toThrow()
+  })
+
+  it('still leaves a REST alone, however far the key has wandered', () => {
+    // A rest is never transposed, so it can never fall off the table — even at a key
+    // offset that would have thrown for a real note.
+    const v = decodeVoice([OP.CKEY, -70, REST, 0x20, ...ENDT])
+    expect(v.notes[0].note).toBe(REST)
   })
 })
 

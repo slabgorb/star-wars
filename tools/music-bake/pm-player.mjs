@@ -137,7 +137,23 @@ class Voice {
         // `BEQ 9$ ;?SOUNDFUL NOTE?(NOT A REST)` — a rest is NOT transposed. Shifting
         // a rest by the key would turn silence into a drone under the tune.
         const note = op === 0 ? 0 : op + this.key
-        this.onote = NOTTAB[note] ?? 0
+        const divisor = NOTTAB[note]
+        if (divisor === undefined) {
+          // The one place a silent fallback would be invisible. NOTTAB[0] is the REST
+          // divisor, so `?? 0` here does not merely lose a note — it force-mutes the
+          // channel (see output()), and the tune plays on, one note quieter, sounding
+          // like music. That is the failure mode this whole epic exists to end, so the
+          // note lookup shouts like every other out-of-range path in this file.
+          //
+          // Reachable by transposition, not just by bad data: `.CKEY` is signed and
+          // COMPOUNDS inside a `.LOOP` (towers/SW4 steps −12 then −24 across two passes).
+          throw new Error(
+            `pm-player: note ${op} transposed by key ${this.key} sounds as ${note}, which is off ` +
+              `NOTTAB (valid 0..${NOTTAB.length - 1}). Refusing to fall back to NOTTAB[0] — that is ` +
+              `the REST divisor, so the note would vanish into silence instead of failing.`,
+          )
+        }
+        this.onote = divisor
         this.odur += (arg >> 1) * 128 // shift out the tie flag, then scale
         if ((arg & 1) === 0) this.vseq = 0 // not tied → restart the envelope
         if (onNote) onNote({ note, duration: arg, volume: this.vol })
@@ -184,12 +200,16 @@ class Voice {
           this.ampEnv = arg
           break
         case OP.LOOP: // PKSL: store the count, remember where the body starts
-          this.loopCount = arg
+          this.loopCount = arg & 0xff // VLC is one byte
           this.loopPc = this.pc
           break
-        case OP.ENDL: // PKEL: `DEC VLC / LBEQ done` — the body runs N times in total
-          this.loopCount -= 1
-          if (this.loopCount > 0) this.pc = this.loopPc
+        case OP.ENDL: // PKEL: `DEC VLC / LBEQ done` — the body runs N times in total.
+          // The DEC is an 8-BIT one, so `.LOOP 0` wraps 0 -> 255 and runs the body 256
+          // times rather than exiting immediately. No shipped tune does it (the counts
+          // are 2, 3, 6, 13, 14), but guessing the friendlier reading would be a
+          // divergence from the ROM hiding inside a comment claiming fidelity.
+          this.loopCount = (this.loopCount - 1) & 0xff
+          if (this.loopCount !== 0) this.pc = this.loopPc
           break
         default:
           throw new Error(`pm-player: unknown opcode 0x${op.toString(16)}`)
@@ -223,26 +243,30 @@ class Voice {
  * Decode a voice's byte stream into the notes it plays, in order, with `.LOOP`
  * expanded and rests preserved. `note` is the EFFECTIVE index into NOTTAB — the
  * `.NKEY`/`.CKEY` offset is already applied, because that is the note that sounds.
+ *
+ * `tempo`/`freqEnvelope`/`ampEnvelope`/`volume` are the values in effect AT THE FIRST
+ * NOTE — the voice's opening setting, which is what a reader wants to know. They are
+ * NOT the final ones: a voice evolves (SW4V1 opens on `.AENV 1` and ends on `.AENV 3`).
+ * The bake does not use them; it uses renderVoice, which evolves the state per tick.
  */
 export function decodeVoice(bytes) {
   const v = new Voice(bytes)
   const notes = []
+  const settingsNow = () => ({ tempo: v.rate, freqEnvelope: v.freqEnv, ampEnvelope: v.ampEnv, volume: v.vol })
+  let opening = null
 
   let steps = 0
   while (!v.done) {
     if (++steps > MAX_STEPS) {
       throw new Error('pm-player: voice did not terminate — a runaway .LOOP, or a stream with no .ENDT')
     }
-    v.fetchNote((n) => notes.push(n))
+    v.fetchNote((n) => {
+      opening ??= settingsNow()
+      notes.push(n)
+    })
   }
 
-  return {
-    notes,
-    tempo: v.rate,
-    freqEnvelope: v.freqEnv,
-    ampEnvelope: v.ampEnv,
-    volume: v.vol,
-  }
+  return { notes, ...(opening ?? settingsNow()) } // a voice with no notes at all: whatever it set up
 }
 
 /**
