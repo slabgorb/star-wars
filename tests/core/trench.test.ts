@@ -73,8 +73,10 @@ import { NO_INPUT, type Input } from '../../src/core/input'
 import type { Vec3 } from '@arcade/shared/math3d'
 import { TRENCH } from '../../src/core/models'
 import * as RenderModule from '../../src/shell/render'
+import { FIRE_AT_PORT } from '../support/aim'
 
-const FIRE: Input = { aimX: 0, aimY: 0, fire: true }
+// sw5-6: RE-SEATED — see tests/support/aim.ts. `aimY: 0` now points at empty sky, not the port.
+const FIRE: Input = FIRE_AT_PORT
 
 /** A live exhaust port at a world position — the hit-test reads `.pos`. */
 const portAt = (pos: Vec3): { pos: Vec3 } => ({ pos })

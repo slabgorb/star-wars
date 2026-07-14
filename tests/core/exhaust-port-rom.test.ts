@@ -24,12 +24,27 @@
 //   .MACRO .PH .1,.2,.3
 //   .WORD .1'*.S,.2'*.S,.3'*.S      -> a plain ×.S, with no GD$MDT-style offset
 //
-// So: THREE CONCENTRIC SQUARES, twelve points, ALL at z=0 — a flat plate whose
-// face is perpendicular to the trench axis, i.e. it looks the pilot in the eye
-// as he comes down the trench. models.ts instead ships an authored 8-vertex
-// OCTAGON of radius ~70 lying flat in the y=0 FLOOR plane. That is this story's
+// So: THREE CONCENTRIC SQUARES, twelve points, ALL at third-component 0. models.ts
+// instead ships an authored 8-vertex OCTAGON of radius ~70. That is this story's
 // defect, and it is not a tweak: different point count, different topology,
-// different plane, ~3.6x different size.
+// ~3.6x different size.
+//
+// ⚠ CORRECTED BY sw5-6 — WHAT THAT THIRD ZERO MEANS.
+// This header originally read the twelve zeros as "flat in z=0 … its face perpendicular
+// to the trench axis, looking the pilot in the eye." That is WRONG, and it shipped a port
+// standing on its edge. The ROM's THIRD component is HEIGHT, not depth — its own macro
+// says so:
+//     .MACRO .PGND .A,.B,.C        ;OFFSET HITE TO MID OF PLAYERS HITE
+//     .WORD .A'*.S,.B'*.S,.C'*.S-GD$MDT    <- the HEIGHT offset hits the THIRD component
+// and render.ts's TOWER_ORIENT already said it out loud: "The ROM's up-axis is Z (x is
+// fore/aft, y lateral); ours is Y."
+//
+// Twelve points with zero HEIGHT is a HORIZONTAL plate. WSBASE.MAC `BSVPORT` then seats it
+// at "Z HITE ON BOTTOM OF TRENCH" — so the port is a hole in the trench FLOOR, which is
+// where the octagon was all along. The octagon's PLANE was right; only its shape was wrong.
+// The vertex assertions below are untouched (they are the ROM's data, 1:1); what sw5-6
+// corrects is the story they were told to tell. See tests/shell/render.exhaust-port-orient
+// .test.ts for the orientation contract this implies.
 //
 // The port's own doc comment already found this object — it names `Object_12`
 // @ $6545 ("12 verts, Z=0, three concentric squares at $60/$A0/$100 =
@@ -202,22 +217,28 @@ describe('sw5-4 AC-1/AC-2 — EXHAUST_PORT is ROM PORT', () => {
     expect(rings.has(64), 'the authored octagon must be GONE').toBe(false)
   })
 
-  it('is a FLAT PLATE in the z=0 plane — it faces the pilot, it does not lie on the floor', () => {
-    // The plane flip is part of the port, not a detail. The authored octagon lay
-    // in the y=0 FLOOR plane (x, 0, z); ROM PORT lies in the z=0 plane (x, y, 0),
-    // so under the shell's TRENCH_ORIENT (IDENTITY) it presents face-on to a
-    // pilot flying down −Z. Re-seating these vertices into the floor plane to
-    // preserve the old look would break AC-5's deep vertex compare anyway — this
-    // says so out loud, and fails first, with a legible message.
-    for (const [, , z] of EXHAUST_PORT.vertices) expect(z, 'the plate is flat in z').toBe(0)
+  it('is a FLAT PLATE with ZERO HEIGHT — a 512×512 patch of trench floor', () => {
+    // The ROM's third component is its HEIGHT axis (`.PGND`'s ";OFFSET HITE" is applied to
+    // it; render.ts's TOWER_ORIENT names the same convention). All twelve points therefore
+    // sit at height 0 — the plate is HORIZONTAL, and `BSVPORT` lays it on the bottom of the
+    // trench. Its two 512-unit spans are the trench's WIDTH and its LENGTH, not width and
+    // height.
+    //
+    // These are the ROM's numbers 1:1 and must not be re-seated to suit a viewing angle:
+    // romCompare's deep vertex compare (sw5-4 AC-5) demands them verbatim, and
+    // PORT_HIT_RADIUS is bound to the porthole's 96 in the same units. The ORIENTATION is
+    // the shell's job — see tests/shell/render.exhaust-port-orient.test.ts.
+    for (const v of EXHAUST_PORT.vertices) {
+      expect(v[2], 'every point is at ROM height 0 — the plate is flat on the ground').toBe(0)
+    }
 
     const spread = (i: 0 | 1 | 2) => {
       const vals = EXHAUST_PORT.vertices.map((v) => v[i])
       return Math.max(...vals) - Math.min(...vals)
     }
-    expect(spread(0), 'spans x').toBe(512)
-    expect(spread(1), 'spans y').toBe(512)
-    expect(spread(2), 'and has NO extent along the trench axis').toBe(0)
+    expect(spread(0), 'spans 512 along the trench (ROM fore/aft)').toBe(512)
+    expect(spread(1), 'spans 512 across the trench (ROM lateral)').toBe(512)
+    expect(spread(2), 'and has NO extent in HEIGHT — it is a floor, not a wall').toBe(0)
   })
 
   it('strokes exactly the 18 edges of `.WGD PORT`', () => {

@@ -609,7 +609,43 @@ against the current clone:
    (53 verts), Darth TIE (57), and `Obj_Trench_Squares` (8, listed above). Edges
    are *not* in `Object_3D_Data.asm` — derive connectivity from draw order /
    `sub_6819` (already tracked in `docs/HANDOFF-authentic-vector-edges.md`).
-2. **`core/trench-channel.ts`** — **partially trued up (epic 14 task 2).**
+2. **`core/trench-channel.ts`** — ⚠ **RESOLVED (sw5-6). The trench IS pinned; everything below
+   this line is superseded and is kept only as history.**
+
+   The premise below — "two conflicting ROM candidates and no way to arbitrate them" — was
+   wrong, and it is the citation the wrong constants leaned on for four stories. There is no
+   conflict. **`WSBASE.MAC` § VIEW STARBASE draws the trench**, and `TBSBL` ("BASE BOTTOM
+   LINES") *is* its cross-section, verbatim:
+
+   ```
+   TBSBL:                  ;BASE BOTTOM LINES
+       .WORD -400,0        ;TOP LEFT PANEL          (lateral, height)
+       .WORD  400,0        ;TOP OF RIGHT PANEL
+       .WORD -400,-1000    ;FAR LEFT BOTTOM
+       .WORD  400,-1000    ;FAR RIGHT BOTTOM
+   ```
+
+   Corroborated by `BSVSID` (`LDD #-400 ;LEFT SIDE` / `LDD #400 ;RIGHT SIDE`) and `BSVSDW`
+   (`LDD #-1000 ;BOTTOM EDGE`, `;LIMIT TO BOTTOM`). The file is `.RADIX 16` — proved from
+   inside it by `;PAINFUL MATH -- 8000 WRAPAROUND HANDLER` (only `0x8000` is the signed-16
+   wrap) and by `CMPD #7000`, the same cull the disassembly independently reports as `$7000`.
+
+   | constant | was | **pinned** | source |
+   |---|---|---|---|
+   | `TRENCH_HALF_W` | 256 | **1024** (`$400`) | `TBSBL`, `BSVSID` |
+   | `TRENCH_WALL_H` | 320 | **4096** (`$1000`) | `TBSBL`, `BSVSDW` |
+   | eye band above floor | fixed 60 | **512…3840** | `WSMAIN.MAC` `SMVG1B` / `sub_703B` |
+   | lateral eye clamp | 512 | **511** (`$1FF`) | `WSMAIN.MAC` `S1MVBS` |
+
+   The real trench is a **canyon** — 2048 wide × 4096 deep — not the 512 × 320 ditch we shipped.
+   The ±256 below came from `Obj_Trench_Squares`, which is trench **furniture** (the floor
+   squares) sitting *on* the floor; that it coincides with the exhaust port's own base
+   half-width (also 256) is a coincidence of two unrelated objects, and sw5-4 mistook it for
+   corroboration. There was never a second candidate to weigh — only a table nobody opened.
+
+   *Superseded history follows.*
+
+2b. **`core/trench-channel.ts`** — *(historical)* **partially trued up (epic 14 task 2).**
    `RIB_Z` (400→512) and `TRENCH_FAR` (6000→7168) now scale off `sub_87CB` (the
    side-wall vertical-line recursion): its Z-window clamp `$800` (2048) is 2× the
    wall half-width `$400` (1024) from `sub_8735`'s left/right wall pass

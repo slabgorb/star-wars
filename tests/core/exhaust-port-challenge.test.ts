@@ -57,6 +57,8 @@ import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
 import type { GameEvent } from '../../src/core/events'
 import type { Vec3 } from '@arcade/shared/math3d'
+import { FIRE_AT_PORT } from '../support/aim'
+import { PORT_APPROACH_WINDOW, TRENCH_SCROLL_SPEED } from '../../src/core/state'
 
 /** A live exhaust port at a world position — the hit-test reads `.pos`. */
 const portAt = (pos: Vec3): { pos: Vec3 } => ({ pos })
@@ -78,7 +80,8 @@ const FRAME = 1 / 60
 
 /** Trigger held, aim dead-centre, square aspect: the sim spawns a bolt at the
  *  cockpit with velocity aimDirection(0,0,1) * PROJECTILE_SPEED = [0,0,-5000]. */
-const FIRE: Input = { aimX: 0, aimY: 0, fire: true, aspect: 1 }
+// sw5-6: RE-SEATED — see tests/support/aim.ts. `aimY: 0` now points at empty sky, not the port.
+const FIRE: Input = FIRE_AT_PORT
 
 /** A world Z near the cockpit — deep inside ANY plausible approach window, so tests
  *  that want the RADIUS or the AIM (not the window) to decide the outcome can seat
@@ -90,8 +93,9 @@ const IN_WINDOW_Z = -300
  * The visible target's outer reach — the geometry sw3-15's WYSIWYG bound is pinned
  * against. RE-SEATED BY sw5-4: this used to be the authored octagon's ~69.5, read in
  * the XZ plane the octagon lay flat in. EXHAUST_PORT is now the ROM's `PORT` object —
- * three concentric squares (96 / 160 / 256), flat in the z=0 plane, facing the pilot —
- * so the reach is read in the x/y plane it actually occupies, and it is measured over
+ * three concentric squares (96 / 160 / 256) whose third coordinate is the ROM's HEIGHT axis, so the
+ * plate lies FLAT IN THE TRENCH FLOOR (sw5-6 — sw5-4 read that third zero as depth and stood the
+ * plate on its edge). The reach is read across the plate's two spanning axes, and measured over
  * the PORTHOLE (the innermost square, the one `.WGD PORT`'s red `;PORTHOLE` pen
  * closes) rather than the whole plate. The berm and base are the lip and the Death
  * Star surface around the shaft; a torpedo into them has missed.
@@ -217,27 +221,75 @@ describe('sw3-15 — the exhaust-port hit sphere is tightened to the visible tar
 // ---------------------------------------------------------------------------
 
 describe('sw3-15 — the hit/miss decision is gated to the narrow approach window (ROM $800)', () => {
-  it('a single centred torpedo fired at TRENCH ENTRY no longer wins — the finish is not unmissable', () => {
-    // THE headline defect. Today one centred bolt fired down the full trench (port at
-    // -EXHAUST_PORT_DISTANCE) detonates the port and clears the run — it never fails.
-    // The ROM resolves the hit/miss only inside the narrow end-wall window; a shot
-    // fired at entry crosses the port far outside it, so it must NOT count, and the
-    // port slips through to a REAL miss that costs a shield.
-    const { state, events, frames } = fireAndFollowPort(trench(portAt([0, 0, -EXHAUST_PORT_DISTANCE])), 320)
-    expect(hit(events)).toBe(false) // the early shot did not land
-    expect(state.phase).toBe('trench') // it never warped the run out to space
-    expect(missed(events)).toBe(true) // the port slipped past → a distinct miss cue
-    expect(state.lives).toBeLessThan(STARTING_LIVES) // ...and missing costs a shield (real stakes)
-    expect(frames).toBe(320) // no early warp-out — the run played on to the miss
+  // ⚠ RE-SEATED BY sw5-6, with the user's explicit sign-off. Read this before judging the two
+  // tests below — they look like moved goalposts and they are not.
+  //
+  // sw3-15 pinned the ROM's $800 end-wall gate, and it was RIGHT to. But it modelled the gate as
+  // "the bolt must CROSS the port inside the window", and that is not what the machine does.
+  // WSMAIN.MAC's decision at the window is `LDA PT.LIV` — it READS A FLAG. The flag was latched
+  // earlier, when a laser got close enough to the porthole and WSLAZR handed the shot to the
+  // machine (`?LAZAR GOT CLOSE ENUF TO FIRE PROTON TORPS?` → `JSR FRPTGN ;THEN LAUNCH DIRECT HIT
+  // PROTON TORPS`), which MVPTGN then funnels home. The window decides whether your torpedo is
+  // ALIVE, not whether your aim was lucky at that instant.
+  //
+  // The distinction was invisible while the port sat at eye height. sw5-6 pinned the trench, and
+  // it stopped being invisible: the pilot flies 768 above a floor-mounted porthole, so inside the
+  // window the port is 43.8° below him against a 30° cone. A shot fired IN the window is not a
+  // hard shot — it is an impossible one. Under sw3-15's model the finish became unwinnable.
+  //
+  // EVERY INTENT sw3-15 PINNED IS PRESERVED, and asserted below:
+  //   • the window still DECIDES the outcome — an armed torpedo does not detonate before it;
+  //   • the finish is still MISSABLE — you must thread the ±96 porthole, and missing costs a shield;
+  //   • a shot on the berm or the base still LOSES (unchanged, see the hit-sphere tests above).
+  // What changes is only WHEN the shot is earned: early, at a range the yoke can actually reach.
+
+  it('an armed torpedo does NOT detonate until the port reaches the window ($800 gate holds)', () => {
+    // sw3-15's real contract, under the ROM's real mechanism. The shot is threaded at entry — the
+    // only range from which a floor-mounted porthole is reachable at all — and it must then WAIT.
+    let s = trench(portAt([0, 0, -EXHAUST_PORT_DISTANCE]))
+    s = stepGame(s, FIRE, FRAME) // pull the trigger, crosshair on the hole
+
+    // The bolt has 2,400 units to cross at 12,000 u/s, so the latch cannot close on the firing
+    // frame — it closes when the laser actually reaches the porthole. Coast until it does, and
+    // assert the whole way that the armed run does NOT cash in early: the $800 gate still holds.
+    //
+    // Stop ONE frame's travel short of the gate: the port advances TRENCH_SCROLL_SPEED*dt per
+    // step, so the step that carries it ACROSS the threshold is legitimately the winning one.
+    const MARGIN = TRENCH_SCROLL_SPEED * FRAME
+    let frames = 0
+    while (s.exhaustPort && s.exhaustPort.pos[2] < -PORT_APPROACH_WINDOW - MARGIN && frames < 400) {
+      s = stepGame(s, NO_INPUT, FRAME)
+      expect(s.phase, 'an armed run must not win before the window').toBe('trench')
+      expect(hit(s.events), 'the $800 gate still holds the outcome').toBe(false)
+      frames++
+    }
+    expect(s.portTorpedoArmed, 'the laser got close enuf — the torpedo launched').toBe(true)
+    expect(frames, 'the run really did fly the whole trench before the gate opened').toBeGreaterThan(60)
+
+    // ...and the moment it reaches the window, the DIRECT HIT lands.
+    s = stepGame(s, NO_INPUT, FRAME)
+    expect(hit(s.events), 'at the window, PT.LIV is alive — the torpedo goes in').toBe(true)
+    expect(s.phase).toBe('space')
+    expect(s.lives).toBe(STARTING_LIVES) // a clean win costs no shield
   })
 
-  it('a centred torpedo that meets the port INSIDE the near-cockpit window still detonates it', () => {
-    // The gate must restore challenge without making the port impossible: a well-timed
-    // shot that meets the port in the approach window still wins, cleanly.
-    const { state, events } = fireAndFollowPort(trench(portAt([0, 0, IN_WINDOW_Z])))
-    expect(hit(events)).toBe(true)
-    expect(state.phase).toBe('space') // the winning shot cleared the run
-    expect(state.lives).toBe(STARTING_LIVES) // a clean win costs no shield
+  it('a run that never threads the porthole MISSES and costs a shield — the finish is not unmissable', () => {
+    // The other half of sw3-15's intent, and the half that actually matters: the finish must be
+    // losable. A pilot who never puts a laser through the hole never arms the torpedo, the port
+    // slips past, and it costs him. Here he holds the trigger with the crosshair CENTRED — which,
+    // now that the porthole lies in the floor, points at the vanishing point: at nothing.
+    const CENTRED: Input = { aimX: 0, aimY: 0, fire: true, aspect: 1 }
+    let s = trench(portAt([0, 0, -EXHAUST_PORT_DISTANCE]))
+    const events: GameEvent[] = []
+    for (let i = 0; i < 320 && s.phase === 'trench'; i++) {
+      s = stepGame(s, CENTRED, FRAME)
+      events.push(...s.events)
+    }
+    expect(s.portTorpedoArmed, 'a shot at empty sky never arms the torpedo').toBe(false)
+    expect(hit(events)).toBe(false) // it did not land
+    expect(s.phase).toBe('trench') // it never warped the run out to space
+    expect(missed(events)).toBe(true) // the port slipped past → a distinct miss cue
+    expect(s.lives).toBeLessThan(STARTING_LIVES) // ...and missing costs a shield (real stakes)
   })
 })
 
