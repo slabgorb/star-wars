@@ -1,45 +1,34 @@
 // tests/core/trench-voice-timer.test.ts
 //
-// RED-phase suite for Story sw3-4 — "Trench voice-line timer". sw2-5 made speech
-// a first-class core GameEvent and wired the 4 lines that map to phase edges, but
-// left the trench nearly silent: after "Use the Force, Luke" fires on trench
-// ENTRY, no further voice plays. The 1983 cabinet drives three more iconic lines
-// off a trench timer `word_4B0E`, gated by run parity `byte_4B12`
-// (docs/star-wars-1983-source-findings.md, "Voice-line triggers by trench timer"):
+// Origin: Story sw3-4 — "Trench voice-line timer". The 1983 cabinet drives four
+// iconic lines off a trench timer `word_4B0E`, gated by 0-based wave parity
+// (WSMAIN.MAC:1868 `LDA BS.WAV / LSRA / IFCC`):
 //
-//   | timer | parity | Sound  | line                                    |
-//   |-------|--------|--------|-----------------------------------------|
-//   |  16   | even   | $18    | "Luke, trust me"                        |
-//   |  24   | even   | $1A    | "Yahoo, you're all clear kid"           |
-//   |  22   | odd    | $16    | "The Force is strong in this one"       |
-//   |  16   | odd    | $C     | (a non-voice cue — out of scope here)   |
+//   | frames | BS.WAV parity | human wave | Sound | line                              |
+//   |--------|---------------|------------|-------|-----------------------------------|
+//   |  16    | even (LSR CC) | odd  1,3,5 | $18   | "Luke, trust me"        (SPKTRU)  |
+//   |  24    | even          | odd  1,3,5 | $1A   | "Yahoo, you're all clear kid" ($SPKYAU) |
+//   |  16    | odd  (LSR CS) | even 2,4,6 | —     | "Let go Luke"           (SPKLET)  |
+//   |  22    | odd           | even 2,4,6 | $16   | "The Force is strong…"  (SPKSTR)  |
 //
-// So a single run plays only its PARITY set: even runs → Luke @16 + Yahoo @24;
-// odd runs → Force is strong @22. Session scope decision (user, sw3-4 RED): the
-// parity gate is implemented NOW, sourced from `wave` (the real ROM source,
-// byte_4B12, is the trench section-chain index — that mechanic lands in sw3-7).
-// wave EVEN → even set; wave ODD → odd set. "reachable now WITHOUT new mechanics."
+// A single run plays only its PARITY set. BS.WAV is the 0-based wave (WSMAIN:1868
+// "BEGIN WITH WAVE 0" / :1702-1707 BS.WAV = clamped GM.WAV), so BS.WAV-even is human
+// ODD and BS.WAV-odd is human EVEN.
 //
-// The contract these tests pin (nothing here exists yet — valid RED, including the
-// `trenchTimer` field and the three new `SpeechLine` ids, which are type errors
-// until GREEN):
+// ── CORRECTED by Story sw7-2 (R2 Wave-parity family) ────────────────────────────
+// sw3-4 sourced parity from the 1-based `state.wave`, so its even/odd sets were the
+// exact INVERSE of the cabinet's (audit U-008), and its odd branch was missing "Let
+// go Luke" @16 entirely (U-007). sw7-2 reconciles the base — parity now derives from
+// the 0-based wave — so the sets ride the ROM waves and "Let go Luke" is restored.
+// The exhaustive wave→line map is pinned in tests/core/wave-parity-gates.test.ts;
+// this suite keeps sw3-4's timing / once-per-run / reset / return-path / determinism
+// coverage, re-expressed against the corrected parity (odd-wave fixtures for the
+// Luke+Yahoo set, even-wave fixtures for the LetGo+Force set).
 //
-//   // src/core/state.ts — GameState gains an integer trench voice timer.
-//   trenchTimer: number   // ROM word_4B0E; 0 in initialState, reset to 0 on
-//                         // entering the trench, +1 each trench step.
-//   // src/core/events.ts — SpeechLine union gains the three cabinet lines
-//   //   | 'lukeTrustMe'               // trench timer 16, even run
-//   //   | 'youreAllClearKid'          // trench timer 24, even run
-//   //   | 'theForceIsStrongInThisOne' // trench timer 22, odd run
-//   // (each id is an existing key in the shell's 23-line SPEECH catalogue, so the
-//   //  generic event->speak pump needs no change — see tests/shell/audio.test.ts.)
-//
-// TICK MODEL (deviation, logged in the session): `trenchTimer` advances by exactly
-// ONE per `stepGame` trench step — a per-step integer counter, NOT dt-scaled — so
-// the authentic thresholds 16/22/24 are reachable inside the ~4.8s trench
-// (EXHAUST_PORT_DISTANCE 2400 / TRENCH_SCROLL_SPEED 500) under the fixed-timestep
-// loop, mirroring the ROM's per-frame word_4B0E. The wall-clock cadence/feel of the
-// cluster is a playtest-tuning candidate (see Delivery Findings), not pinned here.
+// ── (unchanged from sw7-1 / T-008) ──────────────────────────────────────────────
+// The timer advances at the ROM game-frame rate 20.508 Hz (= TICK_HZ), so the cues
+// fire at their authentic wall-clock times (16/20.508 = 0.78 s … 24/20.508 = 1.17 s)
+// and are frame-rate independent. `trenchTimer` is a float game-frame accumulator.
 import { describe, it, expect } from 'vitest'
 import type { GameEvent, SpeechLine } from '../../src/core/events'
 import { stepGame, enterPhase } from '../../src/core/sim'
@@ -49,15 +38,27 @@ import { TRENCH_EYE_SEAT } from '../../src/core/trench-channel'
 
 const DT = 1 / 60
 
-// Authentic ROM trench-timer thresholds (word_4B0E), pinned as golden values.
-const T_LUKE = 16 // even run — "Luke, trust me"        (Sound_18)
-const T_FORCE = 22 // odd run  — "The Force is strong…"   (Sound_16)
-const T_YAHOO = 24 // even run — "Yahoo, you're all clear" (Sound_1A)
+/** ROM game-frame rate (WSINT.MAC:147) — the rate word_4B0E advances at. */
+const ROM_GAME_FRAME_HZ = 246.094 / 12 // 20.508 Hz
+
+// Authentic ROM trench-timer thresholds (word_4B0E), in GAME FRAMES.
+const F_AT16 = 16 // @16 — "Luke, trust me" (odd) / "Let go Luke" (even)
+const F_FORCE = 22 // even wave — "The Force is strong…"    (Sound_16)
+const F_YAHOO = 24 // odd wave  — "Yahoo, you're all clear" (Sound_1A)
+
+// Their authentic wall-clock firing times (frames ÷ 20.508 Hz), in seconds.
+const S_AT16 = F_AT16 / ROM_GAME_FRAME_HZ // 0.780 s
+const S_FORCE = F_FORCE / ROM_GAME_FRAME_HZ // 1.073 s
+const S_YAHOO = F_YAHOO / ROM_GAME_FRAME_HZ // 1.170 s
+
+// Representative parity waves (1-based). ODD → Luke+Yahoo set; EVEN → LetGo+Force set.
+const ODD_WAVE = 1
+const EVEN_WAVE = 2
 
 /** A clean trench run seeded deterministically at a chosen `wave` (parity source).
- *  Wall obstacles are cleared so a catwalk crash can't cut the run short and mask
- *  the voice timer, and the exhaust port sits far downrange (no hit across the
- *  driven window) — this fixture isolates the timer, nothing else. */
+ *  Wall obstacles are cleared so a catwalk crash can't cut the run short and mask the
+ *  voice timer, and the exhaust port sits far downrange (a NO_INPUT run only reaches
+ *  it at ~4.6 s), so this fixture isolates the timer, nothing else. */
 function freshTrench(seed: number, wave: number): GameState {
   return {
     ...enterPhase(initialState(seed), 'trench'),
@@ -73,50 +74,57 @@ function spokenLines(s: GameState): string[] {
 }
 
 interface Beat {
-  timer: number
+  /** accumulated sim-time (s) at the END of this step */
+  t: number
   lines: string[]
 }
 
-/** Drive a trench state forward `steps` frames, recording the timer value and any
- *  speech emitted on each. `steps <= 30` keeps the port far downrange (a port hit
- *  needs a bolt on it, and 30 frames scroll it only ~250 of 2400 units). */
+/** Drive a trench state forward `steps` frames at DT, recording the accumulated
+ *  sim-time and any speech emitted on each. 90 steps = 1.5 s clears the last cue
+ *  (1.17 s) while the port is still ~1,650 u downrange (a NO_INPUT run never fires,
+ *  so the port cannot resolve). */
 function collectRun(s0: GameState, steps: number): Beat[] {
   const beats: Beat[] = []
   let s = s0
+  let t = 0
   for (let i = 0; i < steps; i++) {
     s = stepGame(s, NO_INPUT, DT)
-    beats.push({ timer: s.trenchTimer, lines: spokenLines(s) })
+    t += DT
+    beats.push({ t, lines: spokenLines(s) })
   }
   return beats
 }
 
-/** The timer values at which `line` was spoken across a run — [] if never, and a
- *  length > 1 means it re-fired (a bug the AC5 tests guard against). */
+/** The sim-times at which `line` was spoken across a run — [] if never, and a length
+ *  > 1 means it re-fired (a bug the once-per-run tests guard against). */
 function firedAt(beats: Beat[], line: string): number[] {
-  return beats.filter((b) => b.lines.includes(line)).map((b) => b.timer)
+  return beats.filter((b) => b.lines.includes(line)).map((b) => b.t)
 }
 
-describe('trench voice timer — the counter (AC1)', () => {
+const STEPS = 90 // 1.5 s — past the last threshold (1.17 s), port still downrange
+
+describe('trench voice timer — the counter is frame-true (sw7-1 / T-008)', () => {
   it('enters the trench with the voice timer zeroed', () => {
     expect(enterPhase(initialState(1), 'trench').trenchTimer).toBe(0)
   })
 
-  it('advances by exactly one per trench step', () => {
-    const t0 = freshTrench(1, 2)
-    expect(t0.trenchTimer).toBe(0)
-    const t1 = stepGame(t0, NO_INPUT, DT)
-    expect(t1.trenchTimer).toBe(1)
-    const t2 = stepGame(t1, NO_INPUT, DT)
-    expect(t2.trenchTimer).toBe(2)
+  it('advances at the 20.508 Hz game-frame rate — ~20.5 frames after one second', () => {
+    // One second of 60 Hz steps accumulates ONE second of game frames = 20.508, NOT
+    // 60. (The old per-step counter reached 60 here — 2.93× fast.)
+    let s = freshTrench(1, EVEN_WAVE)
+    for (let i = 0; i < 60; i++) s = stepGame(s, NO_INPUT, DT)
+    expect(s.trenchTimer).toBeCloseTo(ROM_GAME_FRAME_HZ, 1) // ≈ 20.508
   })
 
-  it('is a per-step tick, independent of dt (an integer ROM counter, not dt-scaled)', () => {
-    const t0 = freshTrench(1, 2)
-    // A tiny frame and a huge frame both advance the counter by exactly one — the
-    // thresholds are tick counts, not seconds (a seconds timer could never reach
-    // 24 in a ~4.8s trench).
-    expect(stepGame(t0, NO_INPUT, 1 / 240).trenchTimer).toBe(1)
-    expect(stepGame(t0, NO_INPUT, 0.9).trenchTimer).toBe(1)
+  it('is dt-SCALED, not per-step — a 1/240 step advances ¼ as far as a 1/60 step', () => {
+    // The exact inversion of the sw3-4 bug: the counter is proportional to elapsed
+    // time, so a quarter-length frame advances it a quarter as far. A per-step counter
+    // would advance by 1 for BOTH and this ratio would be 1.
+    const t0 = freshTrench(1, EVEN_WAVE)
+    const fine = stepGame(t0, NO_INPUT, 1 / 240).trenchTimer
+    const coarse = stepGame(t0, NO_INPUT, 1 / 60).trenchTimer
+    expect(fine).toBeGreaterThan(0)
+    expect(coarse / fine).toBeCloseTo(4, 1)
   })
 
   it('does NOT advance outside the trench (a space frame leaves it at 0)', () => {
@@ -126,48 +134,65 @@ describe('trench voice timer — the counter (AC1)', () => {
   })
 })
 
-describe('even-wave trench run — Luke @16 + Yahoo @24 (AC2)', () => {
-  const beats = collectRun(freshTrench(1983, 2), 30)
+describe('odd-wave trench run — "Luke, trust me" @0.78 s + "Yahoo" @1.17 s (AC2)', () => {
+  // Human ODD wave ⇐ BS.WAV EVEN branch (WSMAIN:1868 LSR carry-clear).
+  const beats = collectRun(freshTrench(1983, ODD_WAVE), STEPS)
 
-  it('cues "Luke, trust me" exactly once, at timer 16', () => {
-    expect(firedAt(beats, 'lukeTrustMe')).toEqual([T_LUKE])
+  it('cues "Luke, trust me" exactly once, at its ROM wall-clock time', () => {
+    const times = firedAt(beats, 'lukeTrustMe')
+    expect(times).toHaveLength(1)
+    expect(times[0]).toBeCloseTo(S_AT16, 1) // 0.780 s
   })
 
-  it('cues "Yahoo, you\'re all clear kid" exactly once, at timer 24', () => {
-    expect(firedAt(beats, 'youreAllClearKid')).toEqual([T_YAHOO])
+  it('cues "Yahoo, you\'re all clear kid" exactly once, at its ROM wall-clock time', () => {
+    const times = firedAt(beats, 'youreAllClearKid')
+    expect(times).toHaveLength(1)
+    expect(times[0]).toBeCloseTo(S_YAHOO, 1) // 1.170 s
   })
 
-  it('does NOT cue the odd-run "Force is strong" line on an even run (parity gate, AC4)', () => {
+  it('does NOT cue the even-wave lines on an odd run (parity gate, AC4)', () => {
+    expect(firedAt(beats, 'letGoLuke')).toEqual([])
     expect(firedAt(beats, 'theForceIsStrongInThisOne')).toEqual([])
   })
 })
 
-describe('odd-wave trench run — Force is strong @22 (AC3)', () => {
-  const beats = collectRun(freshTrench(1983, 1), 30)
+describe('even-wave trench run — "Let go Luke" @0.78 s + "The Force is strong" @1.07 s (AC3)', () => {
+  // Human EVEN wave ⇐ BS.WAV ODD branch. sw7-2 restores "Let go Luke" @16 (U-007).
+  const beats = collectRun(freshTrench(1983, EVEN_WAVE), STEPS)
 
-  it('cues "The Force is strong in this one" exactly once, at timer 22', () => {
-    expect(firedAt(beats, 'theForceIsStrongInThisOne')).toEqual([T_FORCE])
+  it('cues "Let go Luke" exactly once, at its ROM wall-clock time (restored by sw7-2)', () => {
+    const times = firedAt(beats, 'letGoLuke')
+    expect(times).toHaveLength(1)
+    expect(times[0]).toBeCloseTo(S_AT16, 1) // 0.780 s
   })
 
-  it('does NOT cue the even-run lines on an odd run (parity gate, AC4)', () => {
+  it('cues "The Force is strong in this one" exactly once, at its ROM wall-clock time', () => {
+    const times = firedAt(beats, 'theForceIsStrongInThisOne')
+    expect(times).toHaveLength(1)
+    expect(times[0]).toBeCloseTo(S_FORCE, 1) // 1.073 s
+  })
+
+  it('does NOT cue the odd-wave lines on an even run (parity gate, AC4)', () => {
     expect(firedAt(beats, 'lukeTrustMe')).toEqual([])
     expect(firedAt(beats, 'youreAllClearKid')).toEqual([])
   })
 })
 
 describe('a line fires ONCE per run, not every frame past its threshold (AC5)', () => {
-  it('an even run is silent of "Luke, trust me" on every frame after timer 16', () => {
-    const beats = collectRun(freshTrench(7, 2), 30)
-    const afterLuke = beats.filter((b) => b.timer > T_LUKE)
-    expect(afterLuke.length).toBeGreaterThan(0) // the run really did pass 16
-    expect(afterLuke.some((b) => b.lines.includes('lukeTrustMe'))).toBe(false)
+  it('an odd run is silent of "Luke, trust me" on every frame after it fires', () => {
+    const beats = collectRun(freshTrench(7, ODD_WAVE), STEPS)
+    expect(firedAt(beats, 'lukeTrustMe')).toHaveLength(1) // it really did fire once
+    const after = beats.filter((b) => b.t > S_AT16 + DT)
+    expect(after.length).toBeGreaterThan(0) // the run really did pass 0.78 s
+    expect(after.some((b) => b.lines.includes('lukeTrustMe'))).toBe(false)
   })
 
-  it('an odd run is silent of "Force is strong" on every frame after timer 22', () => {
-    const beats = collectRun(freshTrench(7, 1), 30)
-    const afterForce = beats.filter((b) => b.timer > T_FORCE)
-    expect(afterForce.length).toBeGreaterThan(0)
-    expect(afterForce.some((b) => b.lines.includes('theForceIsStrongInThisOne'))).toBe(false)
+  it('an even run is silent of "The Force is strong" on every frame after it fires', () => {
+    const beats = collectRun(freshTrench(7, EVEN_WAVE), STEPS)
+    expect(firedAt(beats, 'theForceIsStrongInThisOne')).toHaveLength(1)
+    const after = beats.filter((b) => b.t > S_FORCE + DT)
+    expect(after.length).toBeGreaterThan(0)
+    expect(after.some((b) => b.lines.includes('theForceIsStrongInThisOne'))).toBe(false)
   })
 })
 
@@ -175,77 +200,83 @@ describe('the timer + cues reset each run (AC6)', () => {
   it('resets a NON-ZERO timer to 0 on entering the trench', () => {
     // Drive the reset from a genuinely dirty value — NOT from a pristine
     // `initialState` (whose trenchTimer is already 0, which would pass even if the
-    // `enterPhase` reset were deleted). Mirrors trench-channel.test.ts:342's
-    // `{ ...initialState, trenchScrollZ: 555 }` dirty-fixture pattern.
+    // `enterPhase` reset were deleted).
     const dirty: GameState = { ...initialState(1), trenchTimer: 47 }
     expect(enterPhase(dirty, 'trench').trenchTimer).toBe(0)
   })
 
   it('re-arms the cues on a second run whose prior timer had already climbed past 24', () => {
-    // Run 1 climbs the timer well past every threshold...
-    const run1 = collectRun(freshTrench(1, 2), 30)
-    expect(run1[run1.length - 1].timer).toBeGreaterThan(T_YAHOO) // really climbed past 24
-    expect(firedAt(run1, 'lukeTrustMe')).toEqual([T_LUKE])
-    // ...then a NEW trench opens from a state that STILL carries that climbed timer
-    // (as the real run→run transition would). The entry MUST zero it, or the second
-    // run is silent forever (timer never falls back to 16). If the enterPhase reset
-    // were missing, `run2Start.trenchTimer` would be 30 and the cue would never fire.
-    const climbed: GameState = { ...initialState(1), wave: 2, trenchTimer: 30 }
+    // Run 1 (odd wave) climbs the timer well past every threshold...
+    const run1 = collectRun(freshTrench(1, ODD_WAVE), STEPS)
+    expect(firedAt(run1, 'lukeTrustMe')).toHaveLength(1)
+    expect(firedAt(run1, 'youreAllClearKid')).toHaveLength(1) // really climbed past 24 frames
+    // ...then a NEW trench opens from a state that STILL carries that climbed timer.
+    // The entry MUST zero it, or the second run is silent forever (timer never falls
+    // back below 16). If the enterPhase reset were missing, the cue would never fire.
+    const climbed: GameState = { ...initialState(1), wave: ODD_WAVE, trenchTimer: 30 }
     const run2Start: GameState = {
       ...enterPhase(climbed, 'trench'),
       mode: 'playing',
       trenchObstacles: [],
     }
     expect(run2Start.trenchTimer).toBe(0)
-    expect(firedAt(collectRun(run2Start, 30), 'lukeTrustMe')).toEqual([T_LUKE])
+    const run2 = collectRun(run2Start, STEPS)
+    const luke = firedAt(run2, 'lukeTrustMe')
+    expect(luke).toHaveLength(1)
+    expect(luke[0]).toBeCloseTo(S_AT16, 1)
   })
 })
 
 describe('silence outside the cue windows (AC7 — complements speech-cues.test.ts)', () => {
-  it('the trench is silent below the first threshold', () => {
-    const first = collectRun(freshTrench(1, 2), 1)[0]
-    expect(first.timer).toBe(1)
-    expect(first.lines).toEqual([])
+  it('the trench is silent before the first threshold time', () => {
+    const beats = collectRun(freshTrench(1, EVEN_WAVE), STEPS)
+    const beforeFirst = beats.filter((b) => b.t < S_AT16 - DT)
+    expect(beforeFirst.length).toBeGreaterThan(0) // there really is a pre-cue window
+    expect(beforeFirst.every((b) => b.lines.length === 0)).toBe(true)
   })
 
-  it('every frame that is NOT a threshold frame emits no speech (even run)', () => {
-    const beats = collectRun(freshTrench(1, 2), 30)
-    const offThreshold = beats.filter((b) => b.timer !== T_LUKE && b.timer !== T_YAHOO)
-    expect(offThreshold.every((b) => b.lines.length === 0)).toBe(true)
+  it('emits speech ONLY on the run\'s two threshold frames (no chatter between)', () => {
+    const beats = collectRun(freshTrench(1, EVEN_WAVE), STEPS)
+    const speakingFrames = beats.filter((b) => b.lines.length > 0)
+    expect(speakingFrames).toHaveLength(2) // exactly the @16 + @22 lines, nothing else
   })
 })
 
 describe('parity is stable across many waves (rule: parity arithmetic)', () => {
-  it('a high EVEN wave still cues the even set, never the odd line', () => {
-    const beats = collectRun(freshTrench(1, 100), 30)
-    expect(firedAt(beats, 'lukeTrustMe')).toEqual([T_LUKE])
-    expect(firedAt(beats, 'youreAllClearKid')).toEqual([T_YAHOO])
+  it('a high ODD wave still cues the Luke+Yahoo set, never the even-wave lines', () => {
+    const beats = collectRun(freshTrench(1, 101), STEPS)
+    expect(firedAt(beats, 'lukeTrustMe')).toHaveLength(1)
+    expect(firedAt(beats, 'youreAllClearKid')).toHaveLength(1)
+    expect(firedAt(beats, 'letGoLuke')).toEqual([])
     expect(firedAt(beats, 'theForceIsStrongInThisOne')).toEqual([])
   })
 
-  it('a high ODD wave still cues the odd line, never the even set', () => {
-    const beats = collectRun(freshTrench(1, 101), 30)
-    expect(firedAt(beats, 'theForceIsStrongInThisOne')).toEqual([T_FORCE])
+  it('a high EVEN wave still cues the LetGo+Force set, never the odd-wave lines', () => {
+    const beats = collectRun(freshTrench(1, 100), STEPS)
+    expect(firedAt(beats, 'letGoLuke')).toHaveLength(1)
+    expect(firedAt(beats, 'theForceIsStrongInThisOne')).toHaveLength(1)
     expect(firedAt(beats, 'lukeTrustMe')).toEqual([])
     expect(firedAt(beats, 'youreAllClearKid')).toEqual([])
   })
 })
 
-describe('SpeechEvent carries the new trench SpeechLine ids (AC9 / union exhaustiveness)', () => {
-  // Typed as SpeechLine[]: a COMPILE-TIME assertion that all three ids are members
-  // of the union — a renamed or missing id is a type error, not a silent pass.
-  const NEW_TRENCH_LINES: SpeechLine[] = [
+describe('SpeechEvent carries the trench SpeechLine ids (AC9 / union exhaustiveness)', () => {
+  // Typed as SpeechLine[]: a COMPILE-TIME assertion that all four ids are members of
+  // the union — a renamed or missing id is a type error, not a silent pass. sw7-2 adds
+  // 'letGoLuke' (U-007), the fourth trench line, to sw3-4's original three.
+  const TRENCH_LINES: SpeechLine[] = [
     'lukeTrustMe',
     'youreAllClearKid',
     'theForceIsStrongInThisOne',
+    'letGoLuke',
   ]
 
-  it('adds three DISTINCT lines to the SpeechLine union', () => {
-    expect(new Set(NEW_TRENCH_LINES).size).toBe(3)
+  it('the trench contributes four DISTINCT lines to the SpeechLine union', () => {
+    expect(new Set(TRENCH_LINES).size).toBe(4)
   })
 
   it('each is a valid `speech` GameEvent payload', () => {
-    const events: GameEvent[] = NEW_TRENCH_LINES.map((line) => ({ type: 'speech', line }))
+    const events: GameEvent[] = TRENCH_LINES.map((line) => ({ type: 'speech', line }))
     for (const e of events) {
       expect(e.type).toBe('speech')
       if (e.type === 'speech') expect(typeof e.line).toBe('string')
@@ -254,41 +285,40 @@ describe('SpeechEvent carries the new trench SpeechLine ids (AC9 / union exhaust
 })
 
 describe('a cue rides every return path — coexists with crash / port-kill events', () => {
-  it('fires alongside the win cue when timer 16 lands on the SAME frame as a port kill (clearRun path)', () => {
-    // Even wave, timer one step short of 16, with a bolt parked on the port so this
-    // ONE step both cues "Luke, trust me" (timer -> 16) AND destroys the port. The
-    // port kill runs clearRun -> enterPhase (the most complex return path); the cue,
-    // pushed at the TOP of stepTrench, must still ride the frame's events out.
+  it('fires alongside the win cue when a trench line lands on the SAME frame as a port kill (clearRun path)', () => {
+    // Wave 4 (even → "Let go Luke" @16, and a SPEAKING wave for "Great shot kid"),
+    // timer one game-frame short of 16, with a bolt parked on the port so this ONE step
+    // both crosses the @16 threshold AND destroys the port. The port kill runs clearRun
+    // -> enterPhase (the most complex return path); the cue, pushed at the TOP of
+    // stepTrench, must still ride the frame's events out. (trenchTimer is set 0.1 frames
+    // below 16 so a single game-frame advance — dt·20.508 ≈ 0.34 — crosses it this step.)
     const trench = enterPhase(initialState(1983), 'trench')
     const p = trench.exhaustPort!.pos
-    // sw3-15: seat the port in the near-cockpit approach window so the parked
-    // bolt detonates it this step — the far spawn distance no longer resolves.
-    const port: typeof p = [p[0], p[1], -300]
+    const port: typeof p = [p[0], p[1], -300] // seat it in the near-cockpit approach window
     const s0: GameState = {
       ...trench,
       mode: 'playing',
-      wave: 2,
-      trenchTimer: T_LUKE - 1,
+      wave: 4,
+      trenchTimer: F_AT16 - 0.1,
       trenchObstacles: [],
       exhaustPort: { pos: port },
       projectiles: [{ pos: [port[0], port[1], port[2]], vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
     }
     const lines = spokenLines(stepGame(s0, NO_INPUT, DT))
-    expect(lines).toContain('lukeTrustMe') // the timer cue survived the port-hit return
-    expect(lines).toContain('greatShotKidThatWasOneInAMillion') // ...next to the win cue
+    expect(lines).toContain('letGoLuke') // the timer cue survived the port-hit return
+    expect(lines).toContain('greatShotKidThatWasOneInAMillion') // ...next to the win cue (wave 4 speaks)
   })
 
   it('fires alongside a catwalk crash on the SAME frame (obstacle-crash path)', () => {
-    // A synthetic catwalk parked at the cockpit forces the crash branch on this
-    // step, while the timer hits 16. The cue must ride the crash return path too.
-    // sw5-6: "at the cockpit" is TRENCH_EYE_SEAT — the eye is now a height above the
-    // y=0 trench floor, so a catwalk at y=0 would sit on the floor and miss the pilot.
+    // A synthetic catwalk parked at the cockpit forces the crash branch on this step,
+    // while the timer crosses 16 on an ODD wave ("Luke, trust me"). The cue must ride
+    // the crash return path too.
     const trench = enterPhase(initialState(1983), 'trench')
     const s0: GameState = {
       ...trench,
       mode: 'playing',
-      wave: 2,
-      trenchTimer: T_LUKE - 1,
+      wave: ODD_WAVE,
+      trenchTimer: F_AT16 - 0.1,
       trenchObstacles: [{ kind: 'catwalk', pos: [0, TRENCH_EYE_SEAT, -1] }],
     }
     const out = stepGame(s0, NO_INPUT, DT)
@@ -300,11 +330,11 @@ describe('a cue rides every return path — coexists with crash / port-kill even
 describe('trench voice cues are deterministic (AC8 — pure core)', () => {
   it('identical seed + wave replay identical speech cues across a trench run', () => {
     const stream = (seed: number, wave: number): string[] =>
-      collectRun(freshTrench(seed, wave), 30).flatMap((b) => b.lines)
-    const a = stream(2024, 2)
-    const b = stream(2024, 2)
+      collectRun(freshTrench(seed, wave), STEPS).flatMap((b) => b.lines)
+    const a = stream(2024, ODD_WAVE)
+    const b = stream(2024, ODD_WAVE)
     expect(a).toEqual(b)
-    // The scripted even run really did cross both even-set cue edges.
+    // The scripted odd run really did cross both of its cue edges.
     expect(a).toContain('lukeTrustMe')
     expect(a).toContain('youreAllClearKid')
   })

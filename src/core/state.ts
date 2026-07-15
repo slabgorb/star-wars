@@ -203,30 +203,31 @@ export const TIE_SPAWN_DISTANCE = 0x7c00 // 31744 — WSCPU STARTING LOCATIONS d
  * advances the range by $200/tick, but that per-tick delta is NOT pinned to a
  * source-true units/second figure (docs/tie-flight-ai-model.md porting caveat).
  * This is applied as a units/second rate — moveEnemy (sim.ts) steps pos by
- * ENEMY_SPEED × dt — so it is frame-rate independent of TICK_HZ (30). It is tuned
+ * ENEMY_SPEED × dt — so it is frame-rate independent of TICK_HZ. It is tuned
  * to the spec's design target — a playable ~2.5–4 s spawn→near-bound transit across
  * the restored world: (31744 − 2048) / 10000 ≈ 3.0 s. Retune in playtest; the 8-6
  * difficulty ramp still rides this as the wave-1 base. */
 export const ENEMY_SPEED = 10000
-/** Cabinet simulation-tick rate (Hz) — the shared basis for frame-rate-independent
- *  ROM rates ported from the 1983 source, which counts in cabinet ticks/frames
- *  (fireball life `5,u = $40` = 64 ticks; docs/tie-flight-ai-model.md §6). The real
- *  cabinet's rate is self-timed by vector-list length and is NOT pinned by the
- *  disassembly, so this is PROVISIONAL — playtest-tuned, not unit-tested (design
- *  spec §B/§D "PROVISIONAL feel items"). 30 lands the homing fireball's arrival at
- *  ~0.8–1.5 s across the 2,048–31,744 launch range (spec §B "~1–2 s") and its
- *  64-tick life at ~2.1 s. Shared with sw4-1 (its speeds derive from the same
- *  TICK_HZ); define it ONCE here (epic sw4 guardrail). */
-export const TICK_HZ = 30
+/** Cabinet game-frame rate (Hz) — the shared basis for every ROM per-game-frame
+ *  rate ported from the 1983 source, which counts in game frames (fireball life
+ *  `5,u = $40` = 64 frames; docs/tie-flight-ai-model.md §6). The PRIMARY SOURCE pins
+ *  it: WSINT.MAC:147 `LDA #11. ;12.*4.2MS==>50. MS, 20 PER SECOND` — GMTIMR reloads
+ *  11+1 = 12 IRQs per game frame; IRQ = 12.096 MHz / 4096 / 12 = 246.094 Hz; game
+ *  frame = 246.094 / 12 = 20.508 Hz (audit T-007, pinned three ways). The earlier
+ *  guess of 30 ("rate not pinned by the disassembly") ran every ROM-per-frame rate
+ *  1.46× fast — the MACRO-11 source pins it. Drives ENEMY_SHOT_TTL, the homing decay,
+ *  and the trench voice timer; shared with sw4-1 — define it ONCE here (epic sw4/sw7
+ *  guardrail). */
+export const TICK_HZ = 246.094 / 12
 /** Surface tower/turret fireball speed (units/second, straight-line). Space TIE
  *  fireballs no longer use it — they home via the ROM decay law (story sw4-2, spec
  *  §B); surface fire stays straight-line (out of sw4-2's scope). */
 export const ENEMY_SHOT_SPEED = 300
-/** Enemy fireball lifetime: the ROM's 64-tick fireball life (`5,u = $40`,
- *  docs/tie-flight-ai-model.md §6) expressed in seconds via TICK_HZ. A homing space
- *  fireball (story sw4-2) reaches the cockpit well inside this, so the TTL is a
- *  cleanup cap, not the balance lever. PROVISIONAL — derived from the unpinned
- *  TICK_HZ (design spec §B). */
+/** Enemy fireball lifetime: the ROM's 64-game-frame fireball life (`5,u = $40`,
+ *  FRAGUN `LDB #40`, WSGUNS.MAC:150; docs/tie-flight-ai-model.md §6) expressed in
+ *  seconds via the game-frame rate: 64 / 20.508 = 3.12 s (audit G-003). A homing
+ *  space fireball (story sw4-2) reaches the cockpit well inside this, so the TTL is a
+ *  cleanup cap, not the balance lever. */
 export const ENEMY_SHOT_TTL = 64 / TICK_HZ
 /** Seconds between enemy fireballs (whole formation). */
 export const ENEMY_FIRE_INTERVAL = 1
@@ -612,11 +613,12 @@ export interface GameState {
    * on every phase entry (like `phaseKills`). */
   trenchShotsFired: number
   /** The trench voice-line timer (Wave 3, story sw3-4) — the ROM's `word_4B0E`.
-   * An integer tick counter that advances by 1 each trench step and resets to 0
-   * on every phase entry; the iconic voice lines fire when it hits their ROM
-   * thresholds (16/22/24), gated by run parity (see TRENCH_VOICE_CUES in sim.ts).
-   * A per-step tick, not dt-scaled, so the authentic thresholds stay reachable in
-   * the ~4.8s trench (docs/star-wars-1983-source-findings.md, trench voice timer). */
+   * A game-frame accumulator that advances by dt·TICK_HZ each trench step (sw7-1
+   * made it frame-true at 20.508 Hz) and resets to 0 on every phase entry; the
+   * iconic voice lines fire when it CROSSES their ROM thresholds (16/22/24), gated
+   * by 0-based BS.WAV parity (sw7-2; see TRENCH_VOICE_CUES in sim.ts). The thresholds
+   * fire at their authentic 0.78–1.17 s wall-clock times regardless of tick rate
+   * (docs/star-wars-1983-source-findings.md, trench voice timer). */
   trenchTimer: number
   /** Sim time (`t`) the FORCE_BONUS was last awarded, or `null` if it hasn't
    * been this run. Stamped by a clean port kill so the shell can show the

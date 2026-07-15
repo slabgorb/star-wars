@@ -162,20 +162,37 @@ describe('the punch-list (regression pin)', () => {
     return { onlyInRom: p.onlyInRom.length, onlyInPort: p.onlyInPort.length }
   }
 
-  it('TIE -> TIE Fighter', () => {
-    expect(punchList('TIE')).toEqual({ onlyInRom: 1, onlyInPort: 3 })
+  // sw5-3 RE-SEATS these four pins. They used to encode the audit's TIE-family
+  // defect — the port's TIE edges were RE-AUTHORED by heuristic (story 8-10), so
+  // each drifted from what WSOBJ.MAC draws: TIE `{1,3}`, TI1 `{1,0}`, TI2 `{1,0}`,
+  // TI3 `{3,0}`. sw5-3 re-ports all four from `.WL TIE`/`.WL TI1`/`.WL2 TI2`/
+  // `.WL TI3`, so the port now matches the ROM exactly. The independent-oracle
+  // proof of each draw list lives in tests/core/tie-family-rom.test.ts; these pin
+  // the numbers a stakeholder reads off the contact sheet. '✓ edges match' is the
+  // one string the tool will not print unless a real comparison ran (verticesMatch
+  // true + hasDrawList true + zero drift) — assert the TEXT, not just the counts.
+  it('TIE -> TIE Fighter — clean after the re-port (was 1 / 3)', () => {
+    expect(punchList('TIE')).toEqual({ onlyInRom: 0, onlyInPort: 0 })
+    expect(verdict('TIE').text).toBe('✓ edges match')
+    expect(verdict('TIE').drift).toBe(false)
   })
 
-  it('TI1 -> TIE Fragment Left Wing', () => {
-    expect(punchList('TI1')).toEqual({ onlyInRom: 1, onlyInPort: 0 })
+  it('TI1 -> TIE Fragment Left Wing — clean after the re-port (was 1 / 0)', () => {
+    expect(punchList('TI1')).toEqual({ onlyInRom: 0, onlyInPort: 0 })
+    expect(verdict('TI1').text).toBe('✓ edges match')
+    expect(verdict('TI1').drift).toBe(false)
   })
 
-  it('TI2 -> TIE Fragment Right Wing', () => {
-    expect(punchList('TI2')).toEqual({ onlyInRom: 1, onlyInPort: 0 })
+  it('TI2 -> TIE Fragment Right Wing — clean after the re-port (was 1 / 0)', () => {
+    expect(punchList('TI2')).toEqual({ onlyInRom: 0, onlyInPort: 0 })
+    expect(verdict('TI2').text).toBe('✓ edges match')
+    expect(verdict('TI2').drift).toBe(false)
   })
 
-  it('TI3 -> TIE Fragment Cabin', () => {
-    expect(punchList('TI3')).toEqual({ onlyInRom: 3, onlyInPort: 0 })
+  it('TI3 -> TIE Fragment Cabin — clean after the re-port (was 3 / 0)', () => {
+    expect(punchList('TI3')).toEqual({ onlyInRom: 0, onlyInPort: 0 })
+    expect(verdict('TI3').text).toBe('✓ edges match')
+    expect(verdict('TI3').drift).toBe(false)
   })
 
   // sw5-2 RE-SEATS this pin. It used to encode the audit's headline defect —

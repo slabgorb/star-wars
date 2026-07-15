@@ -140,8 +140,13 @@ describe('speech cue — entering the trench (AC2)', () => {
 })
 
 describe('speech cue — the exhaust-port kill (AC2)', () => {
-  it("cues 'Great shot kid...' when the exhaust port is destroyed (clean kill)", () => {
-    const s0 = { ...portKill(enterPhase(initialState(1983), 'trench')), trenchShotsFired: 0 }
+  // sw7-2: Han's line is WAVE-GATED — the ROM speaks it only on human waves {4,6,8,...}
+  // (WSMAIN:1919, the same 0-based GM.WAV gate as the Imperial March), not on every
+  // kill. These fixtures kill the port on wave 4 (a speaking wave) to isolate the
+  // clean/dirty Force-bonus contract; the exhaustive wave map is in
+  // tests/core/wave-parity-gates.test.ts.
+  it("cues 'Great shot kid...' on a speaking wave when the port is destroyed (clean kill)", () => {
+    const s0 = { ...portKill(enterPhase(initialState(1983), 'trench')), wave: 4, trenchShotsFired: 0 }
     const out = stepGame(s0, NO_INPUT, DT)
     expect(out.events).toContainEqual({
       type: 'speech',
@@ -152,7 +157,7 @@ describe('speech cue — the exhaust-port kill (AC2)', () => {
   })
 
   it("cues 'Great shot kid...' on a DIRTY port kill too — the line is the winning shot, not the Force bonus", () => {
-    const s0 = { ...portKill(enterPhase(initialState(1983), 'trench')), trenchShotsFired: 3 }
+    const s0 = { ...portKill(enterPhase(initialState(1983), 'trench')), wave: 4, trenchShotsFired: 3 }
     const out = stepGame(s0, NO_INPUT, DT)
     expect(out.events).toContainEqual({
       type: 'speech',

@@ -1,0 +1,171 @@
+[
+  {
+    "id": "T-001",
+    "class": "STRUCTURAL",
+    "title": "Game logic runs at 20.508 Hz on the cabinet; our loop steps at 60 Hz",
+    "claim": "ROM game frame = GMTIMR reload 11.(decimal) + 1 = 12 IRQs. IRQ = 12.096 MHz / 4096 / 12 = 246.094 Hz (period 4.0635 ms), so one game frame = 12 x 4.0635 = 48.76 ms = 20.508 Hz (the author's own comment: '20 PER SECOND'). Ours drives @arcade/shared/loop createLoop at the hz=60 default -> dt = 1/60 = 16.67 ms, i.e. 60 Hz. The tick rates differ 60 vs 20.508 (2.926x), but stepGame(state, input, dt) (sim.ts:100) integrates ALL motion as pos += vel*dt with vel in units/second, so per-second motion is identical at any tick rate. The difference is float/dt vs integer/IRQ, not a behavioural divergence for continuous motion.",
+    "reasoning": "This is the headline structural fact of the whole timing audit. Because the sim is dt-based and every speed constant is expressed in units/second, the 60 Hz loop reproduces the same per-second trajectories the 20.508 Hz cabinet produces for CONTINUOUS (vel*dt) quantities -- that is a units equivalence, class STRUCTURAL, not a bug. The equivalence holds ONLY for dt-scaled quantities. Two categories break it and are filed separately: per-cabinet-TICK rates converted through the wrong constant (T-007, TICK_HZ=30 not 20.508) and per-STEP counters that are not dt-scaled (T-008, trenchTimer). ours cites main.ts:136 (the createLoop driver, hz defaults to 60 in @arcade/shared/loop); the dt-integration contract is sim.ts:100.",
+    "source": {
+      "file": "WSINT.MAC",
+      "line": 147,
+      "verbatim": "\tLDA #11.\t\t;12.*4.2MS==>50. MS, 20 PER SECOND"
+    },
+    "ours": {
+      "file": "src/main.ts",
+      "line": 136,
+      "verbatim": "const loop = createLoop("
+    },
+    "recommendation": "accept"
+  },
+  {
+    "id": "T-002",
+    "class": "NO_COUNTERPART",
+    "title": "Three IRQ cadences (246.09 / 61.5 / 20.508 Hz) collapse to a single 60 Hz tick",
+    "claim": "The 6809 services ONE 246.094 Hz IRQ (WSINT.MAC IRQ handler) that fans into three cadences. (1) 246.094 Hz -- every IRQ: switch debounce (DEBNCE), pot reads (DOPOTS), coin logic (JSR COINS), watchdog kick (STA WTCHDG), VG buffer swap, colour-cycle counters. (2) 4-IRQ = 61.5 Hz: 'ANDA #03 ;EVERY 16 MILS' (4/246.094 = 16.25 ms) gates the GTIME/TIMER BCD wall clocks. (3) 12-IRQ = 20.508 Hz: the game frame (GMSYNC). Ours has a single fixed 60 Hz loop: input is sampled once per step (input.sample() in main.ts:143), there is no IRQ, no debounce cadence, and no separate wall-clock tick. None of the three ROM cadences has a structural counterpart.",
+    "reasoning": "A browser clone has no coin door, pots, VG hardware or watchdog, so the fast IRQ work is genuinely N/A; the one cadence that DOES govern gameplay -- the 20.508 Hz game frame -- is addressed by T-001 (its per-second effect is reproduced) and T-007/T-008 (where the conversion is wrong). Recorded as NO_COUNTERPART so the cadence-separation architecture is on the ledger; ours is null by definition.",
+    "source": {
+      "file": "WSINT.MAC",
+      "line": 216,
+      "verbatim": "\tANDA \t#03\t\t;EVERY 16 MILS"
+    },
+    "ours": null,
+    "recommendation": "wont_fix"
+  },
+  {
+    "id": "T-003",
+    "class": "STRUCTURAL",
+    "title": "Overload policy is opposite: cabinet DROPS backlog (slows), ours CATCHES UP (fast-forwards)",
+    "claim": "The IRQ INCs GMSYNC once per game frame; the mainline spins in WAITFRAME doing 'LSR GMSYNC' (WSMAIN.MAC:278) then 'BCC WAITFRAME' (:279). LSR HALVES the pending-frame count, so a mainline that fell behind LOSES backlog -- the game runs SLOWER (frames dropped) and never fast-forwards. Ours uses createLoop's fixed-timestep accumulator (@arcade/shared/loop advanceFixedSteps: acc += min(0.25, elapsed); while (acc >= dt) step(dt)), which CATCHES UP by running multiple sub-steps to consume the backlog, clamped at maxFrame = 0.25 s (~15 steps at 60 Hz). Opposite overload policies: slow-down vs fast-forward.",
+    "reasoning": "Both behaviours fall out of the underlying model -- an integer IRQ semaphore that is halved vs a float accumulator that is drained -- so the class is STRUCTURAL. It is worth recording because the observable consequence differs: on the cabinet a stutter yields slow-motion; on ours a stutter yields a burst of catch-up steps (which can, at extreme dt, skip fine-grained collision -- our code guards the worst case with swept tests e.g. sweptCollides). The accumulator loop lives in node_modules and cannot be cited as ours; the citable anchor is our choice to drive the sim through createLoop (main.ts:136).",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 278,
+      "verbatim": "\tLSR GMSYNC\t\t;PROCESS GAME FRAMES IN TIMELY FASHION"
+    },
+    "ours": {
+      "file": "src/main.ts",
+      "line": 136,
+      "verbatim": "const loop = createLoop("
+    },
+    "recommendation": "accept"
+  },
+  {
+    "id": "T-004",
+    "class": "NO_COUNTERPART",
+    "title": "GMSYNC-overflow watchdog crash has no counterpart",
+    "claim": "When the pending-frame count in GMSYNC overflows into bit 7 (V set), the IRQ executes SWI (WSINT.MAC:149-152: 'INC GMSYNC / IFVS ;?MAINLINE CAUGHT UP IN ITSELF? / SWI') -- a deliberate crash to the hardware watchdog once the mainline is hopelessly behind (roughly >64 frames pending). Ours has no watchdog and no crash-on-runaway; the accumulator's maxFrame = 0.25 s clamp silently caps how much backlog is ever consumed instead. No counterpart.",
+    "reasoning": "The ROM treats unbounded backlog as a fault worth crashing on; a browser game cannot and should not SWI. The maxFrame clamp is the analogous safety valve but has different semantics (cap-and-continue vs crash-and-reset), and it lives in node_modules, so ours is null. NO_COUNTERPART / wont_fix.",
+    "source": {
+      "file": "WSINT.MAC",
+      "line": 150,
+      "verbatim": "\tIFVS\t\t\t;?MAINLINE CAUGHT UP IN ITSELF?"
+    },
+    "ours": null,
+    "recommendation": "wont_fix"
+  },
+  {
+    "id": "T-005",
+    "class": "CONFIRMED",
+    "title": "Gameplay phase ORDER matches: space -> ground(surface) -> base(trench) -> next act",
+    "claim": "The ROM act progression, read off the TPHASE dispatch and its transition wiring: BGN -> SP1 (SPACE WAVE 1, :352) -> SP2 (:353) -> S0G (space->ground transition, PHESP2 sets PH$S0G at :1490 'GOTO DETH STAR GROUND') -> S1G -> GD (GROUND PHASE, :358) -> G0B (PHEGD sets PH$G0B at :1686 'BASE TRENCH FOLLOWS GROUND TOWERS') -> G1B -> BS (BASE STAR / trench, :362) -> B0B (repeat) or NXT (:365) -> BGN (next act). Our NEXT_PHASE (sim.ts:823) encodes exactly this gameplay order: space:'surface', surface:'trench', trench:null (the trench loops to the next wave's space via clearRun). The three gameplay phases and their order match.",
+    "reasoning": "Confirming, not just faulting: space -> surface -> trench -> (wave+1) space is the ROM's own act loop. What ours collapses is only the intermediate transition/framing phases (filed as T-006); the ordering of the three phases the player actually flies is faithful. Source anchors on the least-obvious handoff (ground->trench, :1686); the space->ground handoff (:1490) and the act loop (NXT->BGN, :2025) corroborate.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1686,
+      "verbatim": "\tLDA #PH$G0B\t\t;BASE TRENCH FOLLOWS GROUND TOWERS"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 835,
+      "verbatim": "const NEXT_PHASE: Record<Phase, Phase | null> = {"
+    }
+  },
+  {
+    "id": "T-006",
+    "class": "NO_COUNTERPART",
+    "title": "Explicit multi-frame TRANSITION / start / death phases have no phase counterpart",
+    "claim": "TPHASE has ~31 dispatched phases; ours has 3 (Phase = 'space'|'surface'|'trench', state.ts:19) plus 3 lifecycle modes. Beyond the attract/menu group, the ROM interposes explicit, multi-frame TRANSITION phases between gameplay: S0G/S1G (space->ground, :354-355), S0B (space->base, :356), G0B/G1B (ground->base, :359-360), B0B (base repeat, :363), NXT (next act, :365); plus start phases CN1/SG1/SG2/BGN (:347-350) and death/finale phases S0D/G0D/B0D/EGM (:366-369) and DX1/DX2/DX3 (Death Star explosion, :343-345). Each is a TPHASE entry that runs for a span (fly-down animations, wave setup, countdown). Ours has NO intermediate phase: progress() (sim.ts:924) and clearRun() swap phase INSTANTLY inside one step, enterPhase() (sim.ts:963) is atomic, and death is a single gameOver flag. About 24 of the ~31 ROM phases have no phase-level counterpart.",
+    "reasoning": "The gameplay phases and their order are faithful (T-005); what is missing is the ROM's animated interludes and its per-phase start/death staging, which ours folds into instantaneous transitions plus timestamp fields (deathStarDestroyedAt etc.). That is a deliberate structural simplification for a browser clone, not a numeric divergence. Source anchors the space->ground transition phase (:354); the DX1-DX3 explosion phases overlap pair-explosions and the attract/menu phases overlap pair-hud -- filed here only as the phase-machine structure. ours is null (the rule is absent, not mis-valued).",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 354,
+      "verbatim": "\tP. S0G,I\t\t;SPACE TO GROUND TRANSITION"
+    },
+    "ours": null,
+    "recommendation": "accept"
+  },
+  {
+    "id": "T-007",
+    "class": "DIVERGENCE",
+    "title": "TICK_HZ = 30 mis-converts ROM per-tick rates; the game frame is 20.508 Hz",
+    "claim": "Our sim converts ROM per-cabinet-tick quantities to seconds through TICK_HZ = 30 (state.ts:220): homeShots decays fireball position by decay = (7/8)^(dt*TICK_HZ) (sim.ts:1081), and ENEMY_SHOT_TTL = 64/TICK_HZ. But ROM per-tick quantities tick at the GAME FRAME rate, which the primary source pins at 20.508 Hz (WSINT.MAC:147, 'LDA #11.  ;12.*4.2MS==>50. MS, 20 PER SECOND'), NOT 30. So every ROM-per-tick effect runs 30/20.508 = 1.463x too fast: the 64-tick fireball life should be 64/20.508 = 3.12 s but ours is 64/30 = 2.13 s (0.68x), and the 7/8-per-tick homing decay converges 1.46x too quickly. state.ts:214-219 justifies 30 by asserting the rate 'is NOT pinned by the disassembly' -- the MACRO-11 source pins it.",
+    "reasoning": "This is the most consequential timing finding: TICK_HZ is the single shared basis for every ROM per-tick rate ported into the sim, and it is wrong by ~1.46x, silently speeding up fireball homing and shortening fireball life across the whole game. The homeShots STRUCTURE is correct -- (7/8)^(dt*TICK_HZ) is frame-rate independent, so it is right at ANY loop rate -- only the constant is off. Fix: set TICK_HZ to the game-frame rate 20.508 (= 246.094/12); the derived ENEMY_SHOT_TTL and homing decay follow automatically (one-line change, hence size s), then playtest-retune the feel items. The exact fireball-life / homing corrections are pair-guns / pair-tie-ai's to ratify; this finding pins the shared BASIS. Classed DIVERGENCE (we differ, probably wrong) rather than BOOK_WAS_WRONG because the secondary doc supplied no value -- it said 'unpinned' and we guessed 30.",
+    "source": {
+      "file": "WSINT.MAC",
+      "line": 147,
+      "verbatim": "\tLDA #11.\t\t;12.*4.2MS==>50. MS, 20 PER SECOND"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 220,
+      "verbatim": "export const TICK_HZ = 30"
+    },
+    "recommendation": "fix",
+    "size": "s",
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-1"
+  },
+  {
+    "id": "T-008",
+    "class": "DIVERGENCE",
+    "title": "trenchTimer advances per 60 Hz step, not per 20.508 Hz game frame (2.93x too fast)",
+    "claim": "The ROM dispatches each phase's execute handler exactly ONCE per game frame (WSMAIN.MAC:306-314: WAITFRAME clears one GMSYNC tick, then MAIN does 'LDA PHASE ... JSR @A(X)'), so the trench voice timer word_4B0E advances 20.508 counts/second. Ours advances trenchTimer by +1 per stepGame call (sim.ts:609, 'const trenchTimer = state.trenchTimer + 1') -- i.e. per 60 Hz loop step, and NOT dt-scaled -- so it counts 60/second, 2.926x too fast. The thresholds it is tested against (16/22/24, TRENCH_VOICE_CUES sim.ts:914-916) are therefore reached at 16/60 = 0.27 s .. 24/60 = 0.40 s instead of the ROM's 16/20.508 = 0.78 s .. 24/20.508 = 1.17 s: the cues bunch into the first ~0.4 s of the ~4.8 s (2400/500) trench.",
+    "reasoning": "Unlike vel*dt motion (T-001), a per-STEP counter is frame-rate DEPENDENT: run the loop at 30 vs 60 Hz and the cues fire at different wall-clock times, so this is a genuine divergence, not a units difference. state.ts:614-619 chose the per-step form so 'the authentic thresholds stay reachable', but reachable != correctly timed. Fix: advance the trench clock on the game-frame rate -- accumulate dt*20.508, or drive the trench off trenchScrollZ (which IS dt-scaled) rather than a raw step count -- size m because it changes the counter's type/units and must stay consistent with the threshold values. The threshold constants and voice-line semantics are pair-hud / pair-trench's; this finding is only the counter's RATE.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 307,
+      "verbatim": "\tLDA PHASE\t\t;EXECUTE PHASE"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 609,
+      "verbatim": "  const trenchTimer = state.trenchTimer + 1"
+    },
+    "recommendation": "fix",
+    "size": "m",
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-1"
+  },
+  {
+    "id": "T-009",
+    "class": "NO_COUNTERPART",
+    "title": "PH.TIM attract/menu phase timers have no counterpart (and re-confirm 20.508 Hz)",
+    "claim": "The ROM's attract/menu phases run on PH.TIM countdowns decremented once per game frame: instruction & scoring pages load PH.TIM = 0200 = 512 frames = 512/20.508 = 25.0 s (WSMAIN.MAC:688-689), hi-score display and select-death-star load 0100 = 256 frames = 12.5 s, and enter-initials runs to 0280 = 640 frames = 640/20.508 = 31.2 s -- the author's own 'GIVE 'EM ABOUT 30 SECONDS' (WSMAIN.MAC:1190). Ours has no attract-phase timing at all: mode 'attract' idles indefinitely on the spinning wireframe until Start (sim.ts:111-113), with no timed rotation through instruction / scoring / hi-score / select pages. No counterpart.",
+    "reasoning": "Filed under my scope (PH.TIM phase timers; attract/demo flow). Doubles as a THIRD independent corroboration of the 20.508 Hz frame: 640 frames read as '30 seconds' only if a frame is 1/20.508 s. Attract-screen page rotation is cabinet framing (overlaps pair-hud's message flow) and not a gameplay-fidelity gap, so wont_fix; ours is null.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1190,
+      "verbatim": "\tCMPD #0280\t\t;GIVE 'EM ABOUT 30 SECONDS"
+    },
+    "ours": null,
+    "recommendation": "wont_fix"
+  },
+  {
+    "id": "T-010",
+    "class": "STRUCTURAL",
+    "title": "Free-running FRAME counter (integer game-frames) vs our t (float seconds)",
+    "claim": "The ROM keeps a free-running 16-bit FRAME/FRAMEL counter INC'd once per game frame (IFRAME, WSMAIN.MAC:371-379, 'INC FRAME+1') and reads it for cosmetic attract timing (e.g. VWCOIN flashes GAME OVER / INSERT COINS via 'LDA FRAME+1 / ANDA #10'). Ours keeps no integer frame counter; GameState.t (state.ts:536) accumulates dt in SECONDS and drives the equivalent time-based cosmetics (e.g. the attract wireframe spin, forceBonusAwardedAt beats). Same role -- a monotonic clock -- different representation: integer game-frames at 20.508 Hz vs float seconds.",
+    "reasoning": "A direct float/dt vs integer/IRQ representational difference, class STRUCTURAL. Any cosmetic keyed off FRAME (flash rates via bit masks like ANDA #10 = every 16 frames = 0.78 s) ports to ours as a seconds threshold on t; the mask-based sub-frame rates are cosmetic and not pinned, so accept.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 372,
+      "verbatim": "\tINC FRAME+1"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 537,
+      "verbatim": "  t: number"
+    },
+    "recommendation": "accept"
+  }
+]
