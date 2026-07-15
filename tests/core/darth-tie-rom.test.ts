@@ -246,9 +246,15 @@ describe('sw5-2 AC-3 — the 12 restored ROM edges', () => {
     expect(p.has(key(b)), `${key(b)} (its Y-mirror) present`).toBe(true)
   })
 
-  it.each(WINDOW_CHORDS)('restores the front-window chord %s', (chord) => {
-    expect(present().has(key(chord)), `${key(chord)} present`).toBe(true)
-  })
+  // Each chord is wrapped in its own row so `it.each` passes the whole [a,b]
+  // tuple as one argument — an unwrapped `it.each(WINDOW_CHORDS)` would spread
+  // [48,52] into two args (chord === 48) and `key(48)` would throw.
+  it.each(WINDOW_CHORDS.map((chord) => [chord] as const))(
+    'restores the front-window chord %s',
+    (chord) => {
+      expect(present().has(key(chord)), `${key(chord)} present`).toBe(true)
+    },
+  )
 
   it('all twelve are genuinely ROM edges (present in the hand oracle)', () => {
     // Guard the guard: prove the edges this AC names are actually in `.WL RTH`,
