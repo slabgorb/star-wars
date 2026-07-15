@@ -38,12 +38,13 @@
 // ring-closure (the cabinet never closes the 3-point cross-sections).
 // TRENCH's floor squares already closed cleanly; story
 // 8-5 connected them with catwalk rails and added the ring-based EXHAUST_PORT.
-// TIE_FIGHTER was RE-AUTHORED from its own ring structure (story 8-10), clearing
-// the inherited 8-2 heuristic-edge debt; it is closed into ring loops + symmetric
-// struts and guarded by a connectivity test. DARTH_TIE was authored the same way by
-// 8-10, but story sw5-2 RE-PORTED its edges from the ROM draw list `.WL RTH`
-// (WSOBJ.MAC) — so it is no longer authored; it is the ROM's six pen-up sub-bodies
-// (see its own doc comment). TIE_FIGHTER's own re-port is story sw5-3.
+// TIE_FIGHTER and DARTH_TIE both carried story-8-10 heuristic edges until the sw5
+// contact-sheet audit measured them against the ROM. Story sw5-2 RE-PORTED
+// DARTH_TIE's edges from the ROM draw list `.WL RTH` (the ROM's six pen-up
+// sub-bodies), and story sw5-3 RE-PORTED TIE_FIGHTER's — and the TI1/TI2/TI3
+// fragments' — from `.WL TIE`/`.WL TI1`/`.WL2 TI2`/`.WL TI3` (WSOBJ.MAC). So
+// neither TIE is heuristic now; each edge set is the exact one the cabinet strokes
+// (see each model's own doc comment). Vertices were always the ROM's, untouched.
 //
 // PURE data. No DOM, no time, no randomness — safe for the deterministic core.
 
@@ -133,16 +134,20 @@ export const TIE_FIGHTER: Model3D = {
     [-52, 26, -78],
     [-104, 26, 0],
   ],
-  // RE-AUTHORED by structure (story 8-10, revised). The disassembly gives only
-  // vertices, so edges are hand-authored. The TIE is built as its real sub-bodies
-  // — two hexagonal solar panels, two pylons, and a faceted cockpit ball — NOT by
-  // closing deriveRings() rings: those rings are cross-panel quads (4 corners that
-  // share an x and a y/z-radius span BOTH panels), so closing them boxes the ship.
-  // Instead: each panel is an outer rim + inner hub joined by radial spokes; a
-  // hexagonal-prism pylon joins each panel hub to a cockpit cap; the ball is two
-  // cap hexagons (y=±78) and two equator octagon belts (y=±26) chained together.
-  // Guarded by an isSingleComponent connectivity test (the deriveRings ring-closure
-  // guard is wrong for this geometry); kept bilaterally Y-symmetric, no orphans.
+  // Edges RE-PORTED from the ROM draw list `.WL TIE` (WSOBJ.MAC:1352-1367) by
+  // story sw5-3 — the exact set the cabinet strokes, no longer the story-8-10
+  // heuristic (which fabricated the lower cap's 6th-vertex closure [24,29]/[28,29]
+  // and an equator strut [39,47] the ROM never draws, and lacked the ROM's pentagon
+  // closer [24,28]). Vertices are byte-for-byte the ROM's and untouched.
+  //
+  // Grouped below by geometric role (panels / pylons / cockpit ball) for reading;
+  // the ROM strokes the SAME undirected set in a different order, threading the
+  // sub-bodies together with `.BD`/`.LD` pen runs (see tests/core/tie-family-rom.test.ts,
+  // which decodes `.WL TIE` and pins this list edge-for-edge). Two fidelity notes:
+  // the LOWER cockpit cap (y=-78) is the ROM's five-edge pentagon 24-25-26-27-28
+  // (its 6th vertex, 29, is linked by the pylon + cap→belt strut, not the cap loop),
+  // while the UPPER cap (y=78) is the full hexagon; and the equator has SEVEN belt
+  // struts — the ROM omits 39-47. Still one connected component, no orphans.
   edges: [
     // bottom solar panel (y=-208): outer rim, inner hub, radial spokes
     [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0],
@@ -155,14 +160,14 @@ export const TIE_FIGHTER: Model3D = {
     // pylons: panel hub -> cockpit cap (vertically aligned hexagonal prisms)
     [6, 24], [7, 25], [8, 26], [9, 27], [10, 28], [11, 29],
     [18, 30], [19, 31], [20, 32], [21, 33], [22, 34], [23, 35],
-    // cockpit caps (hexagons at y=-78 / y=78)
-    [24, 25], [25, 26], [26, 27], [27, 28], [28, 29], [29, 24],
+    // cockpit caps: lower (y=-78) is the ROM's pentagon 24-28; upper (y=78) a hexagon
+    [24, 25], [25, 26], [26, 27], [27, 28], [24, 28],
     [30, 31], [31, 32], [32, 33], [33, 34], [34, 35], [35, 30],
     // cockpit-ball equator belts (octagons at y=-26 / y=26)
     [36, 37], [37, 38], [38, 39], [39, 40], [40, 41], [41, 42], [42, 43], [43, 36],
     [44, 45], [45, 46], [46, 47], [47, 48], [48, 49], [49, 50], [50, 51], [51, 44],
-    // belt struts: lower belt <-> upper belt (the equator)
-    [36, 44], [37, 45], [38, 46], [39, 47], [40, 48], [41, 49], [42, 50], [43, 51],
+    // belt struts: lower belt <-> upper belt (the equator) — seven; the ROM omits 39-47
+    [36, 44], [37, 45], [38, 46], [40, 48], [41, 49], [42, 50], [43, 51],
     // cap -> belt struts: cockpit cap down/up to the ball equator
     [24, 36], [25, 37], [26, 39], [27, 41], [28, 42], [29, 43],
     [30, 44], [31, 45], [32, 47], [33, 49], [34, 50], [35, 51],
@@ -173,8 +178,10 @@ export const TIE_FIGHTER: Model3D = {
 // labels `TI1`/`TI2`/`TI3`; cabinet source WSOBJ.MAC). A shot TIE breaks into its
 // left wing+strut, its right wing+strut, and its centre cabin. Vertices are the
 // authentic ROM point tables at the same `.S=13.` scale as `TIE_FIGHTER` (each raw
-// coord ×13); edges follow the ROM's shared draw routine (`.WL TI1` / `.WL2 TI2`
-// draw both wings; `.WL TI3` draws the cabin), re-authored here as index pairs.
+// coord ×13); edges are the ROM's shared draw routine (`.WL TI1` / `.WL2 TI2` draw
+// both wings; `.WL TI3` draws the cabin), RE-PORTED as index pairs by story sw5-3 —
+// the exact set the cabinet strokes, including the `.LD` beam stitches the earlier
+// heuristic dropped (the wings' 6-12 rung; the cabin's 0-12 / 12-20 / 6-20).
 //
 // The two wings are the SAME shape on different planes — TI2 is TI1 rigidly turned
 // about the fin axis, (x,y,z) → (x,z,−y) — so they share one edge list. The cabin
@@ -187,8 +194,8 @@ export const TIE_FIGHTER: Model3D = {
 const TIE_WING_FRAG_EDGES: ReadonlyArray<readonly [number, number]> = [
   // small circle on the fin (inner)
   [6, 7], [7, 8], [8, 9], [9, 10], [10, 11], [11, 6],
-  // strut circle
-  [12, 13], [13, 14], [14, 15], [15, 16], [16, 17], [17, 12],
+  // strut circle — the ROM's `.LD 13,…` enters it via the 6-12 stitch (the port dropped it)
+  [6, 12], [12, 13], [13, 14], [14, 15], [15, 16], [16, 17], [17, 12],
   // outer fin hexagon
   [6, 0], [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0],
   // spider lines: outer fin → inner circle → strut
@@ -233,13 +240,16 @@ export const TIE_WING_FRAG_3: Model3D = {
   edges: [
     // strut pentagon
     [0, 1], [1, 2], [2, 3], [3, 4], [4, 0],
-    // strut → body connectors
+    // strut → body connectors — the ROM's `.LD 13,…` enters via the 0-12 stitch
+    [0, 12],
     [12, 13], [13, 14], [14, 22],
     [14, 15], [15, 16], [16, 24],
     [16, 17], [17, 18], [18, 19], [19, 12],
-    // body octagon (aft ball rim)
+    // body octagon (aft ball rim) — the ROM's `.LD 21,…` enters via the 12-20 stitch
+    [12, 20],
     [20, 21], [21, 22], [22, 23], [23, 24], [24, 25], [25, 26], [26, 27], [27, 20],
-    // second strut hexagon
+    // second strut hexagon — the ROM's `.LD 7,…` enters via the 6-20 stitch
+    [20, 6],
     [6, 7], [7, 8], [8, 9], [9, 10], [10, 11], [11, 6],
     // spider lines binding cabin rings together
     [7, 21], [21, 13], [13, 1],
