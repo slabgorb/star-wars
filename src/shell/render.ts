@@ -990,7 +990,9 @@ function drawAttract(
   h: number,
 ): void {
   glowText(ctx, 'STAR WARS', w / 2, h * 0.26, TITLE_TEXT_PX, 'center', GLOW, 28)
-  glowText(ctx, 'PRESS START', w / 2, h * 0.38, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)
+  // sw7-3 H-010: the ROM's start invitation is message STR (TCMES.MAC:549), not
+  // a 'PRESS START' string the cabinet never had.
+  glowText(ctx, 'PULL TRIGGER TO START', w / 2, h * 0.38, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)
 
   drawHighScoreBoard(ctx, highScores, w, h)
 
@@ -1006,18 +1008,21 @@ function drawGameOver(
   h: number,
 ): void {
   glowText(ctx, 'GAME OVER', w / 2, h * 0.24, BANNER_TEXT_PX, 'center', TIE_GLOW, 24)
-  glowText(ctx, `SCORE ${state.score}`, w / 2, h * 0.33, HUD_TEXT_PX, 'center', GLOW, 12)
+  // sw7-3 H-020: the framing screens comma-group the score like the in-run HUD
+  // (VW8DIG, TCMES.MAC:791) — route through the same pure formatScore.
+  glowText(ctx, `SCORE ${formatScore(state.score)}`, w / 2, h * 0.33, HUD_TEXT_PX, 'center', GLOW, 12)
 
   if (state.entry !== null) {
     // SH2-13: the armed initials entry — the typed buffer with a cursor slot
     // while the 3-char convention still has room. The board waits until the
     // commit lands so the screen reads as one question.
-    glowText(ctx, 'ENTER YOUR INITIALS', w / 2, h * 0.42, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)
+    // sw7-3 H-012: message HSZ (TCMES.MAC:603) — you SHOOT the letter grid, not type.
+    glowText(ctx, 'SHOOT YOUR INITIALS', w / 2, h * 0.42, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)
     const buf = state.entry.initials
     glowText(ctx, buf.length < 3 ? `${buf}_` : buf, w / 2, h * 0.52, BANNER_TEXT_PX, 'center', GLOW, 18)
     glowText(ctx, 'TYPE A-Z  BACKSPACE FIXES  START CONFIRMS', w / 2, h * 0.62, HUD_TEXT_PX, 'center', GLOW, 6)
   } else {
-    glowText(ctx, 'PRESS START', w / 2, h * 0.39, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)
+    glowText(ctx, 'PULL TRIGGER TO START', w / 2, h * 0.39, HUD_TEXT_PX, 'center', BOLT_GLOW, 12) // sw7-3 H-010 (STR)
     drawHighScoreBoard(ctx, highScores, w, h)
   }
 
@@ -1031,7 +1036,12 @@ function drawHighScoreBoard(
   w: number,
   h: number,
 ): void {
-  glowText(ctx, 'HIGH SCORES', w / 2, h * 0.5, HUD_TEXT_PX, 'center', GLOW, 10)
+  // sw7-3 H-011: the ROM board title is message RF2 (TCMES.MAC:605), not a
+  // generic 'HIGH SCORES' (which the ROM only uses for an operator service-menu
+  // option). NOTE: the shared VGMSGA font has no apostrophe glyph, so the "'" is
+  // dropped to a blank at draw time — the authentic string is kept here so it
+  // renders correctly once that glyph lands (Delivery Finding: font apostrophe gap).
+  glowText(ctx, "PRINCESS LEIA'S REBEL FORCE", w / 2, h * 0.5, HUD_TEXT_PX, 'center', GLOW, 10)
 
   let y = h * 0.5 + 30
   if (highScores.length === 0) {
@@ -1041,7 +1051,8 @@ function drawHighScoreBoard(
   for (let i = 0; i < highScores.length; i++) {
     const e = highScores[i]
     const rank = String(i + 1).padStart(2, ' ')
-    const pts = String(e.score).padStart(6, ' ')
+    // sw7-3 H-020: comma-group the board score (VW8DIG) like the in-run HUD.
+    const pts = formatScore(e.score)
     glowText(ctx, `${rank}  ${e.name}  ${pts}  WAVE ${e.wave}`, w / 2, y, HUD_TEXT_PX, 'center', GLOW, 6)
     y += 24
   }
