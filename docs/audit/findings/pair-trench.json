@@ -2,20 +2,36 @@
   {
     "id": "B-001",
     "class": "CONFIRMED",
-    "title": "Trench half-width ±$400 matches ROM cross-section",
-    "claim": "The trench walls stand at lateral ±$400 (1024 ROM units). WSBASE's cross-section table TBSBL lists the top corners at Y=±400 and BSVSDW draws each wall at M.Y0=-400/+400. Ours: TRENCH_HALF_W = 0x400 = 1024. Exact match, ROM units 1:1.",
-    "reasoning": "TBSBL is read (Y-offset, Z-offset) per pair by BSVBOT (`LDD 0(U) ;Y OFFSET` / `LDD 2(U) ;Z OFFSET`). The two top rows are at Y=±400 and the four bottom rows at Y=±400/±200 — so the walls (top-to-bottom) live at Y=±400. Position value, frame-rate-invariant, no conversion needed.",
-    "source": { "file": "WSBASE.MAC", "line": 1481, "verbatim": "\t.WORD -400,0\t\t;TOP LEFT PANEL" },
-    "ours": { "file": "src/core/trench-channel.ts", "line": 58, "verbatim": "export const TRENCH_HALF_W = 0x400 // 1024" }
+    "title": "Trench half-width \u00b1$400 matches ROM cross-section",
+    "claim": "The trench walls stand at lateral \u00b1$400 (1024 ROM units). WSBASE's cross-section table TBSBL lists the top corners at Y=\u00b1400 and BSVSDW draws each wall at M.Y0=-400/+400. Ours: TRENCH_HALF_W = 0x400 = 1024. Exact match, ROM units 1:1.",
+    "reasoning": "TBSBL is read (Y-offset, Z-offset) per pair by BSVBOT (`LDD 0(U) ;Y OFFSET` / `LDD 2(U) ;Z OFFSET`). The two top rows are at Y=\u00b1400 and the four bottom rows at Y=\u00b1400/\u00b1200 \u2014 so the walls (top-to-bottom) live at Y=\u00b1400. Position value, frame-rate-invariant, no conversion needed.",
+    "source": {
+      "file": "WSBASE.MAC",
+      "line": 1481,
+      "verbatim": "\t.WORD -400,0\t\t;TOP LEFT PANEL"
+    },
+    "ours": {
+      "file": "src/core/trench-channel.ts",
+      "line": 58,
+      "verbatim": "export const TRENCH_HALF_W = 0x400 // 1024"
+    }
   },
   {
     "id": "B-002",
     "class": "CONFIRMED",
     "title": "Trench wall height/depth $1000 matches ROM",
     "claim": "The trench is $1000 (4096 ROM units) deep: TBSBL's bottom lines sit at Z=-1000 below its Z=0 top rails, and BSVSDW clamps a wall's vertical run to #-1000 (\";LIMIT TO BOTTOM\"). Ours: TRENCH_WALL_H = 0x1000 = 4096. Exact match, ROM units 1:1.",
-    "reasoning": "Two independent ROM corroborations: TBSBL top rows Z=0, bottom rows Z=-1000 (span $1000); and BSVSDW's `LDD #-1000 ;LIMIT TO BOTTOM` / `LDD #-1000 ;BOTTOM EDGE`. Our floor-at-0 / top-at-+4096 frame is the ROM's frame with the origin slid to the floor — relative depth is identical.",
-    "source": { "file": "WSBASE.MAC", "line": 1643, "verbatim": "\tLDD #-1000\t\t;LIMIT TO BOTTOM" },
-    "ours": { "file": "src/core/trench-channel.ts", "line": 62, "verbatim": "export const TRENCH_WALL_H = 0x1000 // 4096" }
+    "reasoning": "Two independent ROM corroborations: TBSBL top rows Z=0, bottom rows Z=-1000 (span $1000); and BSVSDW's `LDD #-1000 ;LIMIT TO BOTTOM` / `LDD #-1000 ;BOTTOM EDGE`. Our floor-at-0 / top-at-+4096 frame is the ROM's frame with the origin slid to the floor \u2014 relative depth is identical.",
+    "source": {
+      "file": "WSBASE.MAC",
+      "line": 1643,
+      "verbatim": "\tLDD #-1000\t\t;LIMIT TO BOTTOM"
+    },
+    "ours": {
+      "file": "src/core/trench-channel.ts",
+      "line": 62,
+      "verbatim": "export const TRENCH_WALL_H = 0x1000 // 4096"
+    }
   },
   {
     "id": "B-003",
@@ -23,99 +39,189 @@
     "title": "Trench far-cull distance $7000 matches ROM",
     "claim": "The trench stops drawing/culling at $7000 (28672 ROM units) ahead: BSVBOT/BSVFAR cap the drawn depth at #7000, BSVSDW exits `SUBD #7000 ... B EXIT IF BEYOND MAX RANGE`, and BSVPORT shows the port only when `SUBD #7000 IFLE ;?CLOSE ENUF TO SEE?`. Ours: TRENCH_FAR = 0x7000 = 28672. Exact match.",
     "reasoning": "The #7000 far plane recurs in every trench draw routine (BSVBOT :1420, BSVSDW :1662, BSVPORT :1748). Position value, frame-invariant.",
-    "source": { "file": "WSBASE.MAC", "line": 1662, "verbatim": "\tSUBD #7000\t\t;CHECK AGAINST NORMAL END TOO" },
-    "ours": { "file": "src/core/trench-channel.ts", "line": 72, "verbatim": "export const TRENCH_FAR = 0x7000 // 28672" }
+    "source": {
+      "file": "WSBASE.MAC",
+      "line": 1662,
+      "verbatim": "\tSUBD #7000\t\t;CHECK AGAINST NORMAL END TOO"
+    },
+    "ours": {
+      "file": "src/core/trench-channel.ts",
+      "line": 72,
+      "verbatim": "export const TRENCH_FAR = 0x7000 // 28672"
+    }
   },
   {
     "id": "B-004",
     "class": "CONFIRMED",
     "title": "Rib spacing $800 = the ROM SHORT wedge (LONG $1000 variance noted)",
-    "claim": "The ROM lays the trench in WEDGES: a SHORT wedge is $800 (2048) long, a LONG wedge $1000 (4096) — DOFAR/NWFAR `LDD #800` / `LDD #1000`. Wall vertical lines are drawn at each wedge boundary (BSVSDW), so the base rib pitch is $800. Ours: RIB_Z = 0x800 = 2048 (fixed). The base unit matches exactly.",
-    "reasoning": "NWFAR advances WG.FRL by $800 for a SHORT wedge and $1000 for a LONG one; BSVSDW steps M.X0 by the same per-wedge length. We use a fixed $800 pitch, so we render every wedge as SHORT — a minor simplification (the ROM interleaves $1000 LONG wedges), but the base rib pitch is the ROM's own SHORT-wedge $800, not a derived guess.",
-    "source": { "file": "WSBASE.MAC", "line": 1125, "verbatim": "\tLDD #800" },
-    "ours": { "file": "src/core/trench-channel.ts", "line": 67, "verbatim": "export const RIB_Z = 0x800 // 2048" }
+    "claim": "The ROM lays the trench in WEDGES: a SHORT wedge is $800 (2048) long, a LONG wedge $1000 (4096) \u2014 DOFAR/NWFAR `LDD #800` / `LDD #1000`. Wall vertical lines are drawn at each wedge boundary (BSVSDW), so the base rib pitch is $800. Ours: RIB_Z = 0x800 = 2048 (fixed). The base unit matches exactly.",
+    "reasoning": "NWFAR advances WG.FRL by $800 for a SHORT wedge and $1000 for a LONG one; BSVSDW steps M.X0 by the same per-wedge length. We use a fixed $800 pitch, so we render every wedge as SHORT \u2014 a minor simplification (the ROM interleaves $1000 LONG wedges), but the base rib pitch is the ROM's own SHORT-wedge $800, not a derived guess.",
+    "source": {
+      "file": "WSBASE.MAC",
+      "line": 1125,
+      "verbatim": "\tLDD #800"
+    },
+    "ours": {
+      "file": "src/core/trench-channel.ts",
+      "line": 67,
+      "verbatim": "export const RIB_Z = 0x800 // 2048"
+    }
   },
   {
     "id": "B-005",
     "class": "CONFIRMED",
-    "title": "Lateral viewpoint clamp ±$1FF matches ROM — pilot IS movable",
-    "claim": "S1MVBS clamps the pilot's lateral position M$TY to ±$1FF (±511 ROM units) inside the ±$400 walls. Ours: TRENCH_VIEW_HALF_W = 0x1ff = 511. Exact match. This refutes the prior audit's 'our cockpit is immovable [0,0,0]' claim — since sw3-2/sw5-6 the trench viewpoint (trenchView) is pilotable both laterally and vertically, exactly as the ROM allows.",
-    "reasoning": "S1MVBS: `CMPD #1FF / BLE / LDD #1FF` and `CMPD #-1FF / BGE / LDD #-1FF`. ±511 inside ±1024 walls leaves 513 units of side clearance, so a centered pilot never touches a wall — consistent with the ROM's wall furniture being shoot-only. The 'immovable cockpit' assertion in secondary docs is stale.",
-    "source": { "file": "WSMAIN.MAC", "line": 2674, "verbatim": "\tCMPD #1FF" },
-    "ours": { "file": "src/core/trench-channel.ts", "line": 97, "verbatim": "export const TRENCH_VIEW_HALF_W = 0x1ff // 511" }
+    "title": "Lateral viewpoint clamp \u00b1$1FF matches ROM \u2014 pilot IS movable",
+    "claim": "S1MVBS clamps the pilot's lateral position M$TY to \u00b1$1FF (\u00b1511 ROM units) inside the \u00b1$400 walls. Ours: TRENCH_VIEW_HALF_W = 0x1ff = 511. Exact match. This refutes the prior audit's 'our cockpit is immovable [0,0,0]' claim \u2014 since sw3-2/sw5-6 the trench viewpoint (trenchView) is pilotable both laterally and vertically, exactly as the ROM allows.",
+    "reasoning": "S1MVBS: `CMPD #1FF / BLE / LDD #1FF` and `CMPD #-1FF / BGE / LDD #-1FF`. \u00b1511 inside \u00b11024 walls leaves 513 units of side clearance, so a centered pilot never touches a wall \u2014 consistent with the ROM's wall furniture being shoot-only. The 'immovable cockpit' assertion in secondary docs is stale.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 2674,
+      "verbatim": "\tCMPD #1FF"
+    },
+    "ours": {
+      "file": "src/core/trench-channel.ts",
+      "line": 97,
+      "verbatim": "export const TRENCH_VIEW_HALF_W = 0x1ff // 511"
+    }
   },
   {
     "id": "B-006",
     "class": "CONFIRMED",
-    "title": "Vertical viewpoint band ≈ ROM S1MVBS clamp (off-by-one; ours cites the wrong line)",
-    "claim": "S1MVBS clamps the pilot's height M$TZ to [-$DFF, -$101] — i.e. height-above-floor [$1000-$DFF, $1000-$101] = [$201, $EFF] = [513, 3839]. Ours: TRENCH_EYE_MIN = 512, TRENCH_EYE_MAX = 3840. Materially identical (off by 1 unit in 4096).",
-    "reasoning": "The real in-trench clamp is S1MVBS: `CMPD #-101 / BLE / LDD #-101` (top) and `CMPD #-0DFF / BGE / LDD #-0DFF` (bottom). Our constants cite SMVG1B's `-0E00+100` instead — but that line is the trench-ENTRY DROP, not the flight clamp (it is correctly the source for TRENCH_EYE_SEAT). Values agree to ±1, so CONFIRMED; recommend re-pointing the source comment at S1MVBS -$DFF/-$101 for accuracy.",
-    "source": { "file": "WSMAIN.MAC", "line": 2710, "verbatim": "\tCMPD #-0DFF" },
-    "ours": { "file": "src/core/trench-channel.ts", "line": 101, "verbatim": "export const TRENCH_EYE_MIN = TRENCH_WALL_H - 0xe00 // 512" }
+    "title": "Vertical viewpoint band \u2248 ROM S1MVBS clamp (off-by-one; ours cites the wrong line)",
+    "claim": "S1MVBS clamps the pilot's height M$TZ to [-$DFF, -$101] \u2014 i.e. height-above-floor [$1000-$DFF, $1000-$101] = [$201, $EFF] = [513, 3839]. Ours: TRENCH_EYE_MIN = 512, TRENCH_EYE_MAX = 3840. Materially identical (off by 1 unit in 4096).",
+    "reasoning": "The real in-trench clamp is S1MVBS: `CMPD #-101 / BLE / LDD #-101` (top) and `CMPD #-0DFF / BGE / LDD #-0DFF` (bottom). Our constants cite SMVG1B's `-0E00+100` instead \u2014 but that line is the trench-ENTRY DROP, not the flight clamp (it is correctly the source for TRENCH_EYE_SEAT). Values agree to \u00b11, so CONFIRMED; recommend re-pointing the source comment at S1MVBS -$DFF/-$101 for accuracy.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 2710,
+      "verbatim": "\tCMPD #-0DFF"
+    },
+    "ours": {
+      "file": "src/core/trench-channel.ts",
+      "line": 101,
+      "verbatim": "export const TRENCH_EYE_MIN = TRENCH_WALL_H - 0xe00 // 512"
+    }
   },
   {
     "id": "B-007",
     "class": "CONFIRMED",
-    "title": "Trench entry seat height -$D00 → 768 above floor matches ROM",
-    "claim": "On entering the trench, SMVG1B drops the pilot until M$TZ ≤ -$E00+$100 = -$D00 — 'JUST ABOVE BOTTOM OF TRENCH' — i.e. height-above-floor $1000-$D00 = $300 = 768. Ours: TRENCH_EYE_SEAT = $1000 - ($E00-$100) = 768. Exact match: the pilot enters riding LOW and must climb to see over things.",
+    "title": "Trench entry seat height -$D00 \u2192 768 above floor matches ROM",
+    "claim": "On entering the trench, SMVG1B drops the pilot until M$TZ \u2264 -$E00+$100 = -$D00 \u2014 'JUST ABOVE BOTTOM OF TRENCH' \u2014 i.e. height-above-floor $1000-$D00 = $300 = 768. Ours: TRENCH_EYE_SEAT = $1000 - ($E00-$100) = 768. Exact match: the pilot enters riding LOW and must climb to see over things.",
     "reasoning": "SMVG1B: `CMPD #-0E00+100 ;JUST ABOVE BOTTOM OF TRENCH / IFGT / SUBD #100 / STD M$TZ+M.S1 ;DROP PLAYER INTO TRENCH`. Position value, frame-invariant.",
-    "source": { "file": "WSMAIN.MAC", "line": 2617, "verbatim": "\tCMPD #-0E00+100\t\t;JUST ABOVE BOTTOM OF TRENCH" },
-    "ours": { "file": "src/core/trench-channel.ts", "line": 107, "verbatim": "export const TRENCH_EYE_SEAT = TRENCH_WALL_H - (0xe00 - 0x100) // 768" }
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 2617,
+      "verbatim": "\tCMPD #-0E00+100\t\t;JUST ABOVE BOTTOM OF TRENCH"
+    },
+    "ours": {
+      "file": "src/core/trench-channel.ts",
+      "line": 107,
+      "verbatim": "export const TRENCH_EYE_SEAT = TRENCH_WALL_H - (0xe00 - 0x100) // 768"
+    }
   },
   {
     "id": "B-008",
     "class": "DIVERGENCE",
-    "title": "Trench forward/scroll speed 31× too slow (500 vs ~15,750 u/s)",
-    "claim": "ROM trench forward speed = $300 = 768 units per GAME-FRAME (PHIBS `LDD #300 ;INITIAL PLAYER SPEED`, set at trench entry and integrated once per game-frame by S1MVBS `ADDD M$TX+M.S1`). At the 20.508 Hz game-frame rate that is 768 × 20.508 = 15,750 units/sec. Ours scrolls the ENTIRE trench (ribs, port, obstacles) at TRENCH_SCROLL_SPEED = 500 units/sec — 15750/500 = 31.5× too slow — inside a channel whose geometry (RIB_Z 2048, TRENCH_FAR 28672) is 1:1 ROM units.",
+    "title": "Trench forward/scroll speed 31\u00d7 too slow (500 vs ~15,750 u/s)",
+    "claim": "ROM trench forward speed = $300 = 768 units per GAME-FRAME (PHIBS `LDD #300 ;INITIAL PLAYER SPEED`, set at trench entry and integrated once per game-frame by S1MVBS `ADDD M$TX+M.S1`). At the 20.508 Hz game-frame rate that is 768 \u00d7 20.508 = 15,750 units/sec. Ours scrolls the ENTIRE trench (ribs, port, obstacles) at TRENCH_SCROLL_SPEED = 500 units/sec \u2014 15750/500 = 31.5\u00d7 too slow \u2014 inside a channel whose geometry (RIB_Z 2048, TRENCH_FAR 28672) is 1:1 ROM units.",
     "reasoning": "M$VX is set to $300 at PHIBS and is never rewritten inside the trench (S1MVBS reads but never stores it), so forward speed is a constant $300/frame. Because our trench geometry is confirmed 1:1 ROM units (B-001..B-004), the motion through it must also be ROM-scale; at 500 u/s a single 2048-unit rib takes 4.1 s to pass (ROM: 2048/15750 = 0.13 s). Note this is entangled with the compressed port distance (B-009): raising the speed to 15,750 WITHOUT lengthening the trench would flash it past in a fraction of a second, so the fix is speed + length together.",
-    "source": { "file": "WSMAIN.MAC", "line": 1834, "verbatim": "\tLDD #300\t\t;INITIAL PLAYER SPEED" },
-    "ours": { "file": "src/core/state.ts", "line": 401, "verbatim": "export const TRENCH_SCROLL_SPEED = 500" },
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1834,
+      "verbatim": "\tLDD #300\t\t;INITIAL PLAYER SPEED"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 401,
+      "verbatim": "export const TRENCH_SCROLL_SPEED = 500"
+    },
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "verdict": "CONFIRMED"
   },
   {
     "id": "B-009",
     "class": "DIVERGENCE",
     "title": "No trench length: one fixed 2400-unit port vs ROM's variable wedge chain",
-    "claim": "The ROM trench has a real LENGTH: NWBASE/NWFAR/DOFAR lay a chain of $800/$1000 wedges until a PORT or END wedge, recording the port at BS.PLC and the end wall at BS.ELC as the chain builds. Length is the sum of the pie's wedge lengths (a full pie is 16 wedges → on the order of $8000–$10000+ units). Ours has no length at all: a single exhaustPort spawns at a fixed -EXHAUST_PORT_DISTANCE = -2400 and scrolls in; there is no channel body, no end wall, and the distance-to-port is a constant.",
+    "claim": "The ROM trench has a real LENGTH: NWBASE/NWFAR/DOFAR lay a chain of $800/$1000 wedges until a PORT or END wedge, recording the port at BS.PLC and the end wall at BS.ELC as the chain builds. Length is the sum of the pie's wedge lengths (a full pie is 16 wedges \u2192 on the order of $8000\u2013$10000+ units). Ours has no length at all: a single exhaustPort spawns at a fixed -EXHAUST_PORT_DISTANCE = -2400 and scrolls in; there is no channel body, no end wall, and the distance-to-port is a constant.",
     "reasoning": "The port location is dynamic in the ROM (`STD BS.PLC ;LOCATION OF THE PORT`, set by IWEDGE when the PORT wedge is reached); the end-of-trench decision reads BS.ELC (`SUBD M$TX+M.S1 / SUBD #0800`). Our 2400 is ~1/4 of even one short-wedge pie and bears no relation to where a PORT wedge would fall. Position/length values are frame-invariant, so this is a genuine structural shortfall, not a unit artifact. Entangled with B-008 (speed) and B-010 (chain content).",
-    "source": { "file": "WSBASE.MAC", "line": 1156, "verbatim": "\tCMPB #TYP$PORT" },
-    "ours": { "file": "src/core/sim.ts", "line": 1018, "verbatim": "  return { pos: [0, 0, -EXHAUST_PORT_DISTANCE] }" },
+    "source": {
+      "file": "WSBASE.MAC",
+      "line": 1156,
+      "verbatim": "\tCMPB #TYP$PORT"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 1018,
+      "verbatim": "  return { pos: [0, 0, -EXHAUST_PORT_DISTANCE] }"
+    },
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "verdict": "CONFIRMED",
+    "refutation_corrections": [
+      "The length ESTIMATES are approximate, not pinned: 'a full pie is 16 wedges -> on the order of $8000-$10000+ units' and 'our 2400 is ~1/4 of even one short-wedge pie' are not certified constants. The $8000 in DOFAR ('?WILL ALL OF NEW WEDGES FIT INTO 8000?', WSBASE.MAC:1111) is a streaming look-ahead WINDOW governing how many wedges are generated ahead of the player, not the certified total trench length. The structural divergence (variable data-driven wedge chain with dynamic BS.PLC port + BS.ELC end wall vs a lone fixed 2400 port) stands independent of the exact length figure."
+    ]
   },
   {
     "id": "B-010",
     "class": "DIVERGENCE",
     "title": "Wall-content model can't express the ROM wedge/pie panel grid",
-    "claim": "The ROM builds trench content from a 2-bit-per-slot PANEL GRID: each wedge is a 3-byte record (WG$TYP, WG$PNL left-wall descriptor, WG$PNR right-wall descriptor); each descriptor byte encodes 4 stacked vertical wall slots, each a 2-bit type — 0=blank, 1=decorative PANEL (TD$WPN), 2=force-field/CATWALK (TD$WFF), 3=GUN (TD$WGA). 49 named wedge groups (TWDG01..TWDG99) are chained into 11 pies (TPIE) + one random pie. Ours: an 8-entry hand-authored TRENCH_OBSTACLE_STATIONS list of {turret|square|catwalk} + uniform rectangles in trenchWallDetail. Our structure cannot represent per-wall 4-slot columns at any constant setting.",
-    "reasoning": "Proven by WSPANL's draw loop: `ANDA #3 / CMPA PN.DES` selects by 2-bit type and `LSRA / LSRA / EQEND ;LOOP TO NEXT PANEL UP` walks exactly 4 slots up one wall (M.Y0=±400). Concrete example — TWDG92 'DIVIDER WITH CATWALK AT TOP' emits `SHORT 2,3,3,3 2,3,3,3`: top slot = force-field (catwalk), lower three = guns, on both walls. (The LONG/SHORT packing macro as transcribed reads `.A1*4+.A2*4+.A3*4+.A4`, which does NOT obviously produce a 4×2-bit byte; the 4-slot semantics are certain from the WSPANL extraction loop, but the exact literal packing is left un-decoded rather than guessed.) This is a rewrite, not a constant tweak — our trench-obstacles.ts already admits (its own comments) the ROM structure was never decoded.",
-    "source": { "file": "WSBASE.MAC", "line": 880, "verbatim": "\tSHORT\t2,3,3,3 2,3,3,3" },
-    "ours": { "file": "src/core/trench-obstacles.ts", "line": 128, "verbatim": "export const TRENCH_OBSTACLE_STATIONS: readonly TrenchObstacle[] = [" },
+    "claim": "The ROM builds trench content from a 2-bit-per-slot PANEL GRID: each wedge is a 3-byte record (WG$TYP, WG$PNL left-wall descriptor, WG$PNR right-wall descriptor); each descriptor byte encodes 4 stacked vertical wall slots, each a 2-bit type \u2014 0=blank, 1=decorative PANEL (TD$WPN), 2=force-field/CATWALK (TD$WFF), 3=GUN (TD$WGA). 49 named wedge groups (TWDG01..TWDG99) are chained into 11 pies (TPIE) + one random pie. Ours: an 8-entry hand-authored TRENCH_OBSTACLE_STATIONS list of {turret|square|catwalk} + uniform rectangles in trenchWallDetail. Our structure cannot represent per-wall 4-slot columns at any constant setting.",
+    "reasoning": "Proven by WSPANL's draw loop: `ANDA #3 / CMPA PN.DES` selects by 2-bit type and `LSRA / LSRA / EQEND ;LOOP TO NEXT PANEL UP` walks exactly 4 slots up one wall (M.Y0=\u00b1400). Concrete example \u2014 TWDG92 'DIVIDER WITH CATWALK AT TOP' emits `SHORT 2,3,3,3 2,3,3,3`: top slot = force-field (catwalk), lower three = guns, on both walls. (The LONG/SHORT packing macro as transcribed reads `.A1*4+.A2*4+.A3*4+.A4`, which does NOT obviously produce a 4\u00d72-bit byte; the 4-slot semantics are certain from the WSPANL extraction loop, but the exact literal packing is left un-decoded rather than guessed.) This is a rewrite, not a constant tweak \u2014 our trench-obstacles.ts already admits (its own comments) the ROM structure was never decoded.",
+    "source": {
+      "file": "WSBASE.MAC",
+      "line": 880,
+      "verbatim": "\tSHORT\t2,3,3,3 2,3,3,3"
+    },
+    "ours": {
+      "file": "src/core/trench-obstacles.ts",
+      "line": 128,
+      "verbatim": "export const TRENCH_OBSTACLE_STATIONS: readonly TrenchObstacle[] = ["
+    },
     "recommendation": "fix",
-    "size": "l"
+    "size": "l",
+    "verdict": "CONFIRMED",
+    "refutation_corrections": "(1) The finding says '49 named wedge groups (TWDG01..TWDG99)'; the actual count is 53 (TWDG01-37, 41-45, 53-55, 92-99). (2) The finding's key hedge \u2014 that the packing macro 'does NOT obviously produce a 4x2-bit byte' and was 'left un-decoded rather than guessed' \u2014 is now RESOLVED: under MACRO-11 left-to-right evaluation it decodes cleanly to A1*64+A2*16+A3*4+A4, a proper 4x2-bit byte with A1=top, A4=bottom (verified by the CATWALK-AT-TOP/BOTTOM comments). The 4-slot semantics are no longer merely 'certain from the WSPANL loop' \u2014 the literal encoding is now fully decoded. (3) '11 pies (TPIE) + one random pie' is exact: TPIE = PIE1..PIE11 (WSBASE:176-178), PIEXX = RANDOM (:162). Cluster note: B-012 is a specific instance of THIS model gap (the catwalk is force-field panel type 2 inside this same grid), and one rewrite \u2014 porting the 4x2-bit panel grid \u2014 subsumes both; they are distinct observable claims (encoding vs collision behaviour), not the same defect filed twice."
   },
   {
     "id": "B-011",
     "class": "DIVERGENCE",
     "title": "Early-wave trenches are FIXED in the ROM; ours randomizes every run",
-    "claim": "NWBASE picks the trench layout by base-star wave: `LDB BS.WAV / LSLB / LDX #TPIE / ABX / CMPX #TPIEZ / IFHS ;?PAST END OF TABLE? / LDU #RPIE ;THEN DO RANDOM PIE / ELSE LDU (X) ;START OF PIE`. TPIE holds 11 predefined pies (PIE1..PIE11), so waves with BS.WAV 0..10 fly a FIXED, run-identical trench; only BS.WAV ≥ 11 uses the runtime random pie (GNBASE). Ours: spawnTrenchObstacles reseeds and re-picks the tail on EVERY run regardless of wave, so no trench is ever the fixed authored layout.",
-    "reasoning": "Our code's 'fixed-head + picked-tail' model (verified against GNBASE — it does copy a PIEXX skeleton then fill tail slots via `LDB P.RND1 / MUL` from TWDGXX) is the RIGHT mechanism for the RANDOM pie, but wrongly applied to ALL waves. The ROM's first eleven base runs are deterministic hand-authored pies; we randomize them.",
-    "source": { "file": "WSBASE.MAC", "line": 1033, "verbatim": "\tLDU #RPIE\t\t;THEN DO RANDOM PIE" },
-    "ours": { "file": "src/core/trench-obstacles.ts", "line": 176, "verbatim": "    const kind = i < TRENCH_HEAD_COUNT ? o.kind : TRENCH_TAIL_POOL[nextInt(gen, TRENCH_TAIL_POOL.length)]" },
+    "claim": "NWBASE picks the trench layout by base-star wave: `LDB BS.WAV / LSLB / LDX #TPIE / ABX / CMPX #TPIEZ / IFHS ;?PAST END OF TABLE? / LDU #RPIE ;THEN DO RANDOM PIE / ELSE LDU (X) ;START OF PIE`. TPIE holds 11 predefined pies (PIE1..PIE11), so waves with BS.WAV 0..10 fly a FIXED, run-identical trench; only BS.WAV \u2265 11 uses the runtime random pie (GNBASE). Ours: spawnTrenchObstacles reseeds and re-picks the tail on EVERY run regardless of wave, so no trench is ever the fixed authored layout.",
+    "reasoning": "Our code's 'fixed-head + picked-tail' model (verified against GNBASE \u2014 it does copy a PIEXX skeleton then fill tail slots via `LDB P.RND1 / MUL` from TWDGXX) is the RIGHT mechanism for the RANDOM pie, but wrongly applied to ALL waves. The ROM's first eleven base runs are deterministic hand-authored pies; we randomize them.",
+    "source": {
+      "file": "WSBASE.MAC",
+      "line": 1033,
+      "verbatim": "\tLDU #RPIE\t\t;THEN DO RANDOM PIE"
+    },
+    "ours": {
+      "file": "src/core/trench-obstacles.ts",
+      "line": 176,
+      "verbatim": "    const kind = i < TRENCH_HEAD_COUNT ? o.kind : TRENCH_TAIL_POOL[nextInt(gen, TRENCH_TAIL_POOL.length)]"
+    },
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "verdict": "CONFIRMED"
   },
   {
     "id": "B-012",
     "class": "DIVERGENCE",
     "title": "Catwalk is a wall-mounted force field in the ROM, not a channel-spanning bar",
-    "claim": "The ROM 'catwalk' is a wall FORCE FIELD (TD$WFF, panel type 2) at ONE of four vertical wall slots (Y=±400), not a bar spanning the open channel. WSPANL's collision fires only when the pilot is on that wall's SIDE (`LDD M$TY+M.U1 ;THEN CHECK LEFT/RIGHT / IFLE ;?ON LEFT SIDE?`), the field is within a vertical band above him, AND he is within the field's first $400 of depth — then it GLOWS the ship (BG1GLW) + plays the crash sound (AUDCR) + rolls it (S.ROL). Ours: a single catwalk at fixed height CATWALK_Y=888 spans the whole width and hits anyone within CATWALK_HIT_RADIUS, instantly costing a shield.",
-    "reasoning": "Because the ROM hazard is side-gated (M$TY sign) and slotted to a discrete height, a centered pilot (±511 inside ±1024 walls) can steer clear of it laterally; our full-width bar can only be dodged by diving. The immediate WSPANL hit is a graze (glow + roll), not a hard `lives-1` — the shield accounting rides WSGLOW (score-shields scope). Reconciling requires porting the wall-slot panel grid (B-010), so this is a model rewrite, not a constant.",
-    "source": { "file": "WSPANL.MAC", "line": 199, "verbatim": "\tIFLE\t\t\t;?ON LEFT SIDE?" },
-    "ours": { "file": "src/core/sim.ts", "line": 660, "verbatim": "      if (collides(pos, trenchView, CATWALK_HIT_RADIUS)) {" },
+    "claim": "The ROM 'catwalk' is a wall FORCE FIELD (TD$WFF, panel type 2) at ONE of four vertical wall slots (Y=\u00b1400), not a bar spanning the open channel. WSPANL's collision fires only when the pilot is on that wall's SIDE (`LDD M$TY+M.U1 ;THEN CHECK LEFT/RIGHT / IFLE ;?ON LEFT SIDE?`), the field is within a vertical band above him, AND he is within the field's first $400 of depth \u2014 then it GLOWS the ship (BG1GLW) + plays the crash sound (AUDCR) + rolls it (S.ROL). Ours: a single catwalk at fixed height CATWALK_Y=888 spans the whole width and hits anyone within CATWALK_HIT_RADIUS, instantly costing a shield.",
+    "reasoning": "Because the ROM hazard is side-gated (M$TY sign) and slotted to a discrete height, a centered pilot (\u00b1511 inside \u00b11024 walls) can steer clear of it laterally; our full-width bar can only be dodged by diving. The immediate WSPANL hit is a graze (glow + roll), not a hard `lives-1` \u2014 the shield accounting rides WSGLOW (score-shields scope). Reconciling requires porting the wall-slot panel grid (B-010), so this is a model rewrite, not a constant.",
+    "source": {
+      "file": "WSPANL.MAC",
+      "line": 199,
+      "verbatim": "\tIFLE\t\t\t;?ON LEFT SIDE?"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 660,
+      "verbatim": "      if (collides(pos, trenchView, CATWALK_HIT_RADIUS)) {"
+    },
     "recommendation": "fix",
-    "size": "l"
+    "size": "l",
+    "verdict": "CONFIRMED",
+    "refutation_corrections": "Overlap note (not a defect): B-012 and B-010 describe the SAME wedge/panel grid from two angles \u2014 B-010 the encoding, B-012 one panel type's collision behaviour. The finding itself states 'reconciling requires porting the wall-slot panel grid (B-010)', so a single rewrite fixes both. Distinct claims, both TRUE; not a duplicate filing."
   },
   {
     "id": "B-013",
@@ -123,44 +229,80 @@
     "title": "Exhaust-port resolve window $800 matches ROM end-wall gate",
     "claim": "The ROM decides hit-or-miss when the trench end wall closes to within $800 (2048 units): PHEBS `LDD BS.ELC / SUBD M$TX+M.S1 / SUBD #0800 / IFLS ;?ABOUT TO BASH OUR NOSE IN THE END WALL?` then reads PT.LIV. Ours: PORT_APPROACH_WINDOW = 800, gating detonation to `port[2] >= -PORT_APPROACH_WINDOW`. Same $800 gate value.",
     "reasoning": "The port only resolves inside this narrow near-cockpit band; a bolt that crosses it far up-channel cannot count. Our constant is the ROM's own $800 end-wall spacing (one short-wedge length). (Value transplanted 1:1 as a near-cockpit distance; our compressed trench scale, B-009, is the separate divergence.)",
-    "source": { "file": "WSMAIN.MAC", "line": 1900, "verbatim": "\tSUBD #0800" },
-    "ours": { "file": "src/core/state.ts", "line": 435, "verbatim": "export const PORT_APPROACH_WINDOW = 800" }
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1900,
+      "verbatim": "\tSUBD #0800"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 435,
+      "verbatim": "export const PORT_APPROACH_WINDOW = 800"
+    }
   },
   {
     "id": "B-014",
     "class": "CONFIRMED",
     "title": "Exhaust port sits at bottom-center of the trench floor",
-    "claim": "BSVPORT places the port at Y=0 (lateral center — `STD M.GD+2 ;Y WIDTH IN CENTER`) and Z=-1000 (on the trench floor — `LDD #-1000 / STD M.GD+4 ;Z HITE ON BOTTOM OF TRENCH`), at downrange X=BS.PLC. Ours: spawnPort returns [0, 0, -2400] — lateral x=0 (center) and y=0 (our floor), i.e. bottom-center. Positions match.",
+    "claim": "BSVPORT places the port at Y=0 (lateral center \u2014 `STD M.GD+2 ;Y WIDTH IN CENTER`) and Z=-1000 (on the trench floor \u2014 `LDD #-1000 / STD M.GD+4 ;Z HITE ON BOTTOM OF TRENCH`), at downrange X=BS.PLC. Ours: spawnPort returns [0, 0, -2400] \u2014 lateral x=0 (center) and y=0 (our floor), i.e. bottom-center. Positions match.",
     "reasoning": "In our floor-at-0 frame the port's y=0 is the floor and x=0 is the centreline, mirroring the ROM's Y=0 / Z=-1000(=floor). Position value, frame-invariant. (Downrange distance is the separate B-009 compression.)",
-    "source": { "file": "WSBASE.MAC", "line": 1734, "verbatim": "\tSTD M.GD+2\t\t;Y WIDTH IN CENTER" },
-    "ours": { "file": "src/core/sim.ts", "line": 1018, "verbatim": "  return { pos: [0, 0, -EXHAUST_PORT_DISTANCE] }" }
+    "source": {
+      "file": "WSBASE.MAC",
+      "line": 1734,
+      "verbatim": "\tSTD M.GD+2\t\t;Y WIDTH IN CENTER"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 1018,
+      "verbatim": "  return { pos: [0, 0, -EXHAUST_PORT_DISTANCE] }"
+    }
   },
   {
     "id": "B-015",
     "class": "STRUCTURAL",
-    "title": "Port-arming box is ±$200 (±512) in the ROM; ours uses the 108 porthole radius",
-    "claim": "WSLAZR arms the proton torpedo when the laser endpoint lands in a ±$200 box around the porthole in BOTH axes: `LDD TMPTY / ADDD #200 / IFGE ;?WITHIN LEFT EDGE? / SUBD #400 / IFLE ;?WITHIN RIGHT EDGE?` and `LDD TMPTX / SUBD BS.PLC / ADDD #200 / IFGE ... SUBD #400 / IFLE` → both deltas in [-$200,+$200], i.e. a ±512 lateral × ±512 downrange box. Ours uses PORT_HIT_RADIUS = 108 as the arm radius, deliberately NOT the ±512 box.",
-    "reasoning": "The ROM box is measured against TMPTX/TMPTY — the endpoint of a laser drawn a fixed $7000 (28,672 units) ahead of the ship (WSLAZR :418 `LDD #7000 ;FARTHEST FORWARD POINT`). It encodes the cabinet's engagement STANDOFF, not a tolerance around the hole; our whole trench is 2,400 units long (B-009), with no $7000 standoff to measure against, so dropping ±512 in would let shots out on the berm/base win the run (a MISS per sw5-4). This differs only because our world is compressed float/dt, not integer/IRQ-standoff — hence STRUCTURAL; the two-stage structure it feeds is faithfully kept (B-016). State.ts documents this deviation.",
-    "source": { "file": "WSLAZR.MAC", "line": 496, "verbatim": "\tADDD #200" },
-    "ours": { "file": "src/core/state.ts", "line": 426, "verbatim": "export const PORT_HIT_RADIUS = 108" },
+    "title": "Port-arming box is \u00b1$200 (\u00b1512) in the ROM; ours uses the 108 porthole radius",
+    "claim": "WSLAZR arms the proton torpedo when the laser endpoint lands in a \u00b1$200 box around the porthole in BOTH axes: `LDD TMPTY / ADDD #200 / IFGE ;?WITHIN LEFT EDGE? / SUBD #400 / IFLE ;?WITHIN RIGHT EDGE?` and `LDD TMPTX / SUBD BS.PLC / ADDD #200 / IFGE ... SUBD #400 / IFLE` \u2192 both deltas in [-$200,+$200], i.e. a \u00b1512 lateral \u00d7 \u00b1512 downrange box. Ours uses PORT_HIT_RADIUS = 108 as the arm radius, deliberately NOT the \u00b1512 box.",
+    "reasoning": "The ROM box is measured against TMPTX/TMPTY \u2014 the endpoint of a laser drawn a fixed $7000 (28,672 units) ahead of the ship (WSLAZR :418 `LDD #7000 ;FARTHEST FORWARD POINT`). It encodes the cabinet's engagement STANDOFF, not a tolerance around the hole; our whole trench is 2,400 units long (B-009), with no $7000 standoff to measure against, so dropping \u00b1512 in would let shots out on the berm/base win the run (a MISS per sw5-4). This differs only because our world is compressed float/dt, not integer/IRQ-standoff \u2014 hence STRUCTURAL; the two-stage structure it feeds is faithfully kept (B-016). State.ts documents this deviation.",
+    "source": {
+      "file": "WSLAZR.MAC",
+      "line": 496,
+      "verbatim": "\tADDD #200"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 426,
+      "verbatim": "export const PORT_HIT_RADIUS = 108"
+    },
     "recommendation": "accept"
   },
   {
     "id": "B-016",
     "class": "CONFIRMED",
     "title": "Two-stage 'arm early, resolve late' torpedo structure ported faithfully",
-    "claim": "The ROM's port kill is two-stage: (1) a normal laser near the porthole arms the torpedo — WSLAZR `STA PT.LZF ;SET LAZAR FIRE FLAG` then `JSR FRPTGN ;THEN LAUNCH DIRECT HIT PROTON TORPS` (PT.LIV=1); (2) MVPTGN funnels the torpedo home each frame (height-above-floor and lateral offset both driven to 0 as forward distance → 0 — it cannot miss); (3) WSMAIN reads PT.LIV at the $800 end-wall gate to declare HIT/MISS. Ours: portTorpedoArmed latches on an arming bolt (armed early), then `detonates = armed && inApproachWindow` resolves at the $800 window. Structure matches.",
-    "reasoning": "MVPTGN's terminal guidance (`LDD BS.PLC / SUBD PT.X ;FORWARD DISTANCE TO HOLE / SUBD #1000 ;GET UPWARD DISTANCE FROM BOTTOM HOLE` for Z, and `... / JSR ASRD4` = /16 for Y) drives both offsets to zero at the hole — the 'cannot miss' that lets the pilot only get CLOSE, not make the 43.8°-down shot into his own floor. We port exactly this arm-early/resolve-late split.",
-    "source": { "file": "WSLAZR.MAC", "line": 410, "verbatim": "\tJSR FRPTGN\t\t;THEN LAUNCH DIRECT HIT PROTON TORPS" },
-    "ours": { "file": "src/core/sim.ts", "line": 743, "verbatim": "  const detonates = armed && inApproachWindow" }
+    "claim": "The ROM's port kill is two-stage: (1) a normal laser near the porthole arms the torpedo \u2014 WSLAZR `STA PT.LZF ;SET LAZAR FIRE FLAG` then `JSR FRPTGN ;THEN LAUNCH DIRECT HIT PROTON TORPS` (PT.LIV=1); (2) MVPTGN funnels the torpedo home each frame (height-above-floor and lateral offset both driven to 0 as forward distance \u2192 0 \u2014 it cannot miss); (3) WSMAIN reads PT.LIV at the $800 end-wall gate to declare HIT/MISS. Ours: portTorpedoArmed latches on an arming bolt (armed early), then `detonates = armed && inApproachWindow` resolves at the $800 window. Structure matches.",
+    "reasoning": "MVPTGN's terminal guidance (`LDD BS.PLC / SUBD PT.X ;FORWARD DISTANCE TO HOLE / SUBD #1000 ;GET UPWARD DISTANCE FROM BOTTOM HOLE` for Z, and `... / JSR ASRD4` = /16 for Y) drives both offsets to zero at the hole \u2014 the 'cannot miss' that lets the pilot only get CLOSE, not make the 43.8\u00b0-down shot into his own floor. We port exactly this arm-early/resolve-late split.",
+    "source": {
+      "file": "WSLAZR.MAC",
+      "line": 410,
+      "verbatim": "\tJSR FRPTGN\t\t;THEN LAUNCH DIRECT HIT PROTON TORPS"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 743,
+      "verbatim": "  const detonates = armed && inApproachWindow"
+    }
   },
   {
     "id": "B-017",
     "class": "NO_COUNTERPART",
     "title": "ROM trench wall GUNS fire back at the player; ours never do",
-    "claim": "The ROM trench has hostile return fire: DOBASE → BSGUN scans wall panels flagged as guns and fires them (FRPLGN/FRPRGN 'FIRE LEFT/RIGHT PANEL GUN'), throttled by TGPROB — a per-difficulty (WV.HRD) probability + timer-mask table ('0F=1 SEC', '0C0=25%'). Ours: trench turrets are shoot-for-score targets only; state.ts states 'the trench carries no fire' and stepTrench never populates enemyShots. The entire return-fire feature is absent.",
-    "reasoning": "The prior audit's '$E-row return-fire' note (a sub_B3E9 disasm artifact) points at a real ROM behavior: wall guns (panel type 3) shoot at the player, gated by difficulty via TGPROB. We have no counterpart. A fix means adding trench turret fire keyed to WV.HRD — a whole subsystem.",
-    "source": { "file": "WSBASE.MAC", "line": 1217, "verbatim": "\tJSR BSGUN\t\t;TRY FOR A BASE GUN" },
+    "claim": "The ROM trench has hostile return fire: DOBASE \u2192 BSGUN scans wall panels flagged as guns and fires them (FRPLGN/FRPRGN 'FIRE LEFT/RIGHT PANEL GUN'), throttled by TGPROB \u2014 a per-difficulty (WV.HRD) probability + timer-mask table ('0F=1 SEC', '0C0=25%'). Ours: trench turrets are shoot-for-score targets only; state.ts states 'the trench carries no fire' and stepTrench never populates enemyShots. The entire return-fire feature is absent.",
+    "reasoning": "The prior audit's '$E-row return-fire' note (a sub_B3E9 disasm artifact) points at a real ROM behavior: wall guns (panel type 3) shoot at the player, gated by difficulty via TGPROB. We have no counterpart. A fix means adding trench turret fire keyed to WV.HRD \u2014 a whole subsystem.",
+    "source": {
+      "file": "WSBASE.MAC",
+      "line": 1217,
+      "verbatim": "\tJSR BSGUN\t\t;TRY FOR A BASE GUN"
+    },
     "ours": null,
     "recommendation": "fix",
     "size": "l"
@@ -169,20 +311,38 @@
     "id": "B-018",
     "class": "DIVERGENCE",
     "title": "Port miss: ROM re-flies the whole trench (B0B); ours respawns one port",
-    "claim": "On a miss (PT.LIV=0 at the $800 gate), the ROM bashes the nose (AUDCR + BG1GLW) and sets `LDA #PH$B0B ;TRY TRENCH AGAIN UNTIL SUCCESSFUL` — PHIB0B re-inits and re-flies the SAME trench selection from the start (NWBASE), with no Force allowed on reruns. Ours: on the port reaching the fixed cockpit, `lives-1` and `exhaustPort: spawnPort()` — a fresh single port appears 2400 ahead while the channel keeps scrolling; the trench body/obstacles never reset.",
+    "claim": "On a miss (PT.LIV=0 at the $800 gate), the ROM bashes the nose (AUDCR + BG1GLW) and sets `LDA #PH$B0B ;TRY TRENCH AGAIN UNTIL SUCCESSFUL` \u2014 PHIB0B re-inits and re-flies the SAME trench selection from the start (NWBASE), with no Force allowed on reruns. Ours: on the port reaching the fixed cockpit, `lives-1` and `exhaustPort: spawnPort()` \u2014 a fresh single port appears 2400 ahead while the channel keeps scrolling; the trench body/obstacles never reset.",
     "reasoning": "Both cost the player and repeat, so the intent matches, but the ROM restarts the whole trench run (player back to trench start, same pie), while we merely respawn the target inside a continuously-scrolling channel. Our miss test also uses the fixed COCKPIT point + COCKPIT_HIT_RADIUS rather than the ROM's PT.LIV-at-$800-gate decision. Minor next to B-008/B-009/B-010; recommend accepting until the trench gains a real length/chain.",
-    "source": { "file": "WSMAIN.MAC", "line": 1912, "verbatim": "\tLDA #PH$B0B\t\t;TRY TRENCH AGAIN UNTIL SUCCESSFUL" },
-    "ours": { "file": "src/core/sim.ts", "line": 781, "verbatim": "  if (collides(port, COCKPIT, COCKPIT_HIT_RADIUS)) {" },
-    "recommendation": "accept"
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1912,
+      "verbatim": "\tLDA #PH$B0B\t\t;TRY TRENCH AGAIN UNTIL SUCCESSFUL"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 781,
+      "verbatim": "  if (collides(port, COCKPIT, COCKPIT_HIT_RADIUS)) {"
+    },
+    "recommendation": "accept",
+    "verdict": "CONFIRMED"
   },
   {
     "id": "B-019",
     "class": "DIVERGENCE",
     "title": "Floor drawn as 4 longitudinal lines in ROM; ours uses 2 rails + lateral cross-ribs",
-    "claim": "The ROM trench floor is FOUR longitudinal lines — TBSBL bottom rows at Y=-400, -200, +200, +400 (all Z=-1000) — plus two top rails at Y=±400 (Z=0); the walls are vertical lines at wedge boundaries (BSVSDW). There are NO lateral floor cross-ribs. Ours: trenchChannel draws two floor rails (x=±1024) + two top rails, then adds LATERAL floor cross-ribs across the channel at each RIB_Z — an element the ROM never draws — and omits the inner ±$200 floor 'thirds' lines.",
-    "reasoning": "TBSBL has six rows: two top (Y=±400) and four bottom (Y=±400 and the ±200 'LEFT THIRD'/'RIGHT THIRD'). BSVSDW draws only vertical wall lines per wedge; nothing draws a floor rib spanning the width. Cosmetic/visual — recommend accept, or add the ±200 lines and drop the invented cross-ribs (size s) for a closer look.",
-    "source": { "file": "WSBASE.MAC", "line": 1486, "verbatim": "\t.WORD 200,-1000\t\t;RIGHT THIRD" },
-    "ours": { "file": "src/core/trench-channel.ts", "line": 146, "verbatim": "    const fl = vertices.push([-TRENCH_HALF_W, 0, z]) - 1" },
-    "recommendation": "accept"
+    "claim": "The ROM trench floor is FOUR longitudinal lines \u2014 TBSBL bottom rows at Y=-400, -200, +200, +400 (all Z=-1000) \u2014 plus two top rails at Y=\u00b1400 (Z=0); the walls are vertical lines at wedge boundaries (BSVSDW). There are NO lateral floor cross-ribs. Ours: trenchChannel draws two floor rails (x=\u00b11024) + two top rails, then adds LATERAL floor cross-ribs across the channel at each RIB_Z \u2014 an element the ROM never draws \u2014 and omits the inner \u00b1$200 floor 'thirds' lines.",
+    "reasoning": "TBSBL has six rows: two top (Y=\u00b1400) and four bottom (Y=\u00b1400 and the \u00b1200 'LEFT THIRD'/'RIGHT THIRD'). BSVSDW draws only vertical wall lines per wedge; nothing draws a floor rib spanning the width. Cosmetic/visual \u2014 recommend accept, or add the \u00b1200 lines and drop the invented cross-ribs (size s) for a closer look.",
+    "source": {
+      "file": "WSBASE.MAC",
+      "line": 1486,
+      "verbatim": "\t.WORD 200,-1000\t\t;RIGHT THIRD"
+    },
+    "ours": {
+      "file": "src/core/trench-channel.ts",
+      "line": 146,
+      "verbatim": "    const fl = vertices.push([-TRENCH_HALF_W, 0, z]) - 1"
+    },
+    "recommendation": "accept",
+    "verdict": "CONFIRMED"
   }
 ]

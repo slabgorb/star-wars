@@ -3,19 +3,35 @@
     "id": "S-001",
     "class": "CONFIRMED",
     "title": "TIE fighter kill = 1,000 points",
-    "claim": "A regular TIE kill scores 1,000. ROM table TSCA1D = .BYTE 00,10,00; ours TIE_SCORE = 1000. Match. This also confirms the prior sw2-6 claim 'TIE worth 1,000 not 100' — RIGHT, and already ported.",
-    "reasoning": "BCD decode: each score row is three BCD byte-pairs (MSD pair first) forming a 6-digit decimal that ADUSCR (WSGAS:484-503) adds to the BCD score S.SC21/43/65/87 with DAA — no x10 shift, so the added value IS the literal 6-digit number, resolving the BCD-trap here. TSCA1D 00,10,00 -> '00'|'10'|'00' = 001000 = 1,000. SCRTIES:: (WSGAS:444, loads TSCA1D) truncates to the 6-char symbol SCRTIE, which XPSA calls (WSCPU:443 'JSR SCRTIE ;ADD SCORE FOR KILLING TIE FIGHTER') on the killing hit. Ours awards TIE_SCORE=1000 per bolt-kill (sim.ts:268).",
-    "source": { "file": "WSGAS.MAC", "line": 516, "verbatim": "TSCA1D:\t.BYTE 00,10,00\t\t;TIE FIGHTER SHOT" },
-    "ours": { "file": "src/core/state.ts", "line": 147, "verbatim": "export const TIE_SCORE = 1000" }
+    "claim": "A regular TIE kill scores 1,000. ROM table TSCA1D = .BYTE 00,10,00; ours TIE_SCORE = 1000. Match. This also confirms the prior sw2-6 claim 'TIE worth 1,000 not 100' \u2014 RIGHT, and already ported.",
+    "reasoning": "BCD decode: each score row is three BCD byte-pairs (MSD pair first) forming a 6-digit decimal that ADUSCR (WSGAS:484-503) adds to the BCD score S.SC21/43/65/87 with DAA \u2014 no x10 shift, so the added value IS the literal 6-digit number, resolving the BCD-trap here. TSCA1D 00,10,00 -> '00'|'10'|'00' = 001000 = 1,000. SCRTIES:: (WSGAS:444, loads TSCA1D) truncates to the 6-char symbol SCRTIE, which XPSA calls (WSCPU:443 'JSR SCRTIE ;ADD SCORE FOR KILLING TIE FIGHTER') on the killing hit. Ours awards TIE_SCORE=1000 per bolt-kill (sim.ts:268).",
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 516,
+      "verbatim": "TSCA1D:\t.BYTE 00,10,00\t\t;TIE FIGHTER SHOT"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 147,
+      "verbatim": "export const TIE_SCORE = 1000"
+    }
   },
   {
     "id": "S-002",
     "class": "CONFIRMED",
     "title": "Darth Vader's TIE = 2,000 points (value matches; not yet awarded)",
-    "claim": "ROM scores Darth at 2,000 PER HIT (TSCA2D = .BYTE 00,20,00 -> 002000). Ours VADER_SCORE = 2000. Value matches. NOTE: the sim has no Vader enemy, so this constant is defined but never awarded — all enemies use TIE_SCORE=1000.",
-    "reasoning": "TSCA2D 00,20,00 = 002000 = 2,000. SCRDARTH (WSGAS:449) is called from WSCPU:369 ('JSR SCRDARTH ;ADD SCORE FOR HITTING DARTH') inside the damage path that also does 'LDA #05 / STA A$HTA(X) ;KEEP DARTH ALIVE' — so 2,000 is awarded on EACH hit that damages Darth (he is refreshed to 5 hits-available and eventually flees, 'CHASED DARTH OFF'), not once per kill. Our VADER_SCORE constant equals the ROM value but no code path awards it (Enemy.kind is 'tie' only; Vader exists only as a render model), so per-hit Darth scoring is presently absent behavior with a correct constant staged for it.",
-    "source": { "file": "WSGAS.MAC", "line": 517, "verbatim": "TSCA2D:\t.BYTE 00,20,00\t\t;CHASED DARTH OFF" },
-    "ours": { "file": "src/core/state.ts", "line": 153, "verbatim": "export const VADER_SCORE = 2000" }
+    "claim": "ROM scores Darth at 2,000 PER HIT (TSCA2D = .BYTE 00,20,00 -> 002000). Ours VADER_SCORE = 2000. Value matches. NOTE: the sim has no Vader enemy, so this constant is defined but never awarded \u2014 all enemies use TIE_SCORE=1000.",
+    "reasoning": "TSCA2D 00,20,00 = 002000 = 2,000. SCRDARTH (WSGAS:449) is called from WSCPU:369 ('JSR SCRDARTH ;ADD SCORE FOR HITTING DARTH') inside the damage path that also does 'LDA #05 / STA A$HTA(X) ;KEEP DARTH ALIVE' \u2014 so 2,000 is awarded on EACH hit that damages Darth (he is refreshed to 5 hits-available and eventually flees, 'CHASED DARTH OFF'), not once per kill. Our VADER_SCORE constant equals the ROM value but no code path awards it (Enemy.kind is 'tie' only; Vader exists only as a render model), so per-hit Darth scoring is presently absent behavior with a correct constant staged for it.",
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 517,
+      "verbatim": "TSCA2D:\t.BYTE 00,20,00\t\t;CHASED DARTH OFF"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 153,
+      "verbatim": "export const VADER_SCORE = 2000"
+    }
   },
   {
     "id": "S-003",
@@ -23,8 +39,16 @@
     "title": "Shot-down fireball = 33 points",
     "claim": "Shooting an enemy fireball out of the air scores 33. ROM TSCSHT = .BYTE 00,00,33 -> 000033 = 33; ours FIREBALL_SCORE = 33. Match. Confirms the sw2-6 value.",
     "reasoning": "TSCSHT 00,00,33 = 000033 = 33 (BCD, cheapest kill on the board). SCRSHT (WSGAS:469) is called from WSGUNS:1194 ('JSR SCRSHT ;SCORE OUR SHOT'). Ours adds FIREBALL_SCORE=33 when a player bolt downs a fireball (sim.ts:296).",
-    "source": { "file": "WSGAS.MAC", "line": 522, "verbatim": "TSCSHT:\t.BYTE 00,00,33\t\t;HIT FIREBALL" },
-    "ours": { "file": "src/core/state.ts", "line": 158, "verbatim": "export const FIREBALL_SCORE = 33" }
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 522,
+      "verbatim": "TSCSHT:\t.BYTE 00,00,33\t\t;HIT FIREBALL"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 158,
+      "verbatim": "export const FIREBALL_SCORE = 33"
+    }
   },
   {
     "id": "S-004",
@@ -32,17 +56,33 @@
     "title": "Tower top = 200 points",
     "claim": "Destroying a surface tower top scores 200. ROM TSCTWR = .BYTE 00,02,00 -> 000200 = 200; ours TURRET_SCORE = 200. Match.",
     "reasoning": "TSCTWR:: 00,02,00 = 000200 = 200 (BCD). SCRTWR (WSGAS:343) is called from WSGRND:1174 ('JSR SCRTWR ;SCORE FOR HITTING A TOWER BUNKER'); it also folds an incremental TWRMULT bonus and, when the last tower drops, gives the all-towers bonus (see S-009). Ours scores every surface object at TURRET_SCORE=200 (sim.ts:522).",
-    "source": { "file": "WSGAS.MAC", "line": 520, "verbatim": "TSCTWR::.BYTE 00,02,00\t\t;TOWER TOP" },
-    "ours": { "file": "src/core/state.ts", "line": 343, "verbatim": "export const TURRET_SCORE = 200" }
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 520,
+      "verbatim": "TSCTWR::.BYTE 00,02,00\t\t;TOWER TOP"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 343,
+      "verbatim": "export const TURRET_SCORE = 200"
+    }
   },
   {
     "id": "S-005",
     "class": "CONFIRMED",
     "title": "Laser bunker = 200 points",
-    "claim": "Destroying a laser bunker scores 200 — same as a tower. ROM TSCBNK = .BYTE 00,02,00 -> 000200 = 200; ours applies TURRET_SCORE=200 to all surface kinds including bunkers. Match.",
-    "reasoning": "TSCBNK 00,02,00 = 000200 = 200 (BCD), equal to the tower value. SCRBNK (WSGAS:459) is called from WSGRND:1169 ('JSR SCRBNK ;SCORE FOR HITTING A BUNKER'). Ours does not distinguish score by kind — 'score += TURRET_SCORE' runs for every surface object (sim.ts:522); the kind check on the next line only excludes bunkers from the tower QUOTA, not from the points, matching the ROM (200 either way).",
-    "source": { "file": "WSGAS.MAC", "line": 521, "verbatim": "TSCBNK:\t.BYTE 00,02,00\t\t;LASER BUNKER" },
-    "ours": { "file": "src/core/sim.ts", "line": 522, "verbatim": "        score += TURRET_SCORE" }
+    "claim": "Destroying a laser bunker scores 200 \u2014 same as a tower. ROM TSCBNK = .BYTE 00,02,00 -> 000200 = 200; ours applies TURRET_SCORE=200 to all surface kinds including bunkers. Match.",
+    "reasoning": "TSCBNK 00,02,00 = 000200 = 200 (BCD), equal to the tower value. SCRBNK (WSGAS:459) is called from WSGRND:1169 ('JSR SCRBNK ;SCORE FOR HITTING A BUNKER'). Ours does not distinguish score by kind \u2014 'score += TURRET_SCORE' runs for every surface object (sim.ts:522); the kind check on the next line only excludes bunkers from the tower QUOTA, not from the points, matching the ROM (200 either way).",
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 521,
+      "verbatim": "TSCBNK:\t.BYTE 00,02,00\t\t;LASER BUNKER"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 522,
+      "verbatim": "        score += TURRET_SCORE"
+    }
   },
   {
     "id": "S-006",
@@ -50,8 +90,16 @@
     "title": "Trench gun turret = 100 points",
     "claim": "A trench gun turret scores 100. ROM TSCTRT = .BYTE 00,01,00 -> 000100 = 100; ours TRENCH_TURRET_SCORE = 100. Match.",
     "reasoning": "TSCTRT 00,01,00 = 000100 = 100 (BCD). SCRTRT (WSGAS:464) is called from WSLAZR:697 ('JSR SCRTRT ;KILLED A TURRET'). Ours awards TRENCH_TURRET_SCORE=100 when a bolt kills a trench turret obstacle (sim.ts:669).",
-    "source": { "file": "WSGAS.MAC", "line": 519, "verbatim": "TSCTRT:\t.BYTE 00,01,00\t\t;TRENCH TURRET" },
-    "ours": { "file": "src/core/trench-obstacles.ts", "line": 24, "verbatim": "export const TRENCH_TURRET_SCORE = 100" }
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 519,
+      "verbatim": "TSCTRT:\t.BYTE 00,01,00\t\t;TRENCH TURRET"
+    },
+    "ours": {
+      "file": "src/core/trench-obstacles.ts",
+      "line": 24,
+      "verbatim": "export const TRENCH_TURRET_SCORE = 100"
+    }
   },
   {
     "id": "S-007",
@@ -59,44 +107,84 @@
     "title": "Decorative trench panel / wall square = 50 points",
     "claim": "A decorative trench wall panel scores 50. ROM TSCPNL = .BYTE 00,00,50 -> 000050 = 50; ours TRENCH_SQUARE_SCORE = 50. Match.",
     "reasoning": "TSCPNL 00,00,50 = 000050 = 50 (BCD). SCRPNL (WSGAS:454) is called from WSLAZR:688 ('JSR SCRPNL ;SCORE FOR A PANEL'). Ours awards TRENCH_SQUARE_SCORE=50 for a non-turret trench obstacle (sim.ts:669).",
-    "source": { "file": "WSGAS.MAC", "line": 518, "verbatim": "TSCPNL:\t.BYTE 00,00,50\t\t;DECORATIVE PANEL HIT" },
-    "ours": { "file": "src/core/trench-obstacles.ts", "line": 33, "verbatim": "export const TRENCH_SQUARE_SCORE = 50" }
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 518,
+      "verbatim": "TSCPNL:\t.BYTE 00,00,50\t\t;DECORATIVE PANEL HIT"
+    },
+    "ours": {
+      "file": "src/core/trench-obstacles.ts",
+      "line": 33,
+      "verbatim": "export const TRENCH_SQUARE_SCORE = 50"
+    }
   },
   {
     "id": "S-008",
     "class": "CONFIRMED",
     "title": "Exhaust port hit = 25,000 points",
-    "claim": "Killing the Death Star (exhaust port hit) scores 25,000. ROM TSCPRT = .BYTE 02,50,00 -> 025000 = 25,000; ours TRENCH_BONUS = 25000. Match. Confirms the prior sw2-6 claim 'exhaust port 25,000 not 1,000' — RIGHT, and already ported.",
+    "claim": "Killing the Death Star (exhaust port hit) scores 25,000. ROM TSCPRT = .BYTE 02,50,00 -> 025000 = 25,000; ours TRENCH_BONUS = 25000. Match. Confirms the prior sw2-6 claim 'exhaust port 25,000 not 1,000' \u2014 RIGHT, and already ported.",
     "reasoning": "TSCPRT 02,50,00 = '02'|'50'|'00' = 025000 = 25,000 (BCD; the BCD trap makes this read as 25,000, not 2,500 or 250,000). SCRPORT (WSGAS:474) is called from WSMAIN:1960 ('JSR SCRPORT ;SCORE THE EXHAUST PORT'), gated on PT.LIV (fired at the port). Ours adds TRENCH_BONUS=25000 on a port kill (sim.ts:751, 'bonus = TRENCH_BONUS + ...'). Note ROM keeps the exhaust-port score (25,000) SEPARATE from the level-scaled 'use the Force' bonus (see S-012); ours composes both at the same site.",
-    "source": { "file": "WSGAS.MAC", "line": 523, "verbatim": "TSCPRT:\t.BYTE 02,50,00\t\t;EXHAUST PORT" },
-    "ours": { "file": "src/core/state.ts", "line": 399, "verbatim": "export const TRENCH_BONUS = 25000" }
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 523,
+      "verbatim": "TSCPRT:\t.BYTE 02,50,00\t\t;EXHAUST PORT"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 399,
+      "verbatim": "export const TRENCH_BONUS = 25000"
+    }
   },
   {
     "id": "S-009",
     "class": "CONFIRMED",
     "title": "All-towers-destroyed bonus = 50,000 points",
-    "claim": "Eliminating every tower top / bunker in a wave scores a 50,000 bonus. ROM TSCATP = .BYTE 05,00,00 -> 050000 = 50,000; ours SURFACE_CLEAR_BONUS = 50000. Match. Confirms the prior sw2-6 claim 'the 50,000 all-towers bonus' — it exists in the ROM and is now ported (the prior 'missing' state is remediated).",
+    "claim": "Eliminating every tower top / bunker in a wave scores a 50,000 bonus. ROM TSCATP = .BYTE 05,00,00 -> 050000 = 50,000; ours SURFACE_CLEAR_BONUS = 50000. Match. Confirms the prior sw2-6 claim 'the 50,000 all-towers bonus' \u2014 it exists in the ROM and is now ported (the prior 'missing' state is remediated).",
     "reasoning": "TSCATP 05,00,00 = 050000 = 50,000 (BCD). The bonus fires inside SCRTWR (WSGAS:361-370): after decrementing GD.TWL ('# of towers left') via decimal-adjust, 'IFEQ ;?DONE ALL TOWERS? / LDU #TSCATP / JSR ADUSCR' awards it and sets Q.ATP. Ours banks SURFACE_CLEAR_BONUS=50000 once, on the surface->trench drop, when allTowersKilled() (sim.ts:947).",
-    "source": { "file": "WSGAS.MAC", "line": 524, "verbatim": "TSCATP:\t.BYTE 05,00,00\t\t;ELIMINATED ALL TOWER TOPS AND/OR BUNKERS" },
-    "ours": { "file": "src/core/state.ts", "line": 523, "verbatim": "export const SURFACE_CLEAR_BONUS = 50000" }
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 524,
+      "verbatim": "TSCATP:\t.BYTE 05,00,00\t\t;ELIMINATED ALL TOWER TOPS AND/OR BUNKERS"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 523,
+      "verbatim": "export const SURFACE_CLEAR_BONUS = 50000"
+    }
   },
   {
     "id": "S-010",
     "class": "CONFIRMED",
     "title": "Starting shields = 6 (default operator option)",
     "claim": "The player starts with 6 shield units at the default option. ROM: 'ADDA #06 ;GIVES 6 TO 9 UNITS OF SHIELD STRENGTH' (S.GAS init) with a 0-3 operator-option add; default (no option) = 6. Ours STARTING_LIVES = 6. Match at the default.",
-    "reasoning": "WSMAIN:1293-1297 sets S.GAS = 6 + (OPTS1+1 & 03), i.e. 6 to 9, per the operator GAS option; the same clamp bounds ADCGAS refills (WSGAS:48-53). A browser clone has no operator DIPs, so the default 6 is the faithful value and ours matches. LIMITATION: ours has no way to select the 7/8/9 option settings (no operator panel) — recorded, not audited.",
-    "source": { "file": "WSMAIN.MAC", "line": 1296, "verbatim": "\tADDA #06\t\t;GIVES 6 TO 9 UNITS OF SHIELD STRENGTH" },
-    "ours": { "file": "src/core/state.ts", "line": 128, "verbatim": "export const STARTING_LIVES = 6" }
+    "reasoning": "WSMAIN:1293-1297 sets S.GAS = 6 + (OPTS1+1 & 03), i.e. 6 to 9, per the operator GAS option; the same clamp bounds ADCGAS refills (WSGAS:48-53). A browser clone has no operator DIPs, so the default 6 is the faithful value and ours matches. LIMITATION: ours has no way to select the 7/8/9 option settings (no operator panel) \u2014 recorded, not audited.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1296,
+      "verbatim": "\tADDA #06\t\t;GIVES 6 TO 9 UNITS OF SHIELD STRENGTH"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 128,
+      "verbatim": "export const STARTING_LIVES = 6"
+    }
   },
   {
     "id": "S-011",
     "class": "CONFIRMED",
     "title": "Each cockpit hit costs exactly 1 shield unit",
     "claim": "A hit subtracts one shield unit. ROM DO1GAS: 'DEC S.GAS ;THEN DECREASE OUR FUEL'. Ours: each cockpit collision adds 1 to damage, and lives -= damage. The per-hit cost of 1 matches.",
-    "reasoning": "In DO1GAS (WSGAS:63-104) a registered shield hit (GS.GLW>0) does a single DEC S.GAS (WSGAS:76); if that underflows it is pinned to -1 ('SET TO DEAD'). Ours increments damage by 1 per colliding TIE/fireball (sim.ts:310,318) then applies lives = max(0, state.lives - damage) (sim.ts:325). The unit cost per hit (1) is faithful. (Whether MULTIPLE hits in one frame should stack, and the post-hit invulnerability window, are a separate divergence — see S-016.)",
-    "source": { "file": "WSGAS.MAC", "line": 76, "verbatim": "\tDEC S.GAS\t\t;THEN DECREASE OUR FUEL" },
-    "ours": { "file": "src/core/sim.ts", "line": 325, "verbatim": "  const lives = Math.max(0, state.lives - damage)" }
+    "reasoning": "In DO1GAS (WSGAS:63-104) a registered shield hit (GS.GLW>0) does a single DEC S.GAS (WSGAS:76); if that underflows it is pinned to -1 ('SET TO DEAD'). Ours increments damage by 1 per colliding TIE/fireball (sim.ts:310,318) then applies lives = max(0, state.lives - damage) (sim.ts:325). The unit cost per hit (1) is faithful. (Whether MULTIPLE hits in one frame should stack, and the post-hit invulnerability window, are a separate divergence \u2014 see S-016.)",
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 76,
+      "verbatim": "\tDEC S.GAS\t\t;THEN DECREASE OUR FUEL"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 325,
+      "verbatim": "  const lives = Math.max(0, state.lives - damage)"
+    }
   },
   {
     "id": "S-012",
@@ -104,10 +192,20 @@
     "title": "'Use the Force' bonus should scale with wave (5k/10k/25k/50k/100k), ours is a flat 5,000",
     "claim": "The clean-run Force bonus in the ROM is a per-wave table TSCFRC indexed by GM.WAV: wave 0=5,000; 1=10,000; 2=25,000; 3=50,000; 4+=100,000. Ours FORCE_BONUS = 5000 (flat), matching only wave 0. Waves 1+ are 2x-20x too low.",
     "reasoning": "TSCFRC rows (WSGAS:509-513, BCD): 00,50,00=5,000; 01,00,00=10,000; 02,50,00=25,000; 05,00,00=50,000; 10,00,00=100,000 ('LEVEL 5 AND ABOVE'). GETFRP (WSGAS:404-414) indexes GM.WAV*3 into TSCFRC, clamping at TSCFRZ-3 for GM.WAV>=5 (CMPB #TSCFRZ-TSCFRC/3 = #5). SCRFRC (WSGAS:440) is called from WSBASE:1169 ('JSR SCRFRC ;SCORE ONE FOR ASSERTIVENESS TRAINING(FORCEFUL)'), once per trench when Q.FRC marks the player 'used the Force'. This is a wave-indexed table; our single constant cannot express it. Fix is a per-wave lookup (e.g. FORCE_BONUS_BY_WAVE = [5000,10000,25000,50000,100000] clamped), not a constant tweak.",
-    "source": { "file": "WSGAS.MAC", "line": 509, "verbatim": "TSCFRC:\t.BYTE 00,50,00\t\t;USE THE FORCE IN THE TRENCH" },
-    "ours": { "file": "src/core/state.ts", "line": 482, "verbatim": "export const FORCE_BONUS = 5000" },
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 509,
+      "verbatim": "TSCFRC:\t.BYTE 00,50,00\t\t;USE THE FORCE IN THE TRENCH"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 482,
+      "verbatim": "export const FORCE_BONUS = 5000"
+    },
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "verdict": "CONFIRMED",
+    "refutation_corrections": "Minor (non-blocking): the proposed FORCE_BONUS_BY_WAVE is at GM.WAV (0-based) granularity, so a faithful port indexes it by (wave-1) since the clone's `wave` is 1-based; clamp any index >=4 to the 100,000 row."
   },
   {
     "id": "S-013",
@@ -115,7 +213,11 @@
     "title": "Shield-energy-remaining wave bonus (5,000 per surviving shield unit) is absent",
     "claim": "At each wave's end the ROM awards 5,000 points per remaining shield unit (SCRSHL, table TSCSHL = .BYTE 00,50,00 -> 5,000, looped S.GAS times). Ours never converts surviving shields to score.",
     "reasoning": "SCRSHLD:: (WSGAS:375-401; 6-char symbol SCRSHL) loops B = S.GAS times, BCD-adding TSCSHL (WSGAS:525, 00,50,00 = 005000 = 5,000) each pass, then ADUSCRs the sum. It is called from WSMAIN:1967 ('JSR SCRSHL ;ADD SHIELD ENERGY BONUS') in the end-of-wave ceremony. So finishing a wave with 6 shields banks 30,000. Ours has no end-of-wave shield->score conversion anywhere (grep of gameRules/sim shows only object, port, all-towers and force bonuses). Straightforward to add: bonus = 5000 * remaining_shields on wave clear.",
-    "source": { "file": "WSGAS.MAC", "line": 525, "verbatim": "TSCSHL:\t.BYTE 00,50,00\t\t;SHIELD SCORE FOR REMAINING ENERGY UNITS" },
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 525,
+      "verbatim": "TSCSHL:\t.BYTE 00,50,00\t\t;SHIELD SCORE FOR REMAINING ENERGY UNITS"
+    },
     "ours": null,
     "recommendation": "fix",
     "size": "s"
@@ -126,7 +228,11 @@
     "title": "Death-Star-selection wave bonus (200,000 x Death Star number) is absent",
     "claim": "The ROM grants a between-wave bonus for the Death Star the player selected: DS1=200,000, DS2=400,000, DS3=600,000, DS4=800,000 (TSCBN1-4, indexed by GM.WAV). Ours has no Death-Star selection and awards no such bonus.",
     "reasoning": "SCRWAV (WSGAS:327-340) computes GM.WAV*3 and indexes TSCBN1-3, adding TSCBN{n} (WSGAS:527-530: 20,00,00=200,000 / 40,00,00=400,000 / 60,00,00=600,000 / 80,00,00=800,000); 'WAVE 0 GETS NO BONUS' and it is gated on SC.FWV (first pass). Called from WSMAIN:1982 ('JSR SCRWAV ;AND ALSO ADD WAV BONUS'). This bonus rewards the player's choice of Death Star difficulty at the wave-select screen; the browser clone has linear waves and no difficulty-selection mechanic, so there is no site to award it.",
-    "source": { "file": "WSGAS.MAC", "line": 527, "verbatim": "TSCBN1:\t.BYTE 20,00,00\t\t;BONUS FOR CHOOSING DETH STAR 1" },
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 527,
+      "verbatim": "TSCBN1:\t.BYTE 20,00,00\t\t;BONUS FOR CHOOSING DETH STAR 1"
+    },
     "ours": null,
     "recommendation": "wont_fix"
   },
@@ -134,22 +240,42 @@
     "id": "S-015",
     "class": "BOOK_WAS_WRONG",
     "title": "Score-threshold extra shields (400,000 / 800,000) have no primary-source basis",
-    "claim": "Ours awards +1 shield/life the first time the score crosses 400,000 and 800,000 (EXTRA_LIFE_THRESHOLDS, applied in finalizeScore). The primary source has NO score-threshold extra-shield mechanism: the strings 40000/80000 appear NOWHERE in the shipped source, and the ONLY shield-replenish path is ADCGAS — an operator-option amount (0-3 units, OPTS1) added only after the player KILLS the Death Star.",
-    "reasoning": "The code comment cites the secondary doc's 'ROM extra-life text a40000/a80000'; grep of all *.MAC for 40000/80000/a40000/a80000 returns nothing, so that text does not exist in the LF primary (BOOK_WAS_WRONG). Every write to S.GAS in the shipped modules is: init (WSMAIN:1297), the per-hit DEC (WSGAS:76), and ADCGAS (WSGAS:42-58). ADCGAS is called ONLY from WSMAIN:1975 ('JSR ADCGAS ;ADD CANNED GAS'), immediately after 'LDA PT.LIV ;DID PLAYER KILL DETH STAR? / IFNE ;YES, SO ADD BONUS ENERGY' (WSMAIN:1973-1974) — i.e. shields are refilled on DEATH-STAR-KILL, not on a score threshold, and the amount is an operator option (WSGAS:44 'ANDA #03 ;HOW MUCH BONUS ENERGY?'), capped at the starting 6-9 (WSGAS:48-53). Ours also has no shield cap, so score-threshold awards can push lives past the ROM max of 9. Faithful fix: drop the invented score-threshold extra life and refill shields via an ADCGAS-style bonus on Death-Star kill, clamped to the 6-9 max.",
-    "source": { "file": "WSMAIN.MAC", "line": 1973, "verbatim": "\tLDA PT.LIV\t\t;DID PLAYER KILL DETH STAR?" },
-    "ours": { "file": "src/core/state.ts", "line": 135, "verbatim": "export const EXTRA_LIFE_THRESHOLDS: readonly number[] = [400_000, 800_000]" },
+    "claim": "Ours awards +1 shield/life the first time the score crosses 400,000 and 800,000 (EXTRA_LIFE_THRESHOLDS, applied in finalizeScore). The primary source has NO score-threshold extra-shield mechanism: the strings 40000/80000 appear NOWHERE in the shipped source, and the ONLY shield-replenish path is ADCGAS \u2014 an operator-option amount (0-3 units, OPTS1) added only after the player KILLS the Death Star.",
+    "reasoning": "The code comment cites the secondary doc's 'ROM extra-life text a40000/a80000'; grep of all *.MAC for 40000/80000/a40000/a80000 returns nothing, so that text does not exist in the LF primary (BOOK_WAS_WRONG). Every write to S.GAS in the shipped modules is: init (WSMAIN:1297), the per-hit DEC (WSGAS:76), and ADCGAS (WSGAS:42-58). ADCGAS is called ONLY from WSMAIN:1975 ('JSR ADCGAS ;ADD CANNED GAS'), immediately after 'LDA PT.LIV ;DID PLAYER KILL DETH STAR? / IFNE ;YES, SO ADD BONUS ENERGY' (WSMAIN:1973-1974) \u2014 i.e. shields are refilled on DEATH-STAR-KILL, not on a score threshold, and the amount is an operator option (WSGAS:44 'ANDA #03 ;HOW MUCH BONUS ENERGY?'), capped at the starting 6-9 (WSGAS:48-53). Ours also has no shield cap, so score-threshold awards can push lives past the ROM max of 9. Faithful fix: drop the invented score-threshold extra life and refill shields via an ADCGAS-style bonus on Death-Star kill, clamped to the 6-9 max.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1973,
+      "verbatim": "\tLDA PT.LIV\t\t;DID PLAYER KILL DETH STAR?"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 135,
+      "verbatim": "export const EXTRA_LIFE_THRESHOLDS: readonly number[] = [400_000, 800_000]"
+    },
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "verdict": "CONFIRMED",
+    "refutation_corrections": "The finding's S.GAS-write enumeration omits WSGAS:79 (STA S.GAS 'SET TO DEAD', the underflow pin to -1) \u2014 it belongs to the per-hit DEC/death path, not a replenish, so it does not weaken the thesis. The ADCGAS clamp is specifically to STARTING SHIELDS (6-9, operator-set), matching SWOPTS.DOC 'will not go higher than STARTING SHIELDS level' \u2014 worth carrying into the fix so the cap is the option value, not a hard-coded 9."
   },
   {
     "id": "S-016",
     "class": "DIVERGENCE",
     "title": "No post-hit shield-loss window: ours stacks simultaneous hits, ROM loses at most one shield per glow cycle",
-    "claim": "The ROM loses at most ONE shield per hit event: a hit arms a ~10-game-frame glow (BG1GLW: 'LDA #10'), and DO1GAS refuses another decrement until the previous glow/animation finishes ('?AND DONE WITH PREVIOUS GAS CHANGE?'). Ours has no such gate — every colliding TIE and fireball in the same frame each does damage++, so a cluster can strip multiple shields at once and consecutive frames can drain with no invulnerability.",
+    "claim": "The ROM loses at most ONE shield per hit event: a hit arms a ~10-game-frame glow (BG1GLW: 'LDA #10'), and DO1GAS refuses another decrement until the previous glow/animation finishes ('?AND DONE WITH PREVIOUS GAS CHANGE?'). Ours has no such gate \u2014 every colliding TIE and fireball in the same frame each does damage++, so a cluster can strip multiple shields at once and consecutive frames can drain with no invulnerability.",
     "reasoning": "BG1GLW (WSGLOW:58-64) only re-arms when GS.GLW==0 and sets S.GLW=10. DO1GAS (WSGAS:63-104) enters the decrement block only when GS.GLW>0 AND 'LDA GS.HIT / IFLE ;?AND DONE WITH PREVIOUS GAS CHANGE?' (WSGAS:67-68); it then sets GS.HIT=1 (busy) and does a single DEC S.GAS, and GS.HIT is not cleared until the multi-frame hit animation completes (GSVNEW, WSGAS:258-260). Net: one shield per hit, then a ~10-frame (~0.49s at 20.508 Hz) window before the next can register. Ours accumulates damage over both the enemy-collision and fireball-collision filters (sim.ts:307-323) with no cooldown/i-frame state, so multiple shields can be lost in a single 60 Hz frame. Fix needs a hit-cooldown flag on GameState, not a constant.",
-    "source": { "file": "WSGAS.MAC", "line": 68, "verbatim": "\tIFLE\t\t\t;?AND DONE WITH PREVIOUS GAS CHANGE?" },
-    "ours": { "file": "src/core/sim.ts", "line": 310, "verbatim": "      damage++" },
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 68,
+      "verbatim": "\tIFLE\t\t\t;?AND DONE WITH PREVIOUS GAS CHANGE?"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 310,
+      "verbatim": "      damage++"
+    },
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "verdict": "CONFIRMED",
+    "refutation_corrections": "Precision note (does not change verdict): the re-hit lockout is governed by GS.GLW/GS.HIT being cleared at the completion of the gauge-redraw animation (GSVNEW), not directly by the S.GLW=10 glow-display counter the finding cites; the ~10-game-frame / ~0.49s-at-20.508Hz figure is a good order-of-magnitude estimate of that window, not an exact ROM-pinned duration."
   }
 ]

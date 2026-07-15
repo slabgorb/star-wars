@@ -111,7 +111,8 @@
       "verbatim": "export const TICK_HZ = 30"
     },
     "recommendation": "fix",
-    "size": "s"
+    "size": "s",
+    "verdict": "CONFIRMED"
   },
   {
     "id": "T-008",
@@ -130,7 +131,8 @@
       "verbatim": "  const trenchTimer = state.trenchTimer + 1"
     },
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "verdict": "CONFIRMED"
   },
   {
     "id": "T-009",
