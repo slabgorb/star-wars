@@ -173,6 +173,13 @@ const loop = createLoop(
         case 'terrain-crash':
           audio.play('terrainCrash')
           break
+        case 'object-crash':
+          // The ship flew into a standing tower/bunker (sw7-5 / D-020) — the
+          // ROM's AUDCR crash. Reuse the terrain-crash scrape cue (the standing
+          // no-new-asset pattern); the dedicated event lets a bespoke AUDCR
+          // sample swap in later without touching the core.
+          audio.play('terrainCrash')
+          break
         case 'fireball-destroyed':
           // Shooting down a fireball reuses the explosion cue (story 8-18): an
           // existing sample, immediate feedback, no new asset. The dedicated

@@ -71,7 +71,20 @@ describe('sw2-3 — tower tuning constants', () => {
 
 describe('sw2-3 — tall towers fire from their cube top, not the ground', () => {
   it('launches the fireball from the tower cube-top elevation (TOWER_HEIGHT), not y=0', () => {
-    const { shot } = firstFireball()
+    // sw7-5 re-seat: the armed pool now includes BUNKERS (D-016), whose muzzle
+    // is their low body — sampling "the first shot of a real maze run" can
+    // capture a bunker's shot. This pin's intent is the TOWER's muzzle, so the
+    // shooter is staged as an explicit tower past its grace (green both before
+    // and after the D-016 fix; the bunker muzzle is pinned by
+    // surface-hazard.test.ts).
+    const s0: GameState = {
+      ...surface(),
+      turrets: [{ pos: [0, 0, -2000] as Vec3, age: TOWER_FIRE_GRACE + 1, kind: 'tower' }],
+      surfaceMazeLaid: true,
+      enemyFireCooldown: 0,
+    }
+    const s1 = stepGame(s0, NO_INPUT, DT)
+    const shot = s1.enemyShots[s1.enemyShots.length - 1]
     expect(shot).toBeDefined()
     // The bug: a grounded turret fires from the floor (y = 0). A tall tower's gun
     // is the yellow cube on top — the fireball erupts from up at TOWER_HEIGHT.
