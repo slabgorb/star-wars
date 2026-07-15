@@ -38,9 +38,12 @@
 // ring-closure (the cabinet never closes the 3-point cross-sections).
 // TRENCH's floor squares already closed cleanly; story
 // 8-5 connected them with catwalk rails and added the ring-based EXHAUST_PORT.
-// TIE_FIGHTER and DARTH_TIE were likewise RE-AUTHORED from their own ring structure
-// (story 8-10), clearing the inherited 8-2 heuristic-edge debt; both are now closed
-// into ring loops + symmetric struts and guarded by the same topology test.
+// TIE_FIGHTER was RE-AUTHORED from its own ring structure (story 8-10), clearing
+// the inherited 8-2 heuristic-edge debt; it is closed into ring loops + symmetric
+// struts and guarded by a connectivity test. DARTH_TIE was authored the same way by
+// 8-10, but story sw5-2 RE-PORTED its edges from the ROM draw list `.WL RTH`
+// (WSOBJ.MAC) — so it is no longer authored; it is the ROM's six pen-up sub-bodies
+// (see its own doc comment). TIE_FIGHTER's own re-port is story sw5-3.
 //
 // PURE data. No DOM, no time, no randomness — safe for the deterministic core.
 
@@ -309,41 +312,34 @@ export const DARTH_TIE: Model3D = {
     [80, -60, -20],
     [80, -60, 20],
   ],
-  // RE-AUTHORED by structure (story 8-10, revised) — like TIE_FIGHTER, built from
-  // the real sub-bodies rather than by closing deriveRings() rings (which would
-  // box it). Vader's TIE Advanced has BENT solar wings, so each wing is an outer
-  // octagon rim + a small inner square hub (the bend line, at y=±270) joined by
-  // spokes; a 4-strut pylon joins each wing hub to a cockpit square (y=±60); and
-  // the ball is two cockpit squares, two pod-belt octagons (y=±30/±80), and a +x
-  // nose octagon, all chained together. Guarded by an isSingleComponent
-  // connectivity test; kept bilaterally Y-symmetric, no orphans.
+  // Edges are the ROM draw list `.WL RTH` (WSOBJ.MAC:1427-1479), re-ported by
+  // story sw5-2 — replacing story 8-10's heuristic reconstruction, which invented
+  // 44 edges the ROM never draws (the rim→hub spokes and a 4-strut pylon) and
+  // missed 12 it does. The AVG hardware strokes the ship as SIX pen-up runs (`.BD`
+  // blank-moves between them), so the authentic wireframe is six disjoint
+  // sub-bodies, not one connected blob: the two wing octagons, the two wing
+  // struts+squares, the body equator belts, and the +x front-window octagon.
+  // Indices are 0-based — the ROM's 1-based draw indices minus the dropped
+  // `.P 0,0,0` anchor. The ROM's one degenerate self-edge (`.BD …,21,21,…` →
+  // [20,20]) is NOT copied: it strokes a zero-length line, not connectivity. Order
+  // and grouping follow `.WL RTH`'s own section labels; the independent-oracle
+  // proof (0/0 drift vs a hand-decoded `.WL RTH`) is tests/core/darth-tie-rom.test.ts.
   edges: [
-    // bottom wing (y=-180/-270): outer octagon rim, inner square hub, spokes
-    [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 0],
-    [8, 9], [9, 10], [10, 11], [11, 8],
-    [0, 8], [7, 8], [1, 9], [2, 9], [3, 10], [4, 10], [5, 11], [6, 11],
-    // top wing (y=180/270)
-    [12, 13], [13, 14], [14, 15], [15, 16], [16, 17], [17, 18], [18, 19], [19, 12],
-    [20, 21], [21, 22], [22, 23], [23, 20],
-    [12, 20], [19, 20], [13, 21], [14, 21], [15, 22], [16, 22], [17, 23], [18, 23],
-    // pylons: wing inner square -> cockpit square (y=±60)
-    [8, 24], [9, 25], [10, 26], [11, 27],
-    [20, 28], [21, 29], [22, 30], [23, 31],
-    // cockpit squares (y=-60 / y=60)
-    [24, 25], [25, 26], [26, 27], [27, 24],
-    [28, 29], [29, 30], [30, 31], [31, 28],
-    // pod-belt octagons (y=-30/-80 and y=30/80)
-    [32, 33], [33, 34], [34, 35], [35, 36], [36, 37], [37, 38], [38, 39], [39, 32],
-    [40, 41], [41, 42], [42, 43], [43, 44], [44, 45], [45, 46], [46, 47], [47, 40],
-    // belt struts: lower belt <-> upper belt (the equator)
-    [32, 40], [33, 41], [34, 42], [35, 43], [36, 44], [37, 45], [38, 46], [39, 47],
-    // cockpit square -> belt struts
-    [24, 39], [25, 34], [26, 35], [27, 38],
-    [28, 47], [29, 42], [30, 43], [31, 46],
-    // +x nose octagon and its attachment to the belts
-    [48, 49], [49, 50], [50, 51], [51, 52], [52, 53], [53, 54], [54, 55], [55, 48],
-    [55, 34], [54, 35], [50, 42], [51, 43],
-    [48, 33], [49, 41], [52, 44], [53, 36],
+    // RIGHT WING — .BD 8,1,2,3,8,7,4,3 / .BD 4,5,6,7
+    [7, 0], [0, 1], [1, 2], [2, 7], [7, 6], [6, 3], [3, 2], [3, 4], [4, 5], [5, 6],
+    // RIGHT STRUT — .BD 12,11,10,9,12,28 / .BD 27,11 / .BD 10,26 / .BD 25,9
+    [11, 10], [10, 9], [9, 8], [8, 11], [11, 27], [26, 10], [9, 25], [24, 8],
+    // BODY — .BD 37,36,35,34,42,43,44,45,37 / .LD 38,46,47,48,41,33,40,39,38 / cross-struts
+    [36, 35], [35, 34], [34, 33], [33, 41], [41, 42], [42, 43], [43, 44], [44, 36],
+    [36, 37], [37, 45], [45, 46], [46, 47], [47, 40], [40, 32], [32, 39], [39, 38], [38, 37],
+    [38, 35], [34, 39], [32, 33], [41, 40], [47, 42], [43, 46], [45, 44],
+    // LEFT STRUT — .BD 31,23,22,21,21,24,23 (the 21,21 self-edge dropped) / .BD 22,30 / .BD 29,21 / .BD 24,32
+    [30, 22], [22, 21], [21, 20], [20, 23], [23, 22], [21, 29], [28, 20], [23, 31],
+    // LEFT WING — .BD 19,18,17,16,19,20,15,16 / .BD 15,14,13,20
+    [18, 17], [17, 16], [16, 15], [15, 18], [18, 19], [19, 14], [14, 15], [14, 13], [13, 12], [12, 19],
+    // FRONT WINDOW — .BD 49,50,51,52,53,54,55,56,49,53 / .BD 54,50 / .BD 51,55 / .BD 56,52
+    [48, 49], [49, 50], [50, 51], [51, 52], [52, 53], [53, 54], [54, 55], [55, 48], [48, 52],
+    [53, 49], [50, 54], [55, 51],
   ],
 }
 
