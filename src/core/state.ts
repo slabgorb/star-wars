@@ -373,6 +373,31 @@ export const TOWER_HEIGHT = 352
  * tower that fires the instant it appears. Kept well under the ~2s a tower dwells
  * on screen (SPAWN_DISTANCE / TURRET_SCROLL_SPEED) so it still fires in time. */
 export const TOWER_FIRE_GRACE = 0.75
+/** Elevation of a bunker's gun (sw7-5 / D-016). The ROM's bunker is the squat
+ * base of the shared GND table — its whole body spans 0..6 height units (0..720
+ * raw; 0..24 at the 1/30 scale), and GDHTBK centers the bunker's blast at
+ * 3×120 = mid-body (WSGRND.MAC:1166). The fireball erupts from that low body,
+ * never from empty air at TOWER_HEIGHT. */
+export const BUNKER_MUZZLE_HEIGHT = 12
+/** Ceiling below which the ship crashes into a STANDING bunker (sw7-5 / D-020).
+ * ROM: the crash needs the ship below the bunker top (`M$TZ+M.U1 - 6*120.*2
+ * IFLT`, WSGRND.MAC:940-942) — a 720-raw-unit top over a 512-raw-unit floor
+ * (GD$MNT), so low flight risks bunkers and cruise clears them. The clone's
+ * raised floor (MIN_SKIM_ALTITUDE 40, house rule D-021) sits above the
+ * raw-scaled top (24), so the band is re-based proportionally:
+ * 40 × 720/512 ≈ 56 (see the sw7-5 reachability-ruling deviation). */
+export const BUNKER_CRASH_CEILING = 56
+/** The surface flight-band ceiling (sw7-5). ROM: `GD$MXT ==1C00` (7168 raw,
+ * WSMAIN.MAC:2597-2598) = ~238 at the 1/30 scale — deliberately BELOW the
+ * tower cap (TOWER_HEIGHT 352), so a tower can never be overflown and the
+ * maze can fight back (D-020's tower crash carries no height gate). */
+export const MAX_SKIM_ALTITUDE = 238
+/** Lateral half-width of the ship↔object crash window (sw7-5 / D-020), in the
+ * maze's raw lateral units. ROM contact reach is the 45° cone ∩ the X window
+ * ($200..$400 + speed, WSGRND.MAC:901-946) ≈ $300..$1800 raw; $400 = 1024 sits
+ * mid-band and safely inside the tightest authored lane offset (2048), so a
+ * neighbouring lane can never clip the ship. */
+export const OBJECT_CRASH_LATERAL = 1024
 
 // Internal tuning (not part of the test contract).
 

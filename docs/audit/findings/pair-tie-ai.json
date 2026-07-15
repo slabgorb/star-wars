@@ -29,7 +29,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1189,
+      "line": 1216,
       "verbatim": "const ROM_LATERAL_UNIT = 0x400 // 1024 — the ×$400 STARTING-LOCATION lateral step"
     }
   },
@@ -46,7 +46,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1200,
+      "line": 1227,
       "verbatim": "  [-2 * ROM_LATERAL_UNIT, 0], // 1D1"
     }
   },
@@ -80,7 +80,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 266,
+      "line": 270,
       "verbatim": "        killedTie.add(ei)"
     }
   },
@@ -131,7 +131,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1216,
+      "line": 1243,
       "verbatim": "  return { pos, vel: scale(dir, speed), kind: 'tie', orient: lookRotation(dir), bank }"
     }
   },
@@ -148,7 +148,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1136,
+      "line": 1163,
       "verbatim": "function moveEnemy(e: Enemy, dt: number): Enemy {"
     },
     "recommendation": "fix",
@@ -169,7 +169,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 308,
+      "line": 312,
       "verbatim": "  const liveEnemies = standingEnemies.filter((e) => {"
     },
     "recommendation": "fix",
@@ -190,7 +190,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1147,
+      "line": 1174,
       "verbatim": "  const peeling = e.peeling ?? (dist <= TIE_NEAR_BOUND && lateralOffset >= COCKPIT_HIT_RADIUS)"
     },
     "recommendation": "accept",
@@ -209,7 +209,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 236,
+      "line": 240,
       "verbatim": "    if (inPassWindow && cooldown <= 0 && enemyShots.length < params.maxConcurrentShots) {"
     },
     "recommendation": "accept",
@@ -266,7 +266,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1212,
+      "line": 1239,
       "verbatim": "  const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]"
     },
     "recommendation": "accept",
@@ -333,7 +333,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 502,
+      "line": 527,
       "verbatim": "export const SPACE_WAVE_QUOTA = 6"
     },
     "recommendation": "accept",

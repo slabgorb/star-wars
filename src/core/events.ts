@@ -66,6 +66,19 @@ export interface TerrainCrashEvent {
   type: 'terrain-crash'
 }
 
+// The ship flew into a standing surface tower/bunker (sw7-5 / D-020) — the
+// ROM's BG1GLW + AUDCR crash (WSGRND.MAC:901-912 tower, :937-964 bunker).
+// Costs a shield, exactly once per object passed. Its own cue like
+// 'terrain-crash' (AUDCR is a distinct sound), and deliberately NOT an
+// 'enemy-death': the crash never destroys the building — it flies off behind.
+export interface ObjectCrashEvent {
+  type: 'object-crash'
+  /** What the ship hit; legacy kindless entries crash as towers. */
+  kind: 'tower' | 'bunker' | 'bishop'
+  /** Where it crossed the cockpit plane, for particle/SFX placement. */
+  pos: Vec3
+}
+
 // A player bolt shot an enemy fireball out of the air before it reached the
 // cockpit (story 8-18). `pos` is where it died, for particle/SFX placement.
 // Distinct from `enemy-death` because a fireball is hostile ordnance, not an
@@ -192,6 +205,7 @@ export type GameEvent =
   | LevelClearEvent
   | PlayerSpawnEvent
   | TerrainCrashEvent
+  | ObjectCrashEvent
   | FireballDestroyedEvent
   | TrenchObstacleDestroyedEvent
   | ForceBonusEvent

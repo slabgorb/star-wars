@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1108,
+      "line": 1135,
       "verbatim": "  const decay = Math.pow(7 / 8, dt * TICK_HZ)"
     },
     "verdict": "CONFIRMED",
@@ -71,7 +71,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 171,
+      "line": 175,
       "verbatim": "      vel: scale(aimDirection(aimX, aimY, input.aspect), PROJECTILE_SPEED),"
     },
     "recommendation": "wont_fix",
@@ -90,7 +90,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 734,
+      "line": 761,
       "verbatim": "    sweptCollides(port, sub(b.pos, scale(b.vel ?? ZERO, dt)), b.pos, PORT_HIT_RADIUS),"
     },
     "recommendation": "accept"
@@ -150,7 +150,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 317,
+      "line": 321,
       "verbatim": "    if (collides(s.pos, COCKPIT, COCKPIT_HIT_RADIUS)) {"
     },
     "recommendation": "accept",
@@ -169,7 +169,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 309,
+      "line": 313,
       "verbatim": "    if (collides(e.pos, COCKPIT, COCKPIT_HIT_RADIUS)) {"
     },
     "recommendation": "accept",
@@ -189,7 +189,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 240,
+      "line": 244,
       "verbatim": "        pos: [...e.pos] as Vec3,"
     }
   },
