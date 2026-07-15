@@ -609,8 +609,11 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   // clock times (0.78–1.17 s) regardless of tick rate. A cue fires the step its
   // threshold is first crossed — inherently one-shot. Pushed onto the shared `events`
   // list, so the cue rides every return path below (safe-hold, crash, or port hit).
+  // Parity is the ROM's 0-based BS.WAV bit 0 (`LDA BS.WAV / LSRA`, WSMAIN:1868), NOT a
+  // 1-based `wave % 2` — sw7-2 reconciled the base (audit U-008): BS.WAV-even (human
+  // ODD waves) → 'even' set; BS.WAV-odd (human EVEN) → 'odd' set.
   const trenchTimer = state.trenchTimer + dt * TICK_HZ
-  const parity: 'even' | 'odd' = state.wave % 2 === 0 ? 'even' : 'odd'
+  const parity: 'even' | 'odd' = romWave0(state.wave) % 2 === 0 ? 'even' : 'odd'
   for (const cue of TRENCH_VOICE_CUES) {
     if (state.trenchTimer < cue.timer && trenchTimer >= cue.timer && cue.parity === parity) {
       events.push({ type: 'speech', line: cue.line })
@@ -753,9 +756,14 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     const clean = afterObstacles.trenchShotsFired <= 1 // only the killing torpedo
     const bonus = TRENCH_BONUS + (clean ? FORCE_BONUS : 0)
     if (clean) events.push({ type: 'force-bonus', amount: FORCE_BONUS })
-    // Han's line on the winning shot — cued on ANY port kill (clean or not), so
-    // it is independent of the clean-run Force bonus above (sw2-5).
-    events.push({ type: 'speech', line: 'greatShotKidThatWasOneInAMillion' })
+    // Han's line on the winning shot — the ROM (WSMAIN.MAC:1919) reserves it for the
+    // same 0-based gate as the Imperial March: GM.WAV >= 3 AND GM.WAV odd, i.e. human
+    // waves {4,6,8,...}; every other wave explodes silent (sw7-2, U-006). The gate is
+    // independent of the clean-run Force bonus above (sw2-5) — clean/dirty never gates it.
+    const gmKill = romWave0(state.wave)
+    if (gmKill >= 3 && gmKill % 2 === 1) {
+      events.push({ type: 'speech', line: 'greatShotKidThatWasOneInAMillion' })
+    }
     // The Death Star BLOWS (sw2-4): a positioned explosion cue at the port's own
     // spot, emitted BEFORE the level-clear warp below so the shell stages the boom
     // before the jump to the next wave. `[...port]` keeps the step pure.
@@ -887,10 +895,21 @@ const PHASE_MUSIC: Record<Phase, MusicTrack> = {
   trench: 'trench',
 }
 
-/** Which looping track opens `phase` on the wave `wave`. Only the space wave is
- *  wave-sensitive (the Imperial March replaces it at wave>=3 odd). */
+/** The ROM's wave-gated music and speech read the ZERO-based hardware wave counters
+ *  GM.WAV / BS.WAV (WSMAIN.MAC:1421 / 1868 / 1919); our `state.wave` is 1-based. This
+ *  is the SINGLE conversion every wave-gated cue passes through — the Imperial March,
+ *  the "Great shot kid" line, and the trench voice parity all read it — so flipping
+ *  this one shim moves every gate together (sw7-2, audit U-005..U-008). */
+function romWave0(wave1Based: number): number {
+  return wave1Based - 1
+}
+
+/** Which looping track opens `phase` on the (1-based) `wave`. Only the space wave is
+ *  wave-sensitive: the ROM plays the Imperial March instead of the space theme when
+ *  GM.WAV >= 3 AND GM.WAV is odd (WSMAIN.MAC:1421) — i.e. human waves {4,6,8,...}. */
 function musicTrackFor(phase: Phase, wave: number): MusicTrack {
-  if (phase === 'space' && wave >= 3 && wave % 2 === 1) return 'imperialMarch'
+  const gm = romWave0(wave)
+  if (phase === 'space' && gm >= 3 && gm % 2 === 1) return 'imperialMarch'
   return PHASE_MUSIC[phase]
 }
 
@@ -903,20 +922,24 @@ const ENTER_PHASE_SPEECH: Partial<Record<Phase, SpeechLine>> = {
 }
 
 /** The trench voice lines cued off the timer (`trenchTimer` = ROM `word_4B0E`),
- * gated by run parity. The 1983 cabinet gates on `byte_4B12` (the trench
- * section-chain index); until that lands in sw3-7 we source parity from `wave`
- * (sw3-4 scope decision): EVEN wave → "Luke, trust me" @16 + "Yahoo, you're all
- * clear kid" @24; ODD wave → "The Force is strong in this one" @22. A line fires
- * on the single step the timer equals its threshold — one-shot, no re-fire.
+ * gated by 0-based wave parity. The 1983 cabinet gates on the 0-based wave counter
+ * BS.WAV (`LDA BS.WAV / LSRA / IFCC`, WSMAIN.MAC:1868) — NOT `byte_4B12`. Carry-clear
+ * = BS.WAV EVEN (`parity: 'even'`) = human ODD waves {1,3,5,...}: "Luke, trust me" @16
+ * + "Yahoo, you're all clear kid" @24; BS.WAV ODD (`parity: 'odd'`) = human EVEN
+ * {2,4,6,...}: "Let go Luke" @16 + "The Force is strong in this one" @22. sw7-2
+ * reconciled the base (it had been a 1-based `wave % 2`, which INVERTED the sets and
+ * dropped "Let go Luke" — audit U-007/U-008). A line fires on the single step the
+ * timer crosses its threshold — one-shot, no re-fire.
  * (docs/star-wars-1983-source-findings.md, "Voice-line triggers by trench timer".) */
 const TRENCH_VOICE_CUES: ReadonlyArray<{
   timer: number
   parity: 'even' | 'odd'
   line: SpeechLine
 }> = [
-  { timer: 16, parity: 'even', line: 'lukeTrustMe' }, // Sound_18
-  { timer: 24, parity: 'even', line: 'youreAllClearKid' }, // Sound_1A
-  { timer: 22, parity: 'odd', line: 'theForceIsStrongInThisOne' }, // Sound_16
+  { timer: 16, parity: 'even', line: 'lukeTrustMe' }, // BS.WAV even / human odd — SPKTRU (Sound_18)
+  { timer: 24, parity: 'even', line: 'youreAllClearKid' }, // BS.WAV even / human odd — SPKYAU (Sound_1A)
+  { timer: 16, parity: 'odd', line: 'letGoLuke' }, // BS.WAV odd / human even — SPKLET (restored, U-007)
+  { timer: 22, parity: 'odd', line: 'theForceIsStrongInThisOne' }, // BS.WAV odd / human even — SPKSTR (Sound_16)
 ]
 
 /**

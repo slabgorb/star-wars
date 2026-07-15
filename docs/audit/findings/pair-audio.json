@@ -63,7 +63,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 886,
+      "line": 894,
       "verbatim": "  surface: 'towers',"
     }
   },
@@ -85,7 +85,8 @@
     },
     "recommendation": "fix",
     "size": "s",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-2"
   },
   {
     "id": "U-006",
@@ -105,7 +106,8 @@
     },
     "recommendation": "fix",
     "size": "s",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-2"
   },
   {
     "id": "U-007",
@@ -126,7 +128,8 @@
     "recommendation": "fix",
     "size": "s",
     "verdict": "CONFIRMED",
-    "refutation_corrections": "The finding's reasoning ('Our even branch matching the ROM even branch byte-for-byte is strong evidence the wave-parity mapping is aligned') is wrong: the mapping is INVERTED, not aligned. BS.WAV = GM.WAV clamped (WSMAIN:1702-1707) and is 0-based (line 1870 comment 'BEGIN WITH WAVE 0'), while our parity comes from 1-based state.wave (sim.ts:610). So ROM's BS.WAV-odd branch fires on human waves {2,4,6,...} but our parity:'odd' fires on {1,3,5,...}. Adding {timer:16,parity:'odd','letGoLuke'} is still correct RELATIVE to our existing (also-'odd') theForceIsStrongInThisOne entry, but note that the whole trench-cue table is wired to the inverted wave set (same base-offset bug flagged under U-008), so it will play on the wrong waves until the BS.WAV/wave parity is reconciled (sw3-7)."
+    "refutation_corrections": "The finding's reasoning ('Our even branch matching the ROM even branch byte-for-byte is strong evidence the wave-parity mapping is aligned') is wrong: the mapping is INVERTED, not aligned. BS.WAV = GM.WAV clamped (WSMAIN:1702-1707) and is 0-based (line 1870 comment 'BEGIN WITH WAVE 0'), while our parity comes from 1-based state.wave (sim.ts:610). So ROM's BS.WAV-odd branch fires on human waves {2,4,6,...} but our parity:'odd' fires on {1,3,5,...}. Adding {timer:16,parity:'odd','letGoLuke'} is still correct RELATIVE to our existing (also-'odd') theForceIsStrongInThisOne entry, but note that the whole trench-cue table is wired to the inverted wave set (same base-offset bug flagged under U-008), so it will play on the wrong waves until the BS.WAV/wave parity is reconciled (sw3-7).",
+    "remediated_by": "sw7-2"
   },
   {
     "id": "U-008",
@@ -141,8 +144,8 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 917,
-      "verbatim": "  { timer: 16, parity: 'even', line: 'lukeTrustMe' }, // Sound_18"
+      "line": 939,
+      "verbatim": "  { timer: 16, parity: 'even', line: 'lukeTrustMe' }, // BS.WAV even / human odd — SPKTRU (Sound_18)"
     },
     "verdict": "CONFIRMED",
     "refutation_corrections": "Two defects the 'match' framing hides. (1) TIMING (ties to T-008): the trenchTimer that fires these advances `state.trenchTimer + 1` once per stepGame call (sim.ts:609), and stepGame runs on the shared @arcade/shared createLoop whose hz DEFAULTS to 60 (main.ts:136 passes no hz; loop.js:39 hz=60). ROM PH.TIM increments once per 20.508 Hz game frame. So our cues fire at 16/60=0.27 s and 24/60=0.40 s vs ROM 16/20.508=0.78 s and 24/20.508=1.17 s — 2.93x early, bunched into the first ~0.4 s. Frame-count values are right; wall-clock timing is not. (2) PARITY-BASE INVERSION: the reasoning claim 'the gate ... (carry clear = BS.WAV even) corresponds to our parity:even' is FALSE. BS.WAV = GM.WAV (0-based, WSMAIN:1702-1707), our parity uses 1-based state.wave (sim.ts:610), so BS.WAV even <=> human {1,3,5,...} while parity:'even' <=> human {2,4,6,...}. Our even cues are wired to the ROM's odd-wave set. The lines/thresholds match the ROM even branch as data, but ride the wrong waves at the wrong wall-clock time — it is not the clean CONFIRMED the title implies; annotate as 'values correct; parity base inverted and timing 2.93x fast (blocked on T-008 / sw3-7).'"

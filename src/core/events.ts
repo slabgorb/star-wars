@@ -135,11 +135,13 @@ export type SpeechLine =
   | 'redFiveStandingBy' // run start — Luke reports in
   | 'lookAtTheSizeOfThatThing' // entering the Death Star surface
   | 'useTheForceLuke' // entering the trench (was shell-derived before sw2-5)
-  | 'greatShotKidThatWasOneInAMillion' // the exhaust-port kill — the winning shot
-  // sw3-4 — trench voice-line timer (ROM word_4B0E), parity-gated by run:
-  | 'lukeTrustMe' // trench timer 16, even run (Sound_18)
-  | 'youreAllClearKid' // trench timer 24, even run (Sound_1A)
-  | 'theForceIsStrongInThisOne' // trench timer 22, odd run (Sound_16)
+  | 'greatShotKidThatWasOneInAMillion' // the winning port shot, human waves {4,6,8,...} (WSMAIN:1919)
+  // sw3-4 — trench voice-line timer (ROM word_4B0E), gated by 0-based BS.WAV parity
+  // (WSMAIN:1868; base reconciled by sw7-2 — U-007/U-008):
+  | 'lukeTrustMe' // trench timer 16, human ODD wave (Sound_18, SPKTRU)
+  | 'youreAllClearKid' // trench timer 24, human ODD wave (Sound_1A, SPKYAU)
+  | 'theForceIsStrongInThisOne' // trench timer 22, human EVEN wave (Sound_16, SPKSTR)
+  | 'letGoLuke' // trench timer 16, human EVEN wave (SPKLET; restored by sw7-2, U-007)
 
 // A voice line was cued this frame. Speech is DATA like every other event: the
 // core decides WHEN a line plays (deterministic, testable), the shell decides HOW
@@ -165,12 +167,12 @@ export interface NameEnteredEvent {
 // the ROM sound board (docs/star-wars-1983-source-findings.md, "## Sound hooks"):
 // the space wave is Sound_24/25, the Death Star surface is Sound_20/21 ("Towers
 // music" — hence 'towers', not the phase name 'surface'), the trench is Sound_22,
-// and the Imperial March (Sound_1D) replaces the space theme at wave>=3 odd.
+// and the Imperial March (Sound_1D) replaces the space theme on human waves {4,6,8,...}.
 export type MusicTrack =
   | 'space' // space wave — Sound_24/25
   | 'towers' // Death Star surface — Sound_20/21
   | 'trench' // trench run — Sound_22
-  | 'imperialMarch' // replaces the space theme at wave>=3 odd (sub_6838) — Sound_1D
+  | 'imperialMarch' // replaces the space theme on human {4,6,8,...} (WSMAIN:1421, GM.WAV>=3 odd) — Sound_1D
 
 // A phase edge swapped the looping music channel this frame (sw3-5). Like speech,
 // the core decides WHICH track and WHEN (deterministic, tested); the shell owns HOW
