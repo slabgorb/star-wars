@@ -2,9 +2,9 @@
   {
     "id": "D-001",
     "class": "CONFIRMED",
-    "title": "BUNK maze (wave 2) \u2014 all 28 entries match byte-for-byte",
+    "title": "BUNK maze (wave 2) — all 28 entries match byte-for-byte",
     "claim": "surfaceMazes RAW_FAMILIES['BUNK'] reproduces ROM TBUNK exactly: 28 objects, all BUNKER (typeDigit 3), 0 towers. e.g. ROM `BUNKER 3000,0400` = ($3000=12288, $0400=1024) = ours [12288,1024,3]; `BUNKER 6800,7800` = (26624,30720) = ours [26624,30720,3]. .TWRS/TTWRS quota = 0 = towerCount 0.",
-    "reasoning": "Radix 16 (WSCOMN.MAC:5), so bare operands are hex. TBUNK is WSGRND lines 238-266; I converted every one of its 28 BUNKER rows to decimal and matched them one-to-one against surfaceMazes.ts lines 53-60 in source order \u2014 all 28 identical. The header `;0 TOWERS, 7-0,7-1,7-2,7-3` (line 234) partitions the 28 objects by awakening sequence and sums to 28; 0 of them are TOWER/BISHOP, so the ROM .TWRS is 0, matching towerCountOf(base)=0. This is the ROM's actual first ground wave (WSGRND TGDPTR WAVE 02).",
+    "reasoning": "Radix 16 (WSCOMN.MAC:5), so bare operands are hex. TBUNK is WSGRND lines 238-266; I converted every one of its 28 BUNKER rows to decimal and matched them one-to-one against surfaceMazes.ts lines 53-60 in source order — all 28 identical. The header `;0 TOWERS, 7-0,7-1,7-2,7-3` (line 234) partitions the 28 objects by awakening sequence and sums to 28; 0 of them are TOWER/BISHOP, so the ROM .TWRS is 0, matching towerCountOf(base)=0. This is the ROM's actual first ground wave (WSGRND TGDPTR WAVE 02).",
     "source": {
       "file": "WSGRND.MAC",
       "line": 238,
@@ -19,9 +19,9 @@
   {
     "id": "D-002",
     "class": "CONFIRMED",
-    "title": "SQUARE / 3SQUARE maze (wave 3) \u2014 all 28+4 entries match byte-for-byte",
-    "claim": "ROM TSQUARE\u21923SQUARE (WSGRND 471-516) = surfaceMazes 'SQUARE' family. e.g. ROM `BUNKER -8000,2000` = (-32768,8192) = ours [-32768,8192,3]; `TOWER 3000,4000` = (12288,16384) = ours [12288,16384,1]; extended `TOWER 6000,8000` = (24576,32768) = ours [24576,32768,1]. Base towers 16 (`.TWRS`), extended 20.",
-    "reasoning": "Verified all 28 base rows (SQUARE, WSGRND 475-509) and the 4 extended rows (3SQUARE, 511-515) coordinate-by-coordinate; every one matches surfaceMazes rows 66-74. Base has 12 bunkers \u2192 16 tower/bishop = header `;16 TOWERS`; extended adds 4 towers \u2192 20 = header `;20 TOWERS`. baseLen=28 correct. NOTE this maze is what the clone also serves as its wave-1 surface (see D-015).",
+    "title": "SQUARE / 3SQUARE maze (wave 3) — all 28+4 entries match byte-for-byte",
+    "claim": "ROM TSQUARE→3SQUARE (WSGRND 471-516) = surfaceMazes 'SQUARE' family. e.g. ROM `BUNKER -8000,2000` = (-32768,8192) = ours [-32768,8192,3]; `TOWER 3000,4000` = (12288,16384) = ours [12288,16384,1]; extended `TOWER 6000,8000` = (24576,32768) = ours [24576,32768,1]. Base towers 16 (`.TWRS`), extended 20.",
+    "reasoning": "Verified all 28 base rows (SQUARE, WSGRND 475-509) and the 4 extended rows (3SQUARE, 511-515) coordinate-by-coordinate; every one matches surfaceMazes rows 66-74. Base has 12 bunkers → 16 tower/bishop = header `;16 TOWERS`; extended adds 4 towers → 20 = header `;20 TOWERS`. baseLen=28 correct. NOTE this maze is what the clone also serves as its wave-1 surface (see D-015).",
     "source": {
       "file": "WSGRND.MAC",
       "line": 475,
@@ -36,9 +36,9 @@
   {
     "id": "D-003",
     "class": "CONFIRMED",
-    "title": "CLUSTR / 3CLUSTR maze (wave 4) \u2014 all 28+4 entries match byte-for-byte",
-    "claim": "ROM TCLUSTR\u21923CLUSTR (WSGRND 188-231) = surfaceMazes 'CLUSTR' family. e.g. ROM `BUNKER -3400,5400` = ($-3400=-13312, $5400=21504) = ours [-13312,21504,3]; `TOWER -2000,7400` = (-8192, $7400=29696) = ours [-8192,29696,1]. Base towers 16, extended 20.",
-    "reasoning": "All 28 base rows (192-224) and 4 extended (227-230) verified. 12 bunkers in the base \u2192 16 tower/bishop (header `;16 TOWERS`); +4 extended towers \u2192 20. The non-round $3400/$7400 depths (13312/29696) are transcribed correctly, evidence the port is a true hex conversion, not eyeballed round numbers.",
+    "title": "CLUSTR / 3CLUSTR maze (wave 4) — all 28+4 entries match byte-for-byte",
+    "claim": "ROM TCLUSTR→3CLUSTR (WSGRND 188-231) = surfaceMazes 'CLUSTR' family. e.g. ROM `BUNKER -3400,5400` = ($-3400=-13312, $5400=21504) = ours [-13312,21504,3]; `TOWER -2000,7400` = (-8192, $7400=29696) = ours [-8192,29696,1]. Base towers 16, extended 20.",
+    "reasoning": "All 28 base rows (192-224) and 4 extended (227-230) verified. 12 bunkers in the base → 16 tower/bishop (header `;16 TOWERS`); +4 extended towers → 20. The non-round $3400/$7400 depths (13312/29696) are transcribed correctly, evidence the port is a true hex conversion, not eyeballed round numbers.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 215,
@@ -53,9 +53,9 @@
   {
     "id": "D-004",
     "class": "CONFIRMED",
-    "title": "TURNON / 3TURNON maze (wave 5) \u2014 all 28+4 entries match byte-for-byte",
-    "claim": "ROM TTURNON\u21923TURNON (WSGRND 570-619) = surfaceMazes 'TURNON' family. e.g. ROM `TOWER 8000,4000` = ($8000=32768, 16384) = ours [32768,16384,1]; `BUNKER -7000,3000` = (-28672,12288) = ours [-28672,12288,3]. Base towers 20, extended 24.",
-    "reasoning": "All 28 base rows (574-611) and 4 extended (614-618) verified in source order against surfaceMazes rows 94-102. 8 bunkers in base \u2192 20 tower/bishop (header `;20 TOWERS`); +4 extended towers \u2192 24. $8000=32768 sits one unit past the \u00b1$7CFF play-cube clamp, but it is the ROM's own datum so we faithfully carry it.",
+    "title": "TURNON / 3TURNON maze (wave 5) — all 28+4 entries match byte-for-byte",
+    "claim": "ROM TTURNON→3TURNON (WSGRND 570-619) = surfaceMazes 'TURNON' family. e.g. ROM `TOWER 8000,4000` = ($8000=32768, 16384) = ours [32768,16384,1]; `BUNKER -7000,3000` = (-28672,12288) = ours [-28672,12288,3]. Base towers 20, extended 24.",
+    "reasoning": "All 28 base rows (574-611) and 4 extended (614-618) verified in source order against surfaceMazes rows 94-102. 8 bunkers in base → 20 tower/bishop (header `;20 TOWERS`); +4 extended towers → 24. $8000=32768 sits one unit past the ±$7CFF play-cube clamp, but it is the ROM's own datum so we faithfully carry it.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 594,
@@ -70,9 +70,9 @@
   {
     "id": "D-005",
     "class": "CONFIRMED",
-    "title": "WEDGE / 3WEDGE maze (wave 6) \u2014 all 28+4 entries match byte-for-byte",
-    "claim": "ROM TWEDGE\u21923WEDGE (WSGRND 419-467) = surfaceMazes 'WEDGE' family. e.g. ROM `TOWER -1C00,2C00` = ($-1C00=-7168, $2C00=11264) = ours [-7168,11264,1]; `BUNKER 8000,5000` = (32768,20480) = ours [32768,20480,3]. Base towers 20, extended 24.",
-    "reasoning": "All 28 base rows (424-460) and 4 extended (463-466) verified. 8 bunkers in base \u2192 20 tower/bishop (header `;20 TOWERS`); +4 towers \u2192 24. The $1C00/$2C00 (7168/11264) values convert exactly.",
+    "title": "WEDGE / 3WEDGE maze (wave 6) — all 28+4 entries match byte-for-byte",
+    "claim": "ROM TWEDGE→3WEDGE (WSGRND 419-467) = surfaceMazes 'WEDGE' family. e.g. ROM `TOWER -1C00,2C00` = ($-1C00=-7168, $2C00=11264) = ours [-7168,11264,1]; `BUNKER 8000,5000` = (32768,20480) = ours [32768,20480,3]. Base towers 20, extended 24.",
+    "reasoning": "All 28 base rows (424-460) and 4 extended (463-466) verified. 8 bunkers in base → 20 tower/bishop (header `;20 TOWERS`); +4 towers → 24. The $1C00/$2C00 (7168/11264) values convert exactly.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 436,
@@ -87,9 +87,9 @@
   {
     "id": "D-006",
     "class": "CONFIRMED",
-    "title": "DIFF / 3DIFF maze (wave 7 / 16) \u2014 all 28+4 entries match byte-for-byte",
-    "claim": "ROM TDIFF\u21923DIFF (WSGRND 146-185) = surfaceMazes 'DIFF' family. e.g. ROM `BUNKER -5000,1000` = (-20480,4096) = ours [-20480,4096,3]; `BISHOP 0,5000` = (0,20480) = ours [0,20480,2]; `BISHOP -1000,7000` = (-4096,28672) = ours [-4096,28672,2]. Base towers 20 (incl. 3 bishops), extended 24.",
-    "reasoning": "All 28 base rows (151-178) and 4 extended (181-184) verified, including the three BISHOP entries (typeDigit 2) at (0,20480),(-4096,28672),(4096,28672). 8 bunkers in base \u2192 20 tower+bishop (header `;20 TOWERS`); +4 towers \u2192 24. Note DIFF's rows use a SPACE (not tab) after the opcode \u2014 the port still transcribed the operands correctly.",
+    "title": "DIFF / 3DIFF maze (wave 7 / 16) — all 28+4 entries match byte-for-byte",
+    "claim": "ROM TDIFF→3DIFF (WSGRND 146-185) = surfaceMazes 'DIFF' family. e.g. ROM `BUNKER -5000,1000` = (-20480,4096) = ours [-20480,4096,3]; `BISHOP 0,5000` = (0,20480) = ours [0,20480,2]; `BISHOP -1000,7000` = (-4096,28672) = ours [-4096,28672,2]. Base towers 20 (incl. 3 bishops), extended 24.",
+    "reasoning": "All 28 base rows (151-178) and 4 extended (181-184) verified, including the three BISHOP entries (typeDigit 2) at (0,20480),(-4096,28672),(4096,28672). 8 bunkers in base → 20 tower+bishop (header `;20 TOWERS`); +4 towers → 24. Note DIFF's rows use a SPACE (not tab) after the opcode — the port still transcribed the operands correctly.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 151,
@@ -104,9 +104,9 @@
   {
     "id": "D-007",
     "class": "CONFIRMED",
-    "title": "TRAP / 3TRAP maze (wave 8) \u2014 all 28+4 entries match byte-for-byte",
-    "claim": "ROM TTRAP\u21923TRAP (WSGRND 370-416) = surfaceMazes 'TRAP' family. e.g. ROM `TOWER -6800,6000` = (-26624,24576) and `TOWER 6800,1000` = (26624,4096) = ours [-26624,24576,1],[26624,4096,1]; `TOWER 8000,6000` = (32768,24576) = ours [32768,24576,1]. Base towers 21, extended 25.",
-    "reasoning": "All 28 base rows (375-409) and 4 extended (412-415) verified. TRAP's group-A towers sit at very different depths (24576 vs 4096) \u2014 an asymmetry the port preserves. 7 bunkers in base \u2192 21 tower/bishop (header `;21 TOWERS`); +4 towers \u2192 25.",
+    "title": "TRAP / 3TRAP maze (wave 8) — all 28+4 entries match byte-for-byte",
+    "claim": "ROM TTRAP→3TRAP (WSGRND 370-416) = surfaceMazes 'TRAP' family. e.g. ROM `TOWER -6800,6000` = (-26624,24576) and `TOWER 6800,1000` = (26624,4096) = ours [-26624,24576,1],[26624,4096,1]; `TOWER 8000,6000` = (32768,24576) = ours [32768,24576,1]. Base towers 21, extended 25.",
+    "reasoning": "All 28 base rows (375-409) and 4 extended (412-415) verified. TRAP's group-A towers sit at very different depths (24576 vs 4096) — an asymmetry the port preserves. 7 bunkers in base → 21 tower/bishop (header `;21 TOWERS`); +4 towers → 25.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 375,
@@ -121,9 +121,9 @@
   {
     "id": "D-008",
     "class": "CONFIRMED",
-    "title": "SYMTRC / 3SYMTRC maze (wave 9) \u2014 all 28+4 entries match byte-for-byte",
-    "claim": "ROM TSYMTRC\u21923SYMTRC (WSGRND 318-367) = surfaceMazes 'SYMTRC' family. e.g. ROM `TOWER -3C00,1400` = ($-3C00=-15360, $1400=5120) = ours [-15360,5120,1]; `BUNKER -5800,0800` = (-22528,2048) = ours [-22528,2048,3]. Base towers 21, extended 25.",
-    "reasoning": "All 28 base rows (323-360) and 4 extended (363-366) verified. 7 bunkers in base \u2192 21 tower/bishop (header `;21 TOWERS`); +4 towers \u2192 25. $3C00=15360 and $0800=2048 convert exactly.",
+    "title": "SYMTRC / 3SYMTRC maze (wave 9) — all 28+4 entries match byte-for-byte",
+    "claim": "ROM TSYMTRC→3SYMTRC (WSGRND 318-367) = surfaceMazes 'SYMTRC' family. e.g. ROM `TOWER -3C00,1400` = ($-3C00=-15360, $1400=5120) = ours [-15360,5120,1]; `BUNKER -5800,0800` = (-22528,2048) = ours [-22528,2048,3]. Base towers 21, extended 25.",
+    "reasoning": "All 28 base rows (323-360) and 4 extended (363-366) verified. 7 bunkers in base → 21 tower/bishop (header `;21 TOWERS`); +4 towers → 25. $3C00=15360 and $0800=2048 convert exactly.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 329,
@@ -138,9 +138,9 @@
   {
     "id": "D-009",
     "class": "CONFIRMED",
-    "title": "VALLEY / 3VALLEY maze (wave 10) \u2014 all 28+4 entries match byte-for-byte",
-    "claim": "ROM TVALLEY\u21923VALLEY (WSGRND 519-567) = surfaceMazes 'VALLEY' family. e.g. ROM `TOWER 7C00,6000` = ($7C00=31744, 24576) = ours [31744,24576,1]; `TOWER 0000,0000` = (0,0) = ours [0,0,1]; sole `BUNKER 6000,3000` = (24576,12288) = ours [24576,12288,3]. Base towers 27, extended 31.",
-    "reasoning": "All 28 base rows (524-560) and 4 extended (563-566) verified. VALLEY has just ONE bunker \u2192 27 tower/bishop (header `;27 TOWERS`); +4 towers \u2192 31. $7C00=31744 (the TIE-spawn depth constant) is transcribed exactly.",
+    "title": "VALLEY / 3VALLEY maze (wave 10) — all 28+4 entries match byte-for-byte",
+    "claim": "ROM TVALLEY→3VALLEY (WSGRND 519-567) = surfaceMazes 'VALLEY' family. e.g. ROM `TOWER 7C00,6000` = ($7C00=31744, 24576) = ours [31744,24576,1]; `TOWER 0000,0000` = (0,0) = ours [0,0,1]; sole `BUNKER 6000,3000` = (24576,12288) = ours [24576,12288,3]. Base towers 27, extended 31.",
+    "reasoning": "All 28 base rows (524-560) and 4 extended (563-566) verified. VALLEY has just ONE bunker → 27 tower/bishop (header `;27 TOWERS`); +4 towers → 31. $7C00=31744 (the TIE-spawn depth constant) is transcribed exactly.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 555,
@@ -155,9 +155,9 @@
   {
     "id": "D-010",
     "class": "CONFIRMED",
-    "title": "TWRCTY / 3TWRCTY maze (wave 11 / 20) \u2014 all 28+4 entries match byte-for-byte",
-    "claim": "ROM TTWRCTY\u21923TWRCTY (WSGRND 269-315) = surfaceMazes 'TWRCTY' family. e.g. ROM `TOWER -7C00,6800` = ($-7C00=-31744, $6800=26624) = ours [-31744,26624,1]; extended `TOWER 800,3000` = (2048,12288) = ours [2048,12288,1]. Base towers 28 (all TOWER, no bunkers), extended 32.",
-    "reasoning": "All 28 base rows (274-308) and 4 extended (311-314) verified. TWRCTY is all towers \u2192 28 (header `;28 TOWERS`, the max base); +4 \u2192 32 (the max extended, 3TWRCTY WAVE 20). Every family across D-001..D-010 has baseLen 28 objects + 4 extended = 32, matching the ROM invariant that each base maze holds 28 ground objects and its T3 form appends four.",
+    "title": "TWRCTY / 3TWRCTY maze (wave 11 / 20) — all 28+4 entries match byte-for-byte",
+    "claim": "ROM TTWRCTY→3TWRCTY (WSGRND 269-315) = surfaceMazes 'TWRCTY' family. e.g. ROM `TOWER -7C00,6800` = ($-7C00=-31744, $6800=26624) = ours [-31744,26624,1]; extended `TOWER 800,3000` = (2048,12288) = ours [2048,12288,1]. Base towers 28 (all TOWER, no bunkers), extended 32.",
+    "reasoning": "All 28 base rows (274-308) and 4 extended (311-314) verified. TWRCTY is all towers → 28 (header `;28 TOWERS`, the max base); +4 → 32 (the max extended, 3TWRCTY WAVE 20). Every family across D-001..D-010 has baseLen 28 objects + 4 extended = 32, matching the ROM invariant that each base maze holds 28 ground objects and its T3 form appends four.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 299,
@@ -173,8 +173,8 @@
     "id": "D-011",
     "class": "CONFIRMED",
     "title": "TTWRS quota: TOWER and BISHOP count, BUNKER is quota-neutral but shootable",
-    "claim": "ROM: TOWER and BISHOP macros do `.TWRS=.TWRS+1` (WSGRND 118, 129); the BUNKER macro (134-141) does NOT \u2014 bunkers never enter the TTWRS tower count. Ours: towerCountOf filters `e.kind !== 'bunker'`, so tower+bishop count and bunkers do not \u2014 matching every header count (0/16/20/21/27/28 base). Bunkers remain shootable (ROM GDHTGB scores them) and score in ours (TURRET_SCORE).",
-    "reasoning": "The `.TWRS` accumulator is the source of the TTWRS byte IGRND loads into GD.TWL (`# OF TOWERS LEFT, BCD`, WSGRND 687-695). Because BUNKER omits the increment, a maze's tower quota counts only TOWER/BISHOP \u2014 exactly what towersForWave/towerCount computes. sim.ts:523 mirrors this (`if (turrets[ti].kind !== 'bunker') towerKills++`). The ROM keeps `.TWRS` in BCD (`.IIF GT,.TWRS&0F-9,.TWRS=.TWRS+6`), a storage encoding of the same integer count, so our decimal count is the faithful value. This supersedes the disasm byte_98CB 22..50 stream (state.ts:509 note) \u2014 BOOK_WAS_WRONG territory settled by sw4-3, recorded here as CONFIRMED against the primary source.",
+    "claim": "ROM: TOWER and BISHOP macros do `.TWRS=.TWRS+1` (WSGRND 118, 129); the BUNKER macro (134-141) does NOT — bunkers never enter the TTWRS tower count. Ours: towerCountOf filters `e.kind !== 'bunker'`, so tower+bishop count and bunkers do not — matching every header count (0/16/20/21/27/28 base). Bunkers remain shootable (ROM GDHTGB scores them) and score in ours (TURRET_SCORE).",
+    "reasoning": "The `.TWRS` accumulator is the source of the TTWRS byte IGRND loads into GD.TWL (`# OF TOWERS LEFT, BCD`, WSGRND 687-695). Because BUNKER omits the increment, a maze's tower quota counts only TOWER/BISHOP — exactly what towersForWave/towerCount computes. sim.ts:523 mirrors this (`if (turrets[ti].kind !== 'bunker') towerKills++`). The ROM keeps `.TWRS` in BCD (`.IIF GT,.TWRS&0F-9,.TWRS=.TWRS+6`), a storage encoding of the same integer count, so our decimal count is the faithful value. This supersedes the disasm byte_98CB 22..50 stream (state.ts:509 note) — BOOK_WAS_WRONG territory settled by sw4-3, recorded here as CONFIRMED against the primary source.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 118,
@@ -189,8 +189,8 @@
   {
     "id": "D-012",
     "class": "CONFIRMED",
-    "title": "Wave\u2192maze assignment matches ROM TGDPTR for waves 2..20",
-    "claim": "ROM TGDPTR (WSGRND 636-660) assigns WAVE 02=BUNK, 03=SQUARE, 04=CLUSTR, 05=TURNON, 06=WEDGE, 07=DIFF, 08=TRAP, 09=SYMTRC, 10=VALLEY, 11=TWRCTY, 12=3SQUARE \u2026 20=3TWRCTY. Ours mazeForWave uses `idx = w - 2` for 2<=w<=20 over MAZE_ORDER in that exact sequence, so wave 2\u2192BUNK \u2026 wave 20\u21923TWRCTY, identical.",
+    "title": "Wave→maze assignment matches ROM TGDPTR for waves 2..20",
+    "claim": "ROM TGDPTR (WSGRND 636-660) assigns WAVE 02=BUNK, 03=SQUARE, 04=CLUSTR, 05=TURNON, 06=WEDGE, 07=DIFF, 08=TRAP, 09=SYMTRC, 10=VALLEY, 11=TWRCTY, 12=3SQUARE … 20=3TWRCTY. Ours mazeForWave uses `idx = w - 2` for 2<=w<=20 over MAZE_ORDER in that exact sequence, so wave 2→BUNK … wave 20→3TWRCTY, identical.",
     "reasoning": "MAZE_ORDER (surfaceMazes 211-214) lists the 19 mazes in TGDPTR order; `w-2` maps ROM wave n to TGDPTR index n-2, reproducing every TMAP line's WAVE comment. Verified the whole table against the 19 TMAP entries. VWGRND indexes TGDPTR by GD.WAV (=game_wave-2) the same way (WSGRND 728-737).",
     "source": {
       "file": "WSGRND.MAC",
@@ -216,18 +216,18 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 339,
+      "line": 340,
       "verbatim": "export const SKIM_ALTITUDE = 128"
     },
     "verdict": "CONFIRMED",
-    "refutation_corrections": "Re-class as 'CONFIRMED within the 1/30 ground-render convention.' The 1/30 (GROUND_MODEL_SCALE) is a SHELL render choice, not a ROM constant, so unlike the byte-exact maze confirms this equivalence is not scale-free at the absolute level (128 != 3840 without it). State the load-bearing, scale-free fidelity explicitly: SKIM_ALTITUDE = GD$MDT x GROUND_MODEL_SCALE seats towers at the ship's skim height, and the altitude:tower-height ratio (~0.36) mirrors the ROM's GD$MDT:tower-top \u2014 that ratio, not the absolute 128<->3840 mapping, is the authentic quantity. Also note the surface is anisotropically scaled: maze X/Y/depth are raw ROM units 1:1 (D-001..D-012) while the vertical band is 1/30."
+    "refutation_corrections": "Re-class as 'CONFIRMED within the 1/30 ground-render convention.' The 1/30 (GROUND_MODEL_SCALE) is a SHELL render choice, not a ROM constant, so unlike the byte-exact maze confirms this equivalence is not scale-free at the absolute level (128 != 3840 without it). State the load-bearing, scale-free fidelity explicitly: SKIM_ALTITUDE = GD$MDT x GROUND_MODEL_SCALE seats towers at the ship's skim height, and the altitude:tower-height ratio (~0.36) mirrors the ROM's GD$MDT:tower-top — that ratio, not the absolute 128<->3840 mapping, is the authentic quantity. Also note the surface is anisotropically scaled: maze X/Y/depth are raw ROM units 1:1 (D-001..D-012) while the vertical band is 1/30."
   },
   {
     "id": "D-014",
     "class": "STRUCTURAL",
     "title": "Wave 21+ maze re-pick: ROM random (P.RND1), ours deterministic cycle over the same six",
-    "claim": "ROM IGRND: when GD.WAV >= MAP$EQ (19, i.e. game wave >= 21) it picks a maze randomly \u2014 `LDB #MAP$EQ-MAP$RPT` (=6), `LDA P.RND1`, `MUL`, `ADDA #MAP$RPT` (=13) \u2014 a RANDOM selection over TGDPTR indices 13..18 (3WEDGE,3DIFF,3TRAP,3SYMTRC,3VALLEY,3TWRCTY). Ours: `idx = WRAP_START(13) + ((w-21) % WRAP_COUNT(6))`, a deterministic cycle over the SAME six indices.",
-    "reasoning": "The maze SET is identical (indices 13..18, MAP$RPT..MAP$EQ). The only difference is selection: the ROM rerolls P.RND1 each ground entry; the pure deterministic core (no shared RNG-state contract with the maze picker) can't reproduce that stream, so it cycles. Same six mazes, different order \u2014 a determinism-boundary artifact, not a data error. Boundary matches: ROM randomizes at GD.WAV>=19 \u21d4 wave>=21; ours wraps at w>=21.",
+    "claim": "ROM IGRND: when GD.WAV >= MAP$EQ (19, i.e. game wave >= 21) it picks a maze randomly — `LDB #MAP$EQ-MAP$RPT` (=6), `LDA P.RND1`, `MUL`, `ADDA #MAP$RPT` (=13) — a RANDOM selection over TGDPTR indices 13..18 (3WEDGE,3DIFF,3TRAP,3SYMTRC,3VALLEY,3TWRCTY). Ours: `idx = WRAP_START(13) + ((w-21) % WRAP_COUNT(6))`, a deterministic cycle over the SAME six indices.",
+    "reasoning": "The maze SET is identical (indices 13..18, MAP$RPT..MAP$EQ). The only difference is selection: the ROM rerolls P.RND1 each ground entry; the pure deterministic core (no shared RNG-state contract with the maze picker) can't reproduce that stream, so it cycles. Same six mazes, different order — a determinism-boundary artifact, not a data error. Boundary matches: ROM randomizes at GD.WAV>=19 ⇔ wave>=21; ours wraps at w>=21.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 684,
@@ -245,7 +245,7 @@
     "class": "DIVERGENCE",
     "title": "Clone gives wave 1 a surface (SQUARE); the ROM has NO wave-1 ground phase",
     "claim": "ROM: `;WAVE 1 HAS NO GROUND PHASE` (WSGRND 637); TGDPTR starts at WAVE 02=BUNK, and PHIGD's DECA is 'ALWAYS SKIPPED ON FIRST GAME WAVE' (WSMAIN 1604). Ours: mazeForWave(1) returns SQUARE (the wave-3 maze) as a mixed intro. Consequence: SQUARE is served at BOTH clone wave 1 and clone wave 3.",
-    "reasoning": "In the cabinet, game wave 1 is space\u2192trench with no ground segment. The clone's phase machine runs space\u2192surface\u2192trench every wave, so it needs a wave-1 maze; sw4-3 chose SQUARE because a mixed tower+bunker field reads as an intro. This is an added segment, not a mis-port, and the choice re-uses SQUARE, doubling it in the first three waves. Deliberate design divergence tied to the clone's uniform per-wave phase structure.",
+    "reasoning": "In the cabinet, game wave 1 is space→trench with no ground segment. The clone's phase machine runs space→surface→trench every wave, so it needs a wave-1 maze; sw4-3 chose SQUARE because a mixed tower+bunker field reads as an intro. This is an added segment, not a mis-port, and the choice re-uses SQUARE, doubling it in the first three waves. Deliberate design divergence tied to the clone's uniform per-wave phase structure.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 637,
@@ -263,8 +263,8 @@
     "id": "D-016",
     "class": "DIVERGENCE",
     "title": "Bunkers fire in the ROM (GDBNKGN); the clone silences them",
-    "claim": "ROM GDGUN dispatches PC$BNK (=3) to GDBNKGN (`LBHI GDBNKGN ;>2==>BUNKER GUN`, WSGRND 1200): a bunker fires with a distance-weighted chance (`LDA #40; SUBA 4+M.X0; CMPA P.RND1`) \u2014 either straight ahead (FRBFGN) or one diagonal (FRBRGN/FRBLGN). Ours: the armed filter is `turret.kind !== 'bunker'`, so bunkers NEVER fire.",
-    "reasoning": "The clone comment (sim.ts 488-490) explicitly logs 'whether bunkers fire at all \u2026 is an open ROM question.' The primary source answers it: bunkers DO fire (GDBNKGN, WSGRND 1293-1309), from the bunker's low body with a range-scaled probability. This is a concrete missing hazard, not a model-level judgement call. A minimal fix folds bunkers into `armed` with a bunker-height muzzle; a faithful fix also adds the distance-weighted fire chance.",
+    "claim": "ROM GDGUN dispatches PC$BNK (=3) to GDBNKGN (`LBHI GDBNKGN ;>2==>BUNKER GUN`, WSGRND 1200): a bunker fires with a distance-weighted chance (`LDA #40; SUBA 4+M.X0; CMPA P.RND1`) — either straight ahead (FRBFGN) or one diagonal (FRBRGN/FRBLGN). Ours: the armed filter is `turret.kind !== 'bunker'`, so bunkers NEVER fire.",
+    "reasoning": "The clone comment (sim.ts 488-490) explicitly logs 'whether bunkers fire at all … is an open ROM question.' The primary source answers it: bunkers DO fire (GDBNKGN, WSGRND 1293-1309), from the bunker's low body with a range-scaled probability. This is a concrete missing hazard, not a model-level judgement call. A minimal fix folds bunkers into `armed` with a bunker-height muzzle; a faithful fix also adds the distance-weighted fire chance.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 1200,
@@ -283,8 +283,8 @@
     "id": "D-017",
     "class": "DIVERGENCE",
     "title": "Ground return-fire model: ROM per-object directional guns vs one homing fireball",
-    "claim": "ROM: each viewed, above-horizon, undamaged object fires DIRECTIONAL guns every game frame it is drawn \u2014 a TOWER 'SHOOTS DIAG AND FORWARDS' (GDTWRGN rolls P.RND1 for forward FRWFGN + right FRWRGN + left FRWLGN, up to 3 shots) and a BISHOP 'SHOOTS DIAG ONLY' (GDBSHGN: FRWRGN/FRWLGN, no forward). Ours: on a single global cooldown (ENEMY_FIRE_INTERVAL) ONE random armed object lobs ONE fireball that homes on the cockpit; bishop is not distinguished from tower (both pass `kind !== 'bunker'`).",
-    "reasoning": "The cabinet's guns are aimed sparkle-vectors fired probabilistically per object per frame (WSGRND GDTWRGN 1207-1250, GDBSHGN 1252-1291); the density and directionality depend on the pilot's viewing geometry. The clone reuses the space-phase homing-fireball model (sim.ts 491-505), which cannot express forward/left/right diagonals or the bishop's diag-only rule, and rate-limits to one shot per interval. This is a model-level difference, not a constant \u2014 a faithful port is a rewrite (size l) entangled with the 60\u00b0 FOV, so it is recorded as an accepted simplification rather than a constant tweak. Bishops still count toward the quota correctly (D-011); only their firing pattern is unmodeled.",
+    "claim": "ROM: each viewed, above-horizon, undamaged object fires DIRECTIONAL guns every game frame it is drawn — a TOWER 'SHOOTS DIAG AND FORWARDS' (GDTWRGN rolls P.RND1 for forward FRWFGN + right FRWRGN + left FRWLGN, up to 3 shots) and a BISHOP 'SHOOTS DIAG ONLY' (GDBSHGN: FRWRGN/FRWLGN, no forward). Ours: on a single global cooldown (ENEMY_FIRE_INTERVAL) ONE random armed object lobs ONE fireball that homes on the cockpit; bishop is not distinguished from tower (both pass `kind !== 'bunker'`).",
+    "reasoning": "The cabinet's guns are aimed sparkle-vectors fired probabilistically per object per frame (WSGRND GDTWRGN 1207-1250, GDBSHGN 1252-1291); the density and directionality depend on the pilot's viewing geometry. The clone reuses the space-phase homing-fireball model (sim.ts 491-505), which cannot express forward/left/right diagonals or the bishop's diag-only rule, and rate-limits to one shot per interval. This is a model-level difference, not a constant — a faithful port is a rewrite (size l) entangled with the 60° FOV, so it is recorded as an accepted simplification rather than a constant tweak. Bishops still count toward the quota correctly (D-011); only their firing pattern is unmodeled.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 1239,
@@ -302,8 +302,8 @@
     "id": "D-018",
     "class": "NO_COUNTERPART",
     "title": "Per-object awakening-sequence gating (TGD$SQ / GD.SEQ) is absent from the clone",
-    "claim": "ROM: every ground object carries an AWAKENING SEQUENCE NUMBER byte (`.BYTE .C`, WSGRND 115; the third TOWER/BISHOP/BUNKER operand, values 0..3). VWGRND only activates an object once GD.SEQ >= its TGD$SQ (`CMPA TGD$SQ(X); LBLT 90$`, WSGRND 740-742), so deeper rows wake up in staged sequences as the ship advances. Ours: MazeEntry stores only {x,y,kind,typeDigit}; the third operand is dropped and there is no GD.SEQ gate \u2014 the whole field is laid at once (all age 0) and gated only by a flat TOWER_FIRE_GRACE age.",
-    "reasoning": "The awakening sequence is both a fire gate and a staged-reveal mechanism (objects turn on in waves 0\u21924 across the traversal). surfaceMazes.ts deliberately keeps only geometry+type; the RawFamily tuple is [x,y,typeDigit] and never captures .C. The clone's scroll-in-from-horizon model plus TOWER_FIRE_GRACE approximates 'don't fire the instant you appear' but not the ROM's sequenced activation. Recorded as NO_COUNTERPART (the rule exists in the ROM, is not implemented in ours); ours is null because there is no line that carries the sequence.",
+    "claim": "ROM: every ground object carries an AWAKENING SEQUENCE NUMBER byte (`.BYTE .C`, WSGRND 115; the third TOWER/BISHOP/BUNKER operand, values 0..3). VWGRND only activates an object once GD.SEQ >= its TGD$SQ (`CMPA TGD$SQ(X); LBLT 90$`, WSGRND 740-742), so deeper rows wake up in staged sequences as the ship advances. Ours: MazeEntry stores only {x,y,kind,typeDigit}; the third operand is dropped and there is no GD.SEQ gate — the whole field is laid at once (all age 0) and gated only by a flat TOWER_FIRE_GRACE age.",
+    "reasoning": "The awakening sequence is both a fire gate and a staged-reveal mechanism (objects turn on in waves 0→4 across the traversal). surfaceMazes.ts deliberately keeps only geometry+type; the RawFamily tuple is [x,y,typeDigit] and never captures .C. The clone's scroll-in-from-horizon model plus TOWER_FIRE_GRACE approximates 'don't fire the instant you appear' but not the ROM's sequenced activation. Recorded as NO_COUNTERPART (the rule exists in the ROM, is not implemented in ours); ours is null because there is no line that carries the sequence.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 115,
@@ -316,8 +316,8 @@
     "id": "D-019",
     "class": "DIVERGENCE",
     "title": "Surface end condition: ROM ends by traversal (GD.SEQ>=5); clone also ends early on all-towers-killed",
-    "claim": "ROM PHEGD ends the ground phase only when the ship has flown through the sequences \u2014 `LDA GD.SEQ; CMPA #5; IFHS \u2026 LDA #PH$G0B; STA PHASE` (WSMAIN 1678-1688), where GD.SEQ increments once per $8000 lateral wrap of forward travel (S1MVGD 2538-2545). Killing every tower sets Q.ATP and shows '50,000 FOR SHOOTING ALL TOWERS' but does NOT shorten the phase. Ours: phaseCleared returns `allTowersKilled(s) || surfaceScrollZ >= surfaceFieldDepth(s.wave)` \u2014 the scroll-completion arm matches traversal, but the allTowersKilled arm ends the surface EARLY.",
-    "reasoning": "In the cabinet the tower-clear bonus is decoupled from phase length: the pilot still flies the remaining traversal (~5 map-lengths, GD.SEQ 0\u21925) after clearing. The clone couples banking the 50,000 bonus (sim.ts 946-947) with an immediate jump to the trench. Both bank the same bonus once, so the SCORING matches; the divergence is pacing \u2014 a cleared surface is cut short in the clone. Defensible arcade shorthand, recorded as an accepted divergence; a faithful version would drop the allTowersKilled arm and rely on scroll-completion alone.",
+    "claim": "ROM PHEGD ends the ground phase only when the ship has flown through the sequences — `LDA GD.SEQ; CMPA #5; IFHS … LDA #PH$G0B; STA PHASE` (WSMAIN 1678-1688), where GD.SEQ increments once per $8000 lateral wrap of forward travel (S1MVGD 2538-2545). Killing every tower sets Q.ATP and shows '50,000 FOR SHOOTING ALL TOWERS' but does NOT shorten the phase. Ours: phaseCleared returns `allTowersKilled(s) || surfaceScrollZ >= surfaceFieldDepth(s.wave)` — the scroll-completion arm matches traversal, but the allTowersKilled arm ends the surface EARLY.",
+    "reasoning": "In the cabinet the tower-clear bonus is decoupled from phase length: the pilot still flies the remaining traversal (~5 map-lengths, GD.SEQ 0→5) after clearing. The clone couples banking the 50,000 bonus (sim.ts 946-947) with an immediate jump to the trench. Both bank the same bonus once, so the SCORING matches; the divergence is pacing — a cleared surface is cut short in the clone. Defensible arcade shorthand, recorded as an accepted divergence; a faithful version would drop the allTowersKilled arm and rely on scroll-completion alone.",
     "source": {
       "file": "WSMAIN.MAC",
       "line": 1679,
@@ -325,7 +325,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 845,
+      "line": 848,
       "verbatim": "      return allTowersKilled(s) || s.surfaceScrollZ >= surfaceFieldDepth(s.wave)"
     },
     "recommendation": "accept",
@@ -334,9 +334,9 @@
   {
     "id": "D-020",
     "class": "NO_COUNTERPART",
-    "title": "Flying into a standing tower/bunker costs a shield in the ROM; the clone has no ship\u2194object collision",
-    "claim": "ROM GDVIEW resolves ship-vs-object collisions on the surface: when the ship closes on a tower it runs `JSR BG1GLW` (glow shields) + `JSR AUDCR ;AND CRASH INTO TOWER` (WSGRND 911-912) and rolls the ship (S.ROL); bunkers have the analogous over-the-top collision (940-964). Ours: stepSurface only damages the player via terrain-crash and turret bolts \u2014 standing towers/bunkers are collided with ONLY by player projectiles, never by the ship, so the cockpit can fly through a tower unharmed.",
-    "reasoning": "The cabinet makes the maze a physical hazard: mis-steering into a tower or bunker costs shields and throws the ship into a roll. The clone's surface has no ship\u2194turret collision path (sim.ts stepSurface 450-570); objects merely scroll past to be shot. A concrete missing hazard. Recorded NO_COUNTERPART (ours null \u2014 there is no collision line to quote); a fix adds a ship-vs-standing-object proximity test that spends a shield.",
+    "title": "Flying into a standing tower/bunker costs a shield in the ROM; the clone has no ship↔object collision",
+    "claim": "ROM GDVIEW resolves ship-vs-object collisions on the surface: when the ship closes on a tower it runs `JSR BG1GLW` (glow shields) + `JSR AUDCR ;AND CRASH INTO TOWER` (WSGRND 911-912) and rolls the ship (S.ROL); bunkers have the analogous over-the-top collision (940-964). Ours: stepSurface only damages the player via terrain-crash and turret bolts — standing towers/bunkers are collided with ONLY by player projectiles, never by the ship, so the cockpit can fly through a tower unharmed.",
+    "reasoning": "The cabinet makes the maze a physical hazard: mis-steering into a tower or bunker costs shields and throws the ship into a roll. The clone's surface has no ship↔turret collision path (sim.ts stepSurface 450-570); objects merely scroll past to be shot. A concrete missing hazard. Recorded NO_COUNTERPART (ours null — there is no collision line to quote); a fix adds a ship-vs-standing-object proximity test that spends a shield.",
     "source": {
       "file": "WSGRND.MAC",
       "line": 912,
@@ -350,8 +350,8 @@
     "id": "D-021",
     "class": "DIVERGENCE",
     "title": "Low altitude: ROM clamps the ship's height (no penalty); the clone charges a shield for a 'terrain crash'",
-    "claim": "ROM S1MVGD clamps ground-flight height to [GD$MNT=$200 (512), GD$MXT=$1C00 (7168)] \u2014 `CMPD #200; IFLT; LDD #200` (WSMAIN 2586-2589) \u2014 with NO shield cost for pressing the floor; you simply cannot descend past $200. Ours: `if (altitude < MIN_SKIM_ALTITUDE) { damage++ \u2026 }` (sim.ts 457-460) spends a shield and emits a terrain-crash when altitude dips below 40.",
-    "reasoning": "The cabinet has no ground-floor damage in the ground phase \u2014 altitude is bounded, and the only surface hazards are the towers/bunkers (D-020) and their guns. The clone replaces the ROM's hard clamp with a punitive crash-and-bounce (altitude reset to SKIM_ALTITUDE, shield lost). That is an invented penalty. Recorded as a divergence; accepted as a clone hazard-design choice, but the faithful behaviour is a silent clamp at a $200-equivalent floor.",
+    "claim": "ROM S1MVGD clamps ground-flight height to [GD$MNT=$200 (512), GD$MXT=$1C00 (7168)] — `CMPD #200; IFLT; LDD #200` (WSMAIN 2586-2589) — with NO shield cost for pressing the floor; you simply cannot descend past $200. Ours: `if (altitude < MIN_SKIM_ALTITUDE) { damage++ … }` (sim.ts 457-460) spends a shield and emits a terrain-crash when altitude dips below 40.",
+    "reasoning": "The cabinet has no ground-floor damage in the ground phase — altitude is bounded, and the only surface hazards are the towers/bunkers (D-020) and their guns. The clone replaces the ROM's hard clamp with a punitive crash-and-bounce (altitude reset to SKIM_ALTITUDE, shield lost). That is an invented penalty. Recorded as a divergence; accepted as a clone hazard-design choice, but the faithful behaviour is a silent clamp at a $200-equivalent floor.",
     "source": {
       "file": "WSMAIN.MAC",
       "line": 2588,
@@ -368,9 +368,9 @@
   {
     "id": "D-022",
     "class": "DIVERGENCE",
-    "title": "Surface forward pacing: ROM accelerates the pilot ($100\u2192$400); clone scrolls the world at a fixed 600",
-    "claim": "ROM ground flight moves the PLAYER forward at an accelerating speed: PHIGD seeds M$VX+M.S1 = $100 (256 units/game-frame, WSMAIN 1621), and PHEGD ramps it +1 per frame up to $400 (1024) (`ADDD #1; CMPD #400`, WSMAIN 1660-1665). At 20.508 Hz that is 256\u00d720.508 \u2248 5,250 units/s rising to 1024\u00d720.508 \u2248 21,000 units/s, run over ~5 map-lengths (GD.SEQ 0\u21925). Ours: the WORLD scrolls toward a fixed cockpit at a constant TURRET_SCROLL_SPEED = 600 units/s over a single map-length.",
-    "reasoning": "Three differences compound: (1) inversion \u2014 ROM moves the ship through a static maze, the clone scrolls a static-camera world; (2) constant vs accelerating rate; (3) magnitude \u2014 600 u/s is ~9\u00d7 slower than the ROM's slowest ground speed in the shared raw-ROM-unit space (maze depths to $8000=32768 in both). TURRET_SCROLL_SPEED is flagged in state.ts:380 as 'Internal tuning (not part of the test contract)', i.e. a chosen number, not ROM-recovered. Part structural (camera inversion), part tuned-value; recorded as an accepted divergence with the ROM numbers on record for a future pass.",
+    "title": "Surface forward pacing: ROM accelerates the pilot ($100→$400); clone scrolls the world at a fixed 600",
+    "claim": "ROM ground flight moves the PLAYER forward at an accelerating speed: PHIGD seeds M$VX+M.S1 = $100 (256 units/game-frame, WSMAIN 1621), and PHEGD ramps it +1 per frame up to $400 (1024) (`ADDD #1; CMPD #400`, WSMAIN 1660-1665). At 20.508 Hz that is 256×20.508 ≈ 5,250 units/s rising to 1024×20.508 ≈ 21,000 units/s, run over ~5 map-lengths (GD.SEQ 0→5). Ours: the WORLD scrolls toward a fixed cockpit at a constant TURRET_SCROLL_SPEED = 600 units/s over a single map-length.",
+    "reasoning": "Three differences compound: (1) inversion — ROM moves the ship through a static maze, the clone scrolls a static-camera world; (2) constant vs accelerating rate; (3) magnitude — 600 u/s is ~9× slower than the ROM's slowest ground speed in the shared raw-ROM-unit space (maze depths to $8000=32768 in both). TURRET_SCROLL_SPEED is flagged in state.ts:380 as 'Internal tuning (not part of the test contract)', i.e. a chosen number, not ROM-recovered. Part structural (camera inversion), part tuned-value; recorded as an accepted divergence with the ROM numbers on record for a future pass.",
     "source": {
       "file": "WSMAIN.MAC",
       "line": 1662,
@@ -378,7 +378,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 381,
+      "line": 382,
       "verbatim": "export const TURRET_SCROLL_SPEED = 600"
     },
     "recommendation": "accept",

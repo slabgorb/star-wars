@@ -76,7 +76,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 823,
+      "line": 826,
       "verbatim": "const NEXT_PHASE: Record<Phase, Phase | null> = {"
     }
   },
@@ -112,7 +112,8 @@
     },
     "recommendation": "fix",
     "size": "s",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-1"
   },
   {
     "id": "T-008",
@@ -132,7 +133,8 @@
     },
     "recommendation": "fix",
     "size": "m",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-1"
   },
   {
     "id": "T-009",
@@ -161,7 +163,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 536,
+      "line": 537,
       "verbatim": "  t: number"
     },
     "recommendation": "accept"

@@ -2,9 +2,9 @@
   {
     "id": "A-001",
     "class": "CONFIRMED",
-    "title": "TIE spawn DEPTH is $7C00 (31,744) \u2014 matches unscaled",
-    "claim": "The ROM STARTING-LOCATIONS macro .WB emits $7C00 as the first (depth) word of every TBG entry (WSCPU.MAC:1181). $7C00 = 31,744 raw ROM units. Our TIE_SPAWN_DISTANCE = 0x7c00 = 31,744 (state.ts:201). Because models.ts is authored in raw ROM units, the distance ports unscaled \u2014 exact match. (ROM world-X-forward maps to our \u2212Z by convention; magnitude identical.)",
-    "reasoning": "The .WB name,_,a,b macro body is `.WORD 7C00 / .WORD a*400 / .WORD b*400`; the depth word is a literal $7C00 shared by all 12 entries. The clone restored this in sw4-1 (it previously carried a compressed 8000). Values are 16-bit, $4000=1.0, so 31,744 \u2248 1.937 in fixed point \u2014 the far edge of the \u00b1$7CFF play cube.",
+    "title": "TIE spawn DEPTH is $7C00 (31,744) — matches unscaled",
+    "claim": "The ROM STARTING-LOCATIONS macro .WB emits $7C00 as the first (depth) word of every TBG entry (WSCPU.MAC:1181). $7C00 = 31,744 raw ROM units. Our TIE_SPAWN_DISTANCE = 0x7c00 = 31,744 (state.ts:201). Because models.ts is authored in raw ROM units, the distance ports unscaled — exact match. (ROM world-X-forward maps to our −Z by convention; magnitude identical.)",
+    "reasoning": "The .WB name,_,a,b macro body is `.WORD 7C00 / .WORD a*400 / .WORD b*400`; the depth word is a literal $7C00 shared by all 12 entries. The clone restored this in sw4-1 (it previously carried a compressed 8000). Values are 16-bit, $4000=1.0, so 31,744 ≈ 1.937 in fixed point — the far edge of the ±$7CFF play cube.",
     "source": {
       "file": "WSCPU.MAC",
       "line": 1181,
@@ -13,15 +13,15 @@
     "ours": {
       "file": "src/core/state.ts",
       "line": 201,
-      "verbatim": "export const TIE_SPAWN_DISTANCE = 0x7c00 // 31744 \u2014 WSCPU STARTING LOCATIONS depth word"
+      "verbatim": "export const TIE_SPAWN_DISTANCE = 0x7c00 // 31744 — WSCPU STARTING LOCATIONS depth word"
     }
   },
   {
     "id": "A-002",
     "class": "CONFIRMED",
-    "title": "TIE lateral spawn step is \u00d7$400 (1024 units)",
-    "claim": "The .WB macro multiplies each lateral operand by $400 (WSCPU.MAC:1182): `.WORD '.3'*400`. $400 = 1024. Our ROM_LATERAL_UNIT = 0x400 = 1024 (sim.ts:1162), and SPAWN_LATERALS multiplies the {0,\u00b11,\u00b12} pattern by it, so laterals are exactly {0, \u00b11024, \u00b12048} \u2014 the ROM's discrete offsets, unscaled.",
-    "reasoning": "The two lateral words of each TBG entry are operand\u00d7$400. Decoding the 12 .WB rows (WSCPU.MAC:1186\u20131200): the A/B/C groups each use (0,+1),(\u22121,0),(+1,0) \u2192 {0,\u00b11024}; the D group uses (\u22122,0),(+2,0),(0,+2) \u2192 the \u00b12048 corners. Ours reproduces this set exactly.",
+    "title": "TIE lateral spawn step is ×$400 (1024 units)",
+    "claim": "The .WB macro multiplies each lateral operand by $400 (WSCPU.MAC:1182): `.WORD '.3'*400`. $400 = 1024. Our ROM_LATERAL_UNIT = 0x400 = 1024 (sim.ts:1162), and SPAWN_LATERALS multiplies the {0,±1,±2} pattern by it, so laterals are exactly {0, ±1024, ±2048} — the ROM's discrete offsets, unscaled.",
+    "reasoning": "The two lateral words of each TBG entry are operand×$400. Decoding the 12 .WB rows (WSCPU.MAC:1186–1200): the A/B/C groups each use (0,+1),(−1,0),(+1,0) → {0,±1024}; the D group uses (−2,0),(+2,0),(0,+2) → the ±2048 corners. Ours reproduces this set exactly.",
     "source": {
       "file": "WSCPU.MAC",
       "line": 1182,
@@ -29,16 +29,16 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1162,
-      "verbatim": "const ROM_LATERAL_UNIT = 0x400 // 1024 \u2014 the \u00d7$400 STARTING-LOCATION lateral step"
+      "line": 1165,
+      "verbatim": "const ROM_LATERAL_UNIT = 0x400 // 1024 — the ×$400 STARTING-LOCATION lateral step"
     }
   },
   {
     "id": "A-003",
     "class": "CONFIRMED",
-    "title": "D-group corner laterals are \u00b12 units (\u00b12048); only the D group uses them",
-    "claim": "WSCPU.MAC:1198 `.WB 1D1,0,-2,0` decodes to (depth $7C00, \u22122\u00d7$400 = \u2212$800 = \u22122048, 0). Our SPAWN_LATERALS 1D1 entry is [-2 * ROM_LATERAL_UNIT, 0] = [-2048, 0] (sim.ts:1173). The \u00b12048 offset appears ONLY in the D group (1D1/1D2/1D3), matching the ROM \u2014 the A/B/C groups never exceed \u00b11024.",
-    "reasoning": "Confirms both the value and the placement: our comment and the ROM agree that \u00b12048 lives only in the D-group. sim.ts:1173\u20131175 carry 1D1=[-2048,0], 1D2=[2048,0], 1D3=[0,2048], mirroring WSCPU.MAC:1198\u20131200 (\u22122,0)/(2,0)/(0,2).",
+    "title": "D-group corner laterals are ±2 units (±2048); only the D group uses them",
+    "claim": "WSCPU.MAC:1198 `.WB 1D1,0,-2,0` decodes to (depth $7C00, −2×$400 = −$800 = −2048, 0). Our SPAWN_LATERALS 1D1 entry is [-2 * ROM_LATERAL_UNIT, 0] = [-2048, 0] (sim.ts:1173). The ±2048 offset appears ONLY in the D group (1D1/1D2/1D3), matching the ROM — the A/B/C groups never exceed ±1024.",
+    "reasoning": "Confirms both the value and the placement: our comment and the ROM agree that ±2048 lives only in the D-group. sim.ts:1173–1175 carry 1D1=[-2048,0], 1D2=[2048,0], 1D3=[0,2048], mirroring WSCPU.MAC:1198–1200 (−2,0)/(2,0)/(0,2).",
     "source": {
       "file": "WSCPU.MAC",
       "line": 1198,
@@ -46,7 +46,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1173,
+      "line": 1176,
       "verbatim": "  [-2 * ROM_LATERAL_UNIT, 0], // 1D1"
     }
   },
@@ -54,7 +54,7 @@
     "id": "A-004",
     "class": "CONFIRMED",
     "title": "Space wave holds a maximum of 3 live TIEs, refilling on death",
-    "claim": "The space-wave handler PHESP1 keeps up to 3 aliens alive: `CMPA #03 ;3 ALIENS ALIVE?` and, if fewer, `JSR ADASHP` throws another (WSMAIN.MAC:1451\u20131453). Our WAVE_SIZE = 3 (state.ts:169) and the spawn loop only spawns while `movedEnemies.length < WAVE_SIZE` (sim.ts:210) \u2014 the same 3-slot ceiling with refill.",
+    "claim": "The space-wave handler PHESP1 keeps up to 3 aliens alive: `CMPA #03 ;3 ALIENS ALIVE?` and, if fewer, `JSR ADASHP` throws another (WSMAIN.MAC:1451–1453). Our WAVE_SIZE = 3 (state.ts:169) and the spawn loop only spawns while `movedEnemies.length < WAVE_SIZE` (sim.ts:210) — the same 3-slot ceiling with refill.",
     "reasoning": "ADASHP (WSCPU.MAC:1058) is the mid-wave top-up: it fills the first empty ALIEN slot from the wave list. The clone spawns into a free slot on a timer once below 3. The CEILING (3) is an exact match; the refill trigger differs in mechanism (ROM: immediate whenever <3; ours: on a spawnInterval timer) but the slot count is identical.",
     "source": {
       "file": "WSMAIN.MAC",
@@ -71,8 +71,8 @@
     "id": "A-005",
     "class": "CONFIRMED",
     "title": "A regular TIE dies on one hit",
-    "claim": "The shape table gives the TIE 1 life: `.WS TIE,1` (WSCPU.MAC:1165); the .WS macro stores that byte as # OF LIVES (WSCPU.MAC:1162), loaded into A$HTA at spawn (NWASHP `LDA 1(U) ;DRONES DIE ON N HITS`, WSCPU.MAC:1038). On a hit CPHTSA does `DEC A$HTA / LBLE XPSA` (WSCPU.MAC:362\u2013363), so HTA 1\u21920 explodes immediately. Our combat loop kills a TIE on the FIRST bolt contact \u2014 `killedTie.add(ei)` fires on the first `collides(... TIE_HIT_RADIUS)` (sim.ts:265\u2013266). Match: one hit, one kill.",
-    "reasoning": "Darth (RTH) has 4 lives (WSCPU.MAC:1166) and never dies in space (see A-016), but the ordinary TIE is a one-hit kill in both. Our sim has no hits-to-kill counter at all \u2014 a single collide destroys the TIE \u2014 which is behaviourally identical for the 1-life TIE.",
+    "claim": "The shape table gives the TIE 1 life: `.WS TIE,1` (WSCPU.MAC:1165); the .WS macro stores that byte as # OF LIVES (WSCPU.MAC:1162), loaded into A$HTA at spawn (NWASHP `LDA 1(U) ;DRONES DIE ON N HITS`, WSCPU.MAC:1038). On a hit CPHTSA does `DEC A$HTA / LBLE XPSA` (WSCPU.MAC:362–363), so HTA 1→0 explodes immediately. Our combat loop kills a TIE on the FIRST bolt contact — `killedTie.add(ei)` fires on the first `collides(... TIE_HIT_RADIUS)` (sim.ts:265–266). Match: one hit, one kill.",
+    "reasoning": "Darth (RTH) has 4 lives (WSCPU.MAC:1166) and never dies in space (see A-016), but the ordinary TIE is a one-hit kill in both. Our sim has no hits-to-kill counter at all — a single collide destroys the TIE — which is behaviourally identical for the 1-life TIE.",
     "source": {
       "file": "WSCPU.MAC",
       "line": 1165,
@@ -88,8 +88,8 @@
     "id": "A-006",
     "class": "CONFIRMED",
     "title": "TIE fire floor 'too close' is $800 (2048 units)",
-    "claim": "A TIE will not fire when the player's forward range drops to $800: CPUAL does `LDD M.XP / SUBD #800 / BLE 40$ ;B TOO CLOSE` (WSCPU.MAC:629\u2013631). $800 = 2048. Our TIE_NEAR_BOUND = 0x800 = 2048 (state.ts:308) is used as the strafe-fire floor (sim.ts:235 `inPassWindow = ... length(e.pos) > TIE_NEAR_BOUND`). Exact match on the fire floor.",
-    "reasoning": "This is the ROM's literal 'not too close' gate on TIE gunfire (also cited in the flight-AI model \u00a76 as range MReg00 > $800). The clone recovered the exact $800 in sw4-1. NOTE: ours ALSO reuses this same bound as a peel trigger, which the ROM does not do (see A-011) \u2014 but as a FIRE floor the value and role are confirmed identical.",
+    "claim": "A TIE will not fire when the player's forward range drops to $800: CPUAL does `LDD M.XP / SUBD #800 / BLE 40$ ;B TOO CLOSE` (WSCPU.MAC:629–631). $800 = 2048. Our TIE_NEAR_BOUND = 0x800 = 2048 (state.ts:308) is used as the strafe-fire floor (sim.ts:235 `inPassWindow = ... length(e.pos) > TIE_NEAR_BOUND`). Exact match on the fire floor.",
+    "reasoning": "This is the ROM's literal 'not too close' gate on TIE gunfire (also cited in the flight-AI model §6 as range MReg00 > $800). The clone recovered the exact $800 in sw4-1. NOTE: ours ALSO reuses this same bound as a peel trigger, which the ROM does not do (see A-011) — but as a FIRE floor the value and role are confirmed identical.",
     "source": {
       "file": "WSCPU.MAC",
       "line": 630,
@@ -97,16 +97,16 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 308,
-      "verbatim": "export const TIE_NEAR_BOUND = 0x800 // 2048 \u2014 WSCPU \"not too close\" fire/peel floor"
+      "line": 309,
+      "verbatim": "export const TIE_NEAR_BOUND = 0x800 // 2048 — WSCPU \"not too close\" fire/peel floor"
     }
   },
   {
     "id": "A-007",
     "class": "CONFIRMED",
     "title": "Per-wave simultaneous-fireball cap column matches TGPROB exactly",
-    "claim": "TGPROB's third column (guns-allowed) reads 1,1,2,3,4,5,6,6,6,6,6 for wave-hardness indices 0\u201310 (WSCPU.MAC:738\u2013748; e.g. index 6 is `.PROB 07,020,6 ;6`, WSCPU.MAC:744). Our FIRE_CONCURRENCY = [1,1,2,3,4,5,6,6,6,6,6,6,6,6,6,6] (gameRules.ts:188) reproduces indices 0\u201310 verbatim, then saturates at 6. Exact match on the ported column.",
-    "reasoning": "The .PROB macro's third arg (`...C`) is the count of guns allowed to fire that wave (macro WSCPU.MAC:731\u2013734). The table has 11 entries (index 0\u201310). Our array runs to 16 and holds 6 past index 6; since the ROM clamps its index to the 11-entry table (CPUAL `CMPB #TGPROZ-TGPROB/4`, WSCPU.MAC:636) and the value saturates at 6 from index 6 on, the extra tail is harmless. The clone did NOT port the mask/threshold columns (see A-012) \u2014 only this slot-cap column, which it took 1:1.",
+    "claim": "TGPROB's third column (guns-allowed) reads 1,1,2,3,4,5,6,6,6,6,6 for wave-hardness indices 0–10 (WSCPU.MAC:738–748; e.g. index 6 is `.PROB 07,020,6 ;6`, WSCPU.MAC:744). Our FIRE_CONCURRENCY = [1,1,2,3,4,5,6,6,6,6,6,6,6,6,6,6] (gameRules.ts:188) reproduces indices 0–10 verbatim, then saturates at 6. Exact match on the ported column.",
+    "reasoning": "The .PROB macro's third arg (`...C`) is the count of guns allowed to fire that wave (macro WSCPU.MAC:731–734). The table has 11 entries (index 0–10). Our array runs to 16 and holds 6 past index 6; since the ROM clamps its index to the 11-entry table (CPUAL `CMPB #TGPROZ-TGPROB/4`, WSCPU.MAC:636) and the value saturates at 6 from index 6 on, the extra tail is harmless. The clone did NOT port the mask/threshold columns (see A-012) — only this slot-cap column, which it took 1:1.",
     "source": {
       "file": "WSCPU.MAC",
       "line": 744,
@@ -122,8 +122,8 @@
     "id": "A-008",
     "class": "CONFIRMED",
     "title": "A TIE spawns facing the player",
-    "claim": "NWASHP orients a fresh alien to face the player: `LDA #0C0 ;FACE ALIEN TOWARDS PLAYER` written into M$AX and M$BY ($C0 \u2192 \u22121.0 on the depth/lateral diagonal) (WSCPU.MAC:1028\u20131030). Our spawnTie sets `orient: lookRotation(dir)` where dir = toCockpit(pos) (sim.ts:1187,1189) \u2014 the model's forward axis is turned onto the cockpit. Same result: the TIE looks at the player at spawn.",
-    "reasoning": "$C0 is the high byte of $C000 = \u22121.0 in $4000=1.0 fixed point, flipping the identity orientation's Ax/By to point the model back down-range at the ship (flight-AI model \u00a74 'turned to face the player'). lookRotation(toCockpit) is the float equivalent. Difference: the ROM starts at ZERO velocity and accelerates along that facing; ours starts at full |vel| along it (see A-014) \u2014 the FACING at spawn, however, matches.",
+    "claim": "NWASHP orients a fresh alien to face the player: `LDA #0C0 ;FACE ALIEN TOWARDS PLAYER` written into M$AX and M$BY ($C0 → −1.0 on the depth/lateral diagonal) (WSCPU.MAC:1028–1030). Our spawnTie sets `orient: lookRotation(dir)` where dir = toCockpit(pos) (sim.ts:1187,1189) — the model's forward axis is turned onto the cockpit. Same result: the TIE looks at the player at spawn.",
+    "reasoning": "$C0 is the high byte of $C000 = −1.0 in $4000=1.0 fixed point, flipping the identity orientation's Ax/By to point the model back down-range at the ship (flight-AI model §4 'turned to face the player'). lookRotation(toCockpit) is the float equivalent. Difference: the ROM starts at ZERO velocity and accelerates along that facing; ours starts at full |vel| along it (see A-014) — the FACING at spawn, however, matches.",
     "source": {
       "file": "WSCPU.MAC",
       "line": 1028,
@@ -131,7 +131,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1189,
+      "line": 1192,
       "verbatim": "  return { pos, vel: scale(dir, speed), kind: 'tie', orient: lookRotation(dir), bank }"
     }
   },
@@ -139,8 +139,8 @@
     "id": "A-009",
     "class": "DIVERGENCE",
     "title": "TIE choreography is a per-fighter bytecode VM; ours is a 2-state hand machine",
-    "claim": "Each ROM TIE runs a bytecode 'choreography' interpreter (WSCPU.MAC:822\u2013927): a program counter (A$CHPC) over opcodes IF/GOTO/GOSUB/RETURN/TWIRL (TCHOP jump table WSCPU.MAC:862\u2013868), driving scripted maneuver instructions `.CT time,twist,move` (e.g. WSCPU.MAC:1331 `.CT 40,0,C$MF ;TAKES ME HALFWAY TO PLAYER`) gated by event masks `.CUNTIL`/`.CIF` (waits on C$AS 'player in sights', C$PN 'player near', etc.). There are ~13 distinct scripts (TCH1A1\u2026TCH1DZ, WSCPU.MAC:1328\u20131656) plus a random-split subroutine SPLIT (WSCPU.MAC:1605). Our moveEnemy (sim.ts:1109) is a fixed 2-state machine \u2014 approach (constant homing+swoop) then peel \u2014 with a single seeded bank constant and NO script, no events, no per-maneuver timing, no subroutines.",
-    "reasoning": "This is the same shape Tempest's audit found: a real per-entity bytecode VM the clone reduced to a hand-written state machine. Ours is a genuine SIMPLIFICATION, not a structural equal \u2014 it cannot express the ROM's event-gated maneuver sequences (turnover, wall-to-wall dashes, partner passes, the C$R1/C$R2 random split) at any constant setting. Faithfully porting it is a VM + script-table rewrite, not a tuning change. The secondary flight-AI model \u00a75.1/\u00a710 flags this as recovered-but-unported.",
+    "claim": "Each ROM TIE runs a bytecode 'choreography' interpreter (WSCPU.MAC:822–927): a program counter (A$CHPC) over opcodes IF/GOTO/GOSUB/RETURN/TWIRL (TCHOP jump table WSCPU.MAC:862–868), driving scripted maneuver instructions `.CT time,twist,move` (e.g. WSCPU.MAC:1331 `.CT 40,0,C$MF ;TAKES ME HALFWAY TO PLAYER`) gated by event masks `.CUNTIL`/`.CIF` (waits on C$AS 'player in sights', C$PN 'player near', etc.). There are ~13 distinct scripts (TCH1A1…TCH1DZ, WSCPU.MAC:1328–1656) plus a random-split subroutine SPLIT (WSCPU.MAC:1605). Our moveEnemy (sim.ts:1109) is a fixed 2-state machine — approach (constant homing+swoop) then peel — with a single seeded bank constant and NO script, no events, no per-maneuver timing, no subroutines.",
+    "reasoning": "This is the same shape Tempest's audit found: a real per-entity bytecode VM the clone reduced to a hand-written state machine. Ours is a genuine SIMPLIFICATION, not a structural equal — it cannot express the ROM's event-gated maneuver sequences (turnover, wall-to-wall dashes, partner passes, the C$R1/C$R2 random split) at any constant setting. Faithfully porting it is a VM + script-table rewrite, not a tuning change. The secondary flight-AI model §5.1/§10 flags this as recovered-but-unported.",
     "source": {
       "file": "WSCPU.MAC",
       "line": 1331,
@@ -148,20 +148,20 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1109,
+      "line": 1112,
       "verbatim": "function moveEnemy(e: Enemy, dt: number): Enemy {"
     },
     "recommendation": "fix",
     "size": "l",
     "verdict": "CONFIRMED",
-    "refutation_corrections": "Script-count precision: the finding says '~13 distinct scripts (TCH1A1\u2026TCH1DZ)'. The TCH1 family actually holds 16 labels \u2014 4 groups (A/B/C/D) \u00d7 4 scripts each (x1, x2, x3, and the xZ 'BE MEAN TO PLAYER' loiter loop): TCH1A1/A2/A3/AZ, 1B*, 1C*, 1D*. On top of those sit 12 TCH2* entry points (TCH2A1\u2026TCH2D3) that each `.CGOSUB SPLIT` then fall through into the matching TCH1 script, plus the SPLIT subroutine \u2014 so the true authored surface is ~28 entry points over 16+ script bodies, not ~13. This makes the VM strictly LARGER than the finding states; it does not weaken the finding or change the size-l rating."
+    "refutation_corrections": "Script-count precision: the finding says '~13 distinct scripts (TCH1A1…TCH1DZ)'. The TCH1 family actually holds 16 labels — 4 groups (A/B/C/D) × 4 scripts each (x1, x2, x3, and the xZ 'BE MEAN TO PLAYER' loiter loop): TCH1A1/A2/A3/AZ, 1B*, 1C*, 1D*. On top of those sit 12 TCH2* entry points (TCH2A1…TCH2D3) that each `.CGOSUB SPLIT` then fall through into the matching TCH1 script, plus the SPLIT subroutine — so the true authored surface is ~28 entry points over 16+ script bodies, not ~13. This makes the VM strictly LARGER than the finding states; it does not weaken the finding or change the size-l rating."
   },
   {
     "id": "A-010",
     "class": "DIVERGENCE",
-    "title": "We damage the player on TIE-body cockpit contact; the ROM has no TIE\u2194player body collision",
-    "claim": "Our sim costs the player a shield when any TIE reaches the cockpit sphere: `standingEnemies.filter((e) => { if (collides(e.pos, COCKPIT, COCKPIT_HIT_RADIUS)) { damage++; player-death cause 'enemy' ...` (sim.ts:308\u2013315). The ROM has no such collision: TIEs run choreography that loops forever in a 'BE MEAN TO PLAYER' loiter (`.CGOTO 10$`, WSCPU.MAC:1387) and are position-clamped to the play cube (CPCHKL, WSCPU.MAC:799\u2013811); only fireballs damage the player. No alien-body-vs-ship test exists anywhere in the alien code.",
-    "reasoning": "WSCPU's COLLISION section (WSCPU.MAC:341\u2013446) handles only the PLAYER's laser hitting the alien (CPHTSA\u2192XPSA); there is no reverse test. The choreography scripts all terminate in an infinite loiter loop (TCH1AZ/1BZ/1CZ/1DZ, each ending `.CGOTO 10$`), so a TIE never bee-lines into the cockpit \u2014 it maneuvers and shoots, then peels at wave end (A-011). The flight-AI model \u00a77 corroborates: 'only fireballs damage the player.' Our body-collision is a deliberate product deviation (state.ts:288\u2013299 notes the story kept it), but it is a fidelity divergence: faithfully removing it requires the loiter + fireball threat to carry lethality.",
+    "title": "We damage the player on TIE-body cockpit contact; the ROM has no TIE↔player body collision",
+    "claim": "Our sim costs the player a shield when any TIE reaches the cockpit sphere: `standingEnemies.filter((e) => { if (collides(e.pos, COCKPIT, COCKPIT_HIT_RADIUS)) { damage++; player-death cause 'enemy' ...` (sim.ts:308–315). The ROM has no such collision: TIEs run choreography that loops forever in a 'BE MEAN TO PLAYER' loiter (`.CGOTO 10$`, WSCPU.MAC:1387) and are position-clamped to the play cube (CPCHKL, WSCPU.MAC:799–811); only fireballs damage the player. No alien-body-vs-ship test exists anywhere in the alien code.",
+    "reasoning": "WSCPU's COLLISION section (WSCPU.MAC:341–446) handles only the PLAYER's laser hitting the alien (CPHTSA→XPSA); there is no reverse test. The choreography scripts all terminate in an infinite loiter loop (TCH1AZ/1BZ/1CZ/1DZ, each ending `.CGOTO 10$`), so a TIE never bee-lines into the cockpit — it maneuvers and shoots, then peels at wave end (A-011). The flight-AI model §7 corroborates: 'only fireballs damage the player.' Our body-collision is a deliberate product deviation (state.ts:288–299 notes the story kept it), but it is a fidelity divergence: faithfully removing it requires the loiter + fireball threat to carry lethality.",
     "source": {
       "file": "WSCPU.MAC",
       "line": 1387,
@@ -175,14 +175,14 @@
     "recommendation": "fix",
     "size": "m",
     "verdict": "CONFIRMED",
-    "refutation_corrections": "Recommendation must reconcile with G-010, not stand as an independent 'fix'. A-010 and pair-guns G-010 describe the IDENTICAL behaviour and the identical code (sim.ts:308-315) with opposite dispositions (A-010: fix/remove; G-010: accept). Per coverage-review.md \u00a72b and the code's own record, the correct disposition is ACCEPT: it is a documented, deliberate product deviation (story 9-3 AC#3, state.ts:288-299 'the story deliberately keeps it'), and A-011's per-fighter peel means only a near-dead-center TIE \u2014 one whose lateralOffset is inside COCKPIT_HIT_RADIUS=80 (sim.ts:1120) \u2014 ever reaches the cockpit sphere at all, so it rarely triggers. The divergence is genuine and worth RECORDING, but A-010 should be demoted to a cross-reference of G-010's accept rather than shipping a conflicting size-m removal task. The ROM fact is CONFIRMED; the 'fix' recommendation is the part that is wrong."
+    "refutation_corrections": "Recommendation must reconcile with G-010, not stand as an independent 'fix'. A-010 and pair-guns G-010 describe the IDENTICAL behaviour and the identical code (sim.ts:308-315) with opposite dispositions (A-010: fix/remove; G-010: accept). Per coverage-review.md §2b and the code's own record, the correct disposition is ACCEPT: it is a documented, deliberate product deviation (story 9-3 AC#3, state.ts:288-299 'the story deliberately keeps it'), and A-011's per-fighter peel means only a near-dead-center TIE — one whose lateralOffset is inside COCKPIT_HIT_RADIUS=80 (sim.ts:1120) — ever reaches the cockpit sphere at all, so it rarely triggers. The divergence is genuine and worth RECORDING, but A-010 should be demoted to a cross-reference of G-010's accept rather than shipping a conflicting size-m removal task. The ROM fact is CONFIRMED; the 'fix' recommendation is the part that is wrong."
   },
   {
     "id": "A-011",
     "class": "DIVERGENCE",
     "title": "TIEs peel away per-fighter at the near-bound; the ROM loiters and retreats only at wave end",
-    "claim": "Our moveEnemy latches a per-TIE peel the moment a fighter reaches TIE_NEAR_BOUND off-centre: `const peeling = e.peeling ?? (dist <= TIE_NEAR_BOUND && lateralOffset >= COCKPIT_HIT_RADIUS)` (sim.ts:1120), after which it thrusts outward and is culled. In the ROM a TIE never peels during combat \u2014 it loiters and keeps firing. Retreat is a WAVE-END event: CPURET recentres each survivor and drives its depth `ADDD #400 ;RACE BACK TO DETH STAR` (WSCPU.MAC:500) per frame until it overruns and its slot frees. CPURET runs only in the PH$SP2 exit phase (WSMAIN.MAC:1473), not per-combat-frame.",
-    "reasoning": "Two different lifecycles. ROM: all survivors peel together at the descent transition, racing back +$400/frame (= $400\u00d720.508 \u2248 21,000 units/s toward the Death Star). Ours: each fighter independently peels when it individually reaches 2048 units, so the screen empties continuously rather than en masse at wave end. Our peel is a reasonable stand-in for the missing wave-end mechanic (and prevents the full-frame-wall defect), but it is behaviourally distinct. Recommend accept: a faithful version is coupled to the space-phase timer (pair-timing's PH.TIM) \u2014 a larger structural change tracked under A-009/A-019.",
+    "claim": "Our moveEnemy latches a per-TIE peel the moment a fighter reaches TIE_NEAR_BOUND off-centre: `const peeling = e.peeling ?? (dist <= TIE_NEAR_BOUND && lateralOffset >= COCKPIT_HIT_RADIUS)` (sim.ts:1120), after which it thrusts outward and is culled. In the ROM a TIE never peels during combat — it loiters and keeps firing. Retreat is a WAVE-END event: CPURET recentres each survivor and drives its depth `ADDD #400 ;RACE BACK TO DETH STAR` (WSCPU.MAC:500) per frame until it overruns and its slot frees. CPURET runs only in the PH$SP2 exit phase (WSMAIN.MAC:1473), not per-combat-frame.",
+    "reasoning": "Two different lifecycles. ROM: all survivors peel together at the descent transition, racing back +$400/frame (= $400×20.508 ≈ 21,000 units/s toward the Death Star). Ours: each fighter independently peels when it individually reaches 2048 units, so the screen empties continuously rather than en masse at wave end. Our peel is a reasonable stand-in for the missing wave-end mechanic (and prevents the full-frame-wall defect), but it is behaviourally distinct. Recommend accept: a faithful version is coupled to the space-phase timer (pair-timing's PH.TIM) — a larger structural change tracked under A-009/A-019.",
     "source": {
       "file": "WSCPU.MAC",
       "line": 500,
@@ -190,7 +190,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1120,
+      "line": 1123,
       "verbatim": "  const peeling = e.peeling ?? (dist <= TIE_NEAR_BOUND && lateralOffset >= COCKPIT_HIT_RADIUS)"
     },
     "recommendation": "accept",
@@ -200,8 +200,8 @@
     "id": "A-012",
     "class": "DIVERGENCE",
     "title": "Fire decision is a per-TIE seconds timer; the ROM uses a frame-mask + PRNG + in-view gate",
-    "claim": "The ROM fires a TIE gun only when a bundle of gates pass: player is in the alien's view (`BITA #C$PV/100 / BEQ`), range > $800, not glowing, a cadence window `LDA FRAME+1 / ANDA 0(U) ;SPACE THEM OUT` (WSCPU.MAC:646\u2013647, mask = $0F/$07/$03 \u2192 1-in-16/8/4 frames), and a PRNG threshold `CMPA 1(U)` (WSCPU.MAC:650). Our fire gate is a per-TIE seconds cooldown plus in-pass-window and the slot cap: `if (inPassWindow && cooldown <= 0 && enemyShots.length < params.maxConcurrentShots)` (sim.ts:236), with cooldown reset to a scalar enemyFireInterval \u2014 no view/arc check, no frame-mask, no PRNG roll.",
-    "reasoning": "UNIT NOTE: the ROM cadence is a free-running FRAME-counter mask, not a reload timer (flight-AI model \u00a76: 'no per-TIE reload timer'). Mask $0F fires at most 1/16 game-frames = 16/20.508 \u2248 0.78 s windows, each gated ~50% by the $80 PRNG threshold \u2192 an effective wave-0/1 cadence near ~1.5 s. Our fixed 1.0 s interval (state.ts:232) lands in the right ballpark but the MECHANISM (deterministic cooldown vs stochastic frame-mask, and the missing in-view/arc requirement) diverges. The slot-cap half of the ROM gate IS ported faithfully (A-007). Accept: the simplification plays close; the missing in-arc gate is the notable behavioural gap (our TIEs can fire without the cockpit being in their view frustum).",
+    "claim": "The ROM fires a TIE gun only when a bundle of gates pass: player is in the alien's view (`BITA #C$PV/100 / BEQ`), range > $800, not glowing, a cadence window `LDA FRAME+1 / ANDA 0(U) ;SPACE THEM OUT` (WSCPU.MAC:646–647, mask = $0F/$07/$03 → 1-in-16/8/4 frames), and a PRNG threshold `CMPA 1(U)` (WSCPU.MAC:650). Our fire gate is a per-TIE seconds cooldown plus in-pass-window and the slot cap: `if (inPassWindow && cooldown <= 0 && enemyShots.length < params.maxConcurrentShots)` (sim.ts:236), with cooldown reset to a scalar enemyFireInterval — no view/arc check, no frame-mask, no PRNG roll.",
+    "reasoning": "UNIT NOTE: the ROM cadence is a free-running FRAME-counter mask, not a reload timer (flight-AI model §6: 'no per-TIE reload timer'). Mask $0F fires at most 1/16 game-frames = 16/20.508 ≈ 0.78 s windows, each gated ~50% by the $80 PRNG threshold → an effective wave-0/1 cadence near ~1.5 s. Our fixed 1.0 s interval (state.ts:232) lands in the right ballpark but the MECHANISM (deterministic cooldown vs stochastic frame-mask, and the missing in-view/arc requirement) diverges. The slot-cap half of the ROM gate IS ported faithfully (A-007). Accept: the simplification plays close; the missing in-arc gate is the notable behavioural gap (our TIEs can fire without the cockpit being in their view frustum).",
     "source": {
       "file": "WSCPU.MAC",
       "line": 647,
@@ -218,9 +218,9 @@
   {
     "id": "A-013",
     "class": "DIVERGENCE",
-    "title": "Difficulty is a scalar 1+0.15\u00b7(wave\u22121) ramp; the ROM uses a data-driven hardness index",
-    "claim": "Our waveParams scales spawnInterval, enemySpeed and enemyFireInterval by `ramp = 1 + (wave\u22121)\u00b7RAMP_PER_WAVE` with RAMP_PER_WAVE = 0.15 (gameRules.ts:165,191). The ROM has no scalar ramp: hardness is an index WV.HRD = min(SP.WAV + GM.DIF, 15) (WSMAIN.MAC:1359\u20131364 `STA WV.HRD ; CURRENT WAVES DIFFICULTY`) that selects a row of the TGPROB fire table (A-007); enemy SPEED and maneuvers come from the per-wave choreography scripts + composition tables (A-009/A-017), not a multiplier.",
-    "reasoning": "The clone's speed/spawn/fire-rate ramp is invented (single-sourced 'authentic-FEEL' per gameRules.ts:139\u2013147); the ROM ramps difficulty by (a) the fire-table index and (b) which composition/scripts a wave draws (harder scripts, Darth ordering, more aggressive fire rows). Only the fire-concurrency column is a faithful port (A-007); the scalar enemySpeed/spawnInterval ramp has no ROM counterpart. Accept as a pragmatic stand-in, but note it is not the ROM's difficulty model.",
+    "title": "Difficulty is a scalar 1+0.15·(wave−1) ramp; the ROM uses a data-driven hardness index",
+    "claim": "Our waveParams scales spawnInterval, enemySpeed and enemyFireInterval by `ramp = 1 + (wave−1)·RAMP_PER_WAVE` with RAMP_PER_WAVE = 0.15 (gameRules.ts:165,191). The ROM has no scalar ramp: hardness is an index WV.HRD = min(SP.WAV + GM.DIF, 15) (WSMAIN.MAC:1359–1364 `STA WV.HRD ; CURRENT WAVES DIFFICULTY`) that selects a row of the TGPROB fire table (A-007); enemy SPEED and maneuvers come from the per-wave choreography scripts + composition tables (A-009/A-017), not a multiplier.",
+    "reasoning": "The clone's speed/spawn/fire-rate ramp is invented (single-sourced 'authentic-FEEL' per gameRules.ts:139–147); the ROM ramps difficulty by (a) the fire-table index and (b) which composition/scripts a wave draws (harder scripts, Darth ordering, more aggressive fire rows). Only the fire-concurrency column is a faithful port (A-007); the scalar enemySpeed/spawnInterval ramp has no ROM counterpart. Accept as a pragmatic stand-in, but note it is not the ROM's difficulty model.",
     "source": {
       "file": "WSMAIN.MAC",
       "line": 1364,
@@ -237,9 +237,9 @@
   {
     "id": "A-014",
     "class": "DIVERGENCE",
-    "title": "Constant approach speed vs the ROM's choreographed per-axis thrust (\u00f732 / \u00f764)",
-    "claim": "The ROM builds a TIE's per-frame motion by adding orientation basis vectors scaled by \u00f764 (SNMVF `JSR ASRD6`, WSCPU.MAC:226) or \u00f732 (SNMVF2 `JSR ASRD5`, WSCPU.MAC:211), selected by the choreography move flags (C$MF, C$MF2, C$MU, \u2026). With $4000 = 1.0, forward-once adds $4000\u00f764 = $100 = 256 units/frame and forward-twice adds $4000\u00f732 = $200 = 512 units/frame. At the 20.508 Hz game frame: 256\u00d720.508 \u2248 5,250 u/s (C$MF) and 512\u00d720.508 \u2248 10,500 u/s (C$MF2). Our ENEMY_SPEED = 10,000 u/s (state.ts:210) is a single CONSTANT magnitude, \u22485% under the C$MF2 rate and applied as |vel| along a homing heading rather than summed per-axis basis thrusts.",
-    "reasoning": "UNIT TRAP handled: converting the ROM's per-frame integer thrust at the real 20.508 Hz frame (NOT 60) gives 5,250 / 10,500 u/s for the two forward speeds; our 10,000 sits just below C$MF2, so the MAGNITUDE is roughly faithful. The DIVERGENCE is structural: the ROM speed is quantised and VARIES step-to-step with the active move-flag combination (e.g. C$MF+C$MU, C$MF2, C$MF3=768/frame\u224815,750 u/s), rebuilt each frame from the rotating orientation; ours is one fixed scalar on a smooth heading. Had the clone assumed 60 fps for the $200/frame delta it would read 512\u00d760 = 30,720 u/s (\u22482.93\u00d7 too fast) \u2014 it did not; it derived 10,000 from a transit-time design target, which happens to land near the true C$MF2 rate. Accept.",
+    "title": "Constant approach speed vs the ROM's choreographed per-axis thrust (÷32 / ÷64)",
+    "claim": "The ROM builds a TIE's per-frame motion by adding orientation basis vectors scaled by ÷64 (SNMVF `JSR ASRD6`, WSCPU.MAC:226) or ÷32 (SNMVF2 `JSR ASRD5`, WSCPU.MAC:211), selected by the choreography move flags (C$MF, C$MF2, C$MU, …). With $4000 = 1.0, forward-once adds $4000÷64 = $100 = 256 units/frame and forward-twice adds $4000÷32 = $200 = 512 units/frame. At the 20.508 Hz game frame: 256×20.508 ≈ 5,250 u/s (C$MF) and 512×20.508 ≈ 10,500 u/s (C$MF2). Our ENEMY_SPEED = 10,000 u/s (state.ts:210) is a single CONSTANT magnitude, ≈5% under the C$MF2 rate and applied as |vel| along a homing heading rather than summed per-axis basis thrusts.",
+    "reasoning": "UNIT TRAP handled: converting the ROM's per-frame integer thrust at the real 20.508 Hz frame (NOT 60) gives 5,250 / 10,500 u/s for the two forward speeds; our 10,000 sits just below C$MF2, so the MAGNITUDE is roughly faithful. The DIVERGENCE is structural: the ROM speed is quantised and VARIES step-to-step with the active move-flag combination (e.g. C$MF+C$MU, C$MF2, C$MF3=768/frame≈15,750 u/s), rebuilt each frame from the rotating orientation; ours is one fixed scalar on a smooth heading. Had the clone assumed 60 fps for the $200/frame delta it would read 512×60 = 30,720 u/s (≈2.93× too fast) — it did not; it derived 10,000 from a transit-time design target, which happens to land near the true C$MF2 rate. Accept.",
     "source": {
       "file": "WSCPU.MAC",
       "line": 226,
@@ -257,8 +257,8 @@
     "id": "A-015",
     "class": "DIVERGENCE",
     "title": "Spawn walks all 12 TBG slots monotonically; the ROM pairs 3-of-a-group with fixed choreography",
-    "claim": "In the ROM each wave entry pairs a specific shape, choreography script and begin-location as a triple \u2014 `.WV TIE,1A1,1A1` (WSCPU.MAC:1253) \u2014 and a wave draws only ONE group's 3 begin-locations (TWV1A uses 1A1/1A2/1A3; TWV1D/TRTH1D use the D-group corners). Our spawnTie instead indexes a flat 12-entry table monotonically: `SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]` (sim.ts:1185), cycling 1A1\u21921A2\u2192\u2026\u21921D3 regardless of wave, with NO tie between a lateral and a choreography.",
-    "reasoning": "The clone recovered the SET of laterals (A-002/A-003) but not their grouping or their pairing with scripts. Consequence: our walk visits the \u00b12048 D-corners on 3 of every 12 spawns in every wave, whereas the ROM only presents \u00b12048 when a D-group wave/level is active \u2014 so our lateral DISTRIBUTION per wave differs, and the lateral no longer implies a maneuver. This is a facet of the missing composition/choreography system (A-009/A-017); accept until those are ported.",
+    "claim": "In the ROM each wave entry pairs a specific shape, choreography script and begin-location as a triple — `.WV TIE,1A1,1A1` (WSCPU.MAC:1253) — and a wave draws only ONE group's 3 begin-locations (TWV1A uses 1A1/1A2/1A3; TWV1D/TRTH1D use the D-group corners). Our spawnTie instead indexes a flat 12-entry table monotonically: `SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]` (sim.ts:1185), cycling 1A1→1A2→…→1D3 regardless of wave, with NO tie between a lateral and a choreography.",
+    "reasoning": "The clone recovered the SET of laterals (A-002/A-003) but not their grouping or their pairing with scripts. Consequence: our walk visits the ±2048 D-corners on 3 of every 12 spawns in every wave, whereas the ROM only presents ±2048 when a D-group wave/level is active — so our lateral DISTRIBUTION per wave differs, and the lateral no longer implies a maneuver. This is a facet of the missing composition/choreography system (A-009/A-017); accept until those are ported.",
     "source": {
       "file": "WSCPU.MAC",
       "line": 1253,
@@ -266,22 +266,22 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1185,
+      "line": 1188,
       "verbatim": "  const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]"
     },
     "recommendation": "accept",
     "verdict": "CONFIRMED",
     "refutation_corrections": [
-      "FALSE SUB-CLAIM: the reasoning states 'our walk visits the \u00b12048 D-corners on 3 of every 12 spawns in every wave, whereas the ROM only presents \u00b12048 when a D-group wave/level is active.' The ROM DOES present the \u00b12048 D-corners in every wave. TWV2Z (WSCPU.MAC:1299-1320) uses begin-locations 1D1/1D2/1D3 nine times, and TWV2Z is the sustaining group in EVERY space-wave set (SETA1..SETA6, WSCPU.MAC:1230-1235 \u2014 SET A1 = TWV1A,TWV2B,TWV2C,TWV2Z is the first wave). So both ours and the ROM show \u00b12048 corners in the first wave; the asserted per-wave lateral-DISTRIBUTION gap ('ROM shows no D-corners early') is illusory. The genuine divergence is the missing begin-loc<->choreography pairing and the TSPWAV SET structure/order, NOT a \u00b12048-only-in-D-waves distribution difference.",
-      "IMPRECISE: 'a wave draws only ONE group's 3 begin-locations' \u2014 a space wave is a TSPWAV SET that CHAINS several TWV groups (SET A1 chains TWV1A,TWV2B,TWV2C,TWV2Z), so a wave draws several groups' begin-locations, and the per-wave lateral set is the union of those groups (which, via TWV2Z, always includes the D-corners)."
+      "FALSE SUB-CLAIM: the reasoning states 'our walk visits the ±2048 D-corners on 3 of every 12 spawns in every wave, whereas the ROM only presents ±2048 when a D-group wave/level is active.' The ROM DOES present the ±2048 D-corners in every wave. TWV2Z (WSCPU.MAC:1299-1320) uses begin-locations 1D1/1D2/1D3 nine times, and TWV2Z is the sustaining group in EVERY space-wave set (SETA1..SETA6, WSCPU.MAC:1230-1235 — SET A1 = TWV1A,TWV2B,TWV2C,TWV2Z is the first wave). So both ours and the ROM show ±2048 corners in the first wave; the asserted per-wave lateral-DISTRIBUTION gap ('ROM shows no D-corners early') is illusory. The genuine divergence is the missing begin-loc<->choreography pairing and the TSPWAV SET structure/order, NOT a ±2048-only-in-D-waves distribution difference.",
+      "IMPRECISE: 'a wave draws only ONE group's 3 begin-locations' — a space wave is a TSPWAV SET that CHAINS several TWV groups (SET A1 chains TWV1A,TWV2B,TWV2C,TWV2Z), so a wave draws several groups' begin-locations, and the per-wave lateral set is the union of those groups (which, via TWV2Z, always includes the D-corners)."
     ]
   },
   {
     "id": "A-016",
     "class": "NO_COUNTERPART",
-    "title": "Darth Vader's TIE (RTH): 4 lives, immortal in space, retreats \u2014 absent from our sim",
-    "claim": "The ROM has a distinct Darth ship (RTH shape, `.WS RTH,4` = 4 lives, WSCPU.MAC:1166) that CANNOT be killed in the space wave: on a non-fatal hit CPHTSA resets its hit counter \u2014 `LDA #05 / STA A$HTA(X) ;KEEP DARTH ALIVE` (WSCPU.MAC:367\u2013368) \u2014 scores it via SCRDARTH, forces a glow/roll, and throws the ship for a loop; it then flees at wave end. Our sim has no Darth enemy at all: Enemy.kind is 'tie' only (state.ts:45), VADER_SCORE (2000) is defined but nothing awards it (state.ts:148\u2013153), and there is no survive/retreat rule.",
-    "reasoning": "Regular TIEs (HTA=1) explode on the first hit; only Darth (HTA\u22652) reaches the KEEP-DARTH-ALIVE fall-through, which pins HTA to 5 after every hit \u2014 so Darth is effectively immortal in space, scoring on each hit and retreating rather than dying. This is a whole enemy + survival rule with no counterpart. A future Vader-enemy story would wire VADER_SCORE, the invulnerable-glow, and the retreat; it is a large addition (new enemy type + wave-composition slot, see A-017).",
+    "title": "Darth Vader's TIE (RTH): 4 lives, immortal in space, retreats — absent from our sim",
+    "claim": "The ROM has a distinct Darth ship (RTH shape, `.WS RTH,4` = 4 lives, WSCPU.MAC:1166) that CANNOT be killed in the space wave: on a non-fatal hit CPHTSA resets its hit counter — `LDA #05 / STA A$HTA(X) ;KEEP DARTH ALIVE` (WSCPU.MAC:367–368) — scores it via SCRDARTH, forces a glow/roll, and throws the ship for a loop; it then flees at wave end. Our sim has no Darth enemy at all: Enemy.kind is 'tie' only (state.ts:45), VADER_SCORE (2000) is defined but nothing awards it (state.ts:148–153), and there is no survive/retreat rule.",
+    "reasoning": "Regular TIEs (HTA=1) explode on the first hit; only Darth (HTA≥2) reaches the KEEP-DARTH-ALIVE fall-through, which pins HTA to 5 after every hit — so Darth is effectively immortal in space, scoring on each hit and retreating rather than dying. This is a whole enemy + survival rule with no counterpart. A future Vader-enemy story would wire VADER_SCORE, the invulnerable-glow, and the retreat; it is a large addition (new enemy type + wave-composition slot, see A-017).",
     "source": {
       "file": "WSCPU.MAC",
       "line": 368,
@@ -294,9 +294,9 @@
   {
     "id": "A-017",
     "class": "NO_COUNTERPART",
-    "title": "TSPWAV per-wave composition table (6 sets, Darth ordering) \u2014 absent from our sim",
-    "claim": "The ROM selects each space wave's contents from a data table TSPWAV of 6 sets (WSCPU.MAC:1218\u20131235), e.g. `SET A1 TWV1A,TWV2B,TWV2C,TWV2Z` (WSCPU.MAC:1230). Each set lists which TWV wave-groups (and thus which TIE/Darth mix and choreography) appear, in order; past the 6 authored sets the selector recycles the last two with 'DARTH FIRST' on odd waves / 'DARTH SECOND' on even (WSCPU.MAC:980\u2013982,1225\u20131226). Our sim has no composition data: every space wave is an identical flat spawn of TIEs, and Darth never appears.",
-    "reasoning": "Wave identity in the ROM is DATA (which groups, in which order, with Darth first/second), not a formula. Our clone reduces every wave to 'spawn TIEs until 6 are killed' (A-019) with a wave-independent lateral walk (A-015). Porting this is a data-table + selector addition sitting on top of the choreography VM (A-009) and the Darth enemy (A-016) \u2014 hence large. Recorded so the composition gap is explicit, not silently folded into the difficulty ramp (A-013).",
+    "title": "TSPWAV per-wave composition table (6 sets, Darth ordering) — absent from our sim",
+    "claim": "The ROM selects each space wave's contents from a data table TSPWAV of 6 sets (WSCPU.MAC:1218–1235), e.g. `SET A1 TWV1A,TWV2B,TWV2C,TWV2Z` (WSCPU.MAC:1230). Each set lists which TWV wave-groups (and thus which TIE/Darth mix and choreography) appear, in order; past the 6 authored sets the selector recycles the last two with 'DARTH FIRST' on odd waves / 'DARTH SECOND' on even (WSCPU.MAC:980–982,1225–1226). Our sim has no composition data: every space wave is an identical flat spawn of TIEs, and Darth never appears.",
+    "reasoning": "Wave identity in the ROM is DATA (which groups, in which order, with Darth first/second), not a formula. Our clone reduces every wave to 'spawn TIEs until 6 are killed' (A-019) with a wave-independent lateral walk (A-015). Porting this is a data-table + selector addition sitting on top of the choreography VM (A-009) and the Darth enemy (A-016) — hence large. Recorded so the composition gap is explicit, not silently folded into the difficulty ramp (A-013).",
     "source": {
       "file": "WSCPU.MAC",
       "line": 1230,
@@ -309,9 +309,9 @@
   {
     "id": "A-018",
     "class": "NO_COUNTERPART",
-    "title": "Damage roll-burst (~20.34\u00b0/frame) when a TIE is hit \u2014 absent from our sim",
-    "claim": "When a TIE is hit and glowing, CPUAL rolls it by a fixed large angle each frame: `LDD #5696. ;20.34 DEGREES` into M.SIN with cos 15362 (WSCPU.MAC:541\u2013544), decrementing the A$ROL counter (set to $1F \u2248 31 frames on hit, WSCPU.MAC:371\u2013372). sin(20.34\u00b0)\u00d716384 \u2248 5693 \u2248 5696 (the trailing period makes 5696 DECIMAL). At 20.508 Hz that is 20.34\u00d720.508 \u2248 417\u00b0/s for ~1.5 s. Our sim has no per-frame damage roll \u2014 a hit TIE is either destroyed (fragment cue) or unaffected; TIE_BANK_ANGLE (0.6 rad \u2248 34\u00b0, state.ts:286) is a STATIC lean, not a rate.",
-    "reasoning": "The 20.34\u00b0/frame roll is the visible 'spinning when shielded/hit' tell, tied to Darth's survive-and-glow (A-016) and to any glow window. Ours has no equivalent because our TIEs die on one hit and carry no glow/roll state. Cosmetic-adjacent; accept unless a Darth/shield model is added, at which point this roll rate is the recovered constant to use.",
+    "title": "Damage roll-burst (~20.34°/frame) when a TIE is hit — absent from our sim",
+    "claim": "When a TIE is hit and glowing, CPUAL rolls it by a fixed large angle each frame: `LDD #5696. ;20.34 DEGREES` into M.SIN with cos 15362 (WSCPU.MAC:541–544), decrementing the A$ROL counter (set to $1F ≈ 31 frames on hit, WSCPU.MAC:371–372). sin(20.34°)×16384 ≈ 5693 ≈ 5696 (the trailing period makes 5696 DECIMAL). At 20.508 Hz that is 20.34×20.508 ≈ 417°/s for ~1.5 s. Our sim has no per-frame damage roll — a hit TIE is either destroyed (fragment cue) or unaffected; TIE_BANK_ANGLE (0.6 rad ≈ 34°, state.ts:286) is a STATIC lean, not a rate.",
+    "reasoning": "The 20.34°/frame roll is the visible 'spinning when shielded/hit' tell, tied to Darth's survive-and-glow (A-016) and to any glow window. Ours has no equivalent because our TIEs die on one hit and carry no glow/roll state. Cosmetic-adjacent; accept unless a Darth/shield model is added, at which point this roll rate is the recovered constant to use.",
     "source": {
       "file": "WSCPU.MAC",
       "line": 541,
@@ -324,8 +324,8 @@
     "id": "A-019",
     "class": "DIVERGENCE",
     "title": "Space phase clears on a 6-kill quota; the ROM descends on a music-timed schedule",
-    "claim": "Our space phase ends when phaseKills reaches SPACE_WAVE_QUOTA = 6 (state.ts:501; sim.ts:843 `s.phaseKills >= SPACE_WAVE_QUOTA`). The ROM does NOT gate the space phase on kills: PHESP1 advances a phase timer PH.TIM each frame and, at a music-sequenced threshold, sets `LDA #PH$SP2 ;GO AHEAD AND DESCEND` (WSMAIN.MAC:1443), keeping \u22643 TIEs alive and refilling on death throughout (A-004). You cannot 'clear' the space wave by shooting N fighters.",
-    "reasoning": "The ROM's descent is driven by the theme-music timeline (PMTH5/PMTHB/PMDES beats measured in PH.TIM ticks, WSMAIN.MAC:1415\u20131448), not a body count \u2014 killing more TIEs never ends the wave sooner, and killing none still descends on schedule. Ours makes the kill count the sole gate. The exact PH.TIM schedule is pair-timing's to own; recorded here as the wave-PROGRESSION divergence (my scope). Accept: a faithful port re-times the phase and couples to the timer, a change tracked with A-011.",
+    "claim": "Our space phase ends when phaseKills reaches SPACE_WAVE_QUOTA = 6 (state.ts:501; sim.ts:843 `s.phaseKills >= SPACE_WAVE_QUOTA`). The ROM does NOT gate the space phase on kills: PHESP1 advances a phase timer PH.TIM each frame and, at a music-sequenced threshold, sets `LDA #PH$SP2 ;GO AHEAD AND DESCEND` (WSMAIN.MAC:1443), keeping ≤3 TIEs alive and refilling on death throughout (A-004). You cannot 'clear' the space wave by shooting N fighters.",
+    "reasoning": "The ROM's descent is driven by the theme-music timeline (PMTH5/PMTHB/PMDES beats measured in PH.TIM ticks, WSMAIN.MAC:1415–1448), not a body count — killing more TIEs never ends the wave sooner, and killing none still descends on schedule. Ours makes the kill count the sole gate. The exact PH.TIM schedule is pair-timing's to own; recorded here as the wave-PROGRESSION divergence (my scope). Accept: a faithful port re-times the phase and couples to the timer, a change tracked with A-011.",
     "source": {
       "file": "WSMAIN.MAC",
       "line": 1443,
@@ -333,7 +333,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 501,
+      "line": 502,
       "verbatim": "export const SPACE_WAVE_QUOTA = 6"
     },
     "recommendation": "accept",

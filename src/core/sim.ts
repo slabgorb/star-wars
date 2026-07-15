@@ -601,15 +601,18 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   // The walled channel scrolls toward the cockpit at the SAME rate the port does
   // (story 11-6), so the corridor and the target rush past together — advanced on
   // `base` so it rides every return path (reset to 0 on the next phase entry).
-  // Advance the trench voice-line timer (ROM word_4B0E) one tick and cue any
-  // parity-gated voice line that lands on this tick (story sw3-4). The timer hits
-  // each integer threshold exactly once, so the cue is inherently one-shot — no
-  // re-fire guard needed. Pushed onto the shared `events` list, so the cue rides
-  // every return path below (safe-hold, obstacle crash, or port hit).
-  const trenchTimer = state.trenchTimer + 1
+  // Advance the trench voice-line timer (ROM word_4B0E) at the GAME-FRAME rate and
+  // cue any parity-gated voice line whose threshold this step CROSSES (story sw3-4;
+  // sw7-1/T-008 made it frame-true). The ROM advances word_4B0E once per 20.508 Hz
+  // game frame — not once per 60 Hz loop step — so the timer accumulates dt·TICK_HZ
+  // (game frames), and its 16/22/24-frame thresholds fire at their authentic wall-
+  // clock times (0.78–1.17 s) regardless of tick rate. A cue fires the step its
+  // threshold is first crossed — inherently one-shot. Pushed onto the shared `events`
+  // list, so the cue rides every return path below (safe-hold, crash, or port hit).
+  const trenchTimer = state.trenchTimer + dt * TICK_HZ
   const parity: 'even' | 'odd' = state.wave % 2 === 0 ? 'even' : 'odd'
   for (const cue of TRENCH_VOICE_CUES) {
-    if (cue.timer === trenchTimer && cue.parity === parity) {
+    if (state.trenchTimer < cue.timer && trenchTimer >= cue.timer && cue.parity === parity) {
       events.push({ type: 'speech', line: cue.line })
     }
   }
