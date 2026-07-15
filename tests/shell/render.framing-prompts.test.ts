@@ -6,8 +6,9 @@
 //   H-010  the start prompt is the ROM's message STR <PULL TRIGGER TO START>
 //          (TCMES.MAC:549), not 'PRESS START' — at BOTH sites: the attract screen
 //          AND the game-over screen (render.ts:993 and :1020).
-//   H-012  the initials-entry prompt is message HSZ <SHOOT YOUR INITIALS>
-//          (TCMES.MAC:603), not 'ENTER YOUR INITIALS'.
+//   H-012 (ruling) the initials-entry prompt reads 'ENTER YOUR INITIALS'. The ROM's HSZ is
+//          <SHOOT YOUR INITIALS> (TCMES.MAC:603), but that assumes the shoot-a-letter-grid entry
+//          (H-013); our clone uses keyboard entry, so ENTER matches the input — accepted divergence.
 //   H-020  the game-over final score is comma-grouped (VW8DIG — TCMES.MAC:791),
 //          not the raw `SCORE ${state.score}` integer.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -67,7 +68,7 @@ const gameOver = (score = 128_535): GameState => ({
   score,
   entry: null,
 })
-// A game-over screen with the initials entry armed (the SHOOT YOUR INITIALS branch).
+// A game-over screen with the initials entry armed (the ENTER YOUR INITIALS branch).
 const gameOverEntry = (initials: string): GameState => ({
   ...initialState(1983),
   mode: 'gameover',
@@ -93,11 +94,13 @@ describe('sw7-3 H-010 — the start prompt is PULL TRIGGER TO START, not PRESS S
   })
 })
 
-describe('sw7-3 H-012 — the initials prompt is SHOOT YOUR INITIALS, not ENTER YOUR INITIALS', () => {
+describe('sw7-3 H-012 (ruling) — the initials prompt reads ENTER YOUR INITIALS (keyboard entry, not the ROM shoot-a-grid SHOOT)', () => {
   it('the armed game-over entry screen', () => {
+    // Accepted divergence: the ROM's HSZ is <SHOOT YOUR INITIALS> (shoot-a-letter-grid),
+    // but our clone uses keyboard entry (H-013 accepted), so ENTER matches the input model.
     render(makeCtx(), gameOverEntry('AB'), W, H, NO_SCORES)
-    expect(texts()).toContain('SHOOT YOUR INITIALS')
-    expect(texts()).not.toContain('ENTER YOUR INITIALS')
+    expect(texts()).toContain('ENTER YOUR INITIALS')
+    expect(texts()).not.toContain('SHOOT YOUR INITIALS')
   })
 })
 

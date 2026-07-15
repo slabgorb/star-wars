@@ -206,13 +206,13 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 1015,
+      "line": 1020,
       "verbatim": "    glowText(ctx, 'ENTER YOUR INITIALS', w / 2, h * 0.42, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)"
     },
-    "recommendation": "fix",
+    "recommendation": "accept",
     "size": "s",
     "verdict": "CONFIRMED",
-    "remediated_by": "sw7-3"
+    "ruling": "sw7-3: kept ENTER YOUR INITIALS. The ROM verb SHOOT assumes the shoot-a-letter-grid entry (H-013, accepted as structural); our clone uses keyboard entry, so ENTER accurately describes the input. Accepted divergence, not a fidelity miss."
   },
   {
     "id": "H-013",

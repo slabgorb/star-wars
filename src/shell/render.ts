@@ -1016,8 +1016,8 @@ function drawGameOver(
     // SH2-13: the armed initials entry — the typed buffer with a cursor slot
     // while the 3-char convention still has room. The board waits until the
     // commit lands so the screen reads as one question.
-    // sw7-3 H-012: message HSZ (TCMES.MAC:603) — you SHOOT the letter grid, not type.
-    glowText(ctx, 'SHOOT YOUR INITIALS', w / 2, h * 0.42, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)
+    // sw7-3 ruling: the ROM's HSZ is <SHOOT YOUR INITIALS> (shoot-a-grid, TCMES.MAC:603), but our clone uses KEYBOARD entry (H-013 accepted), so ENTER matches what the player does — accepted divergence.
+    glowText(ctx, 'ENTER YOUR INITIALS', w / 2, h * 0.42, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)
     const buf = state.entry.initials
     glowText(ctx, buf.length < 3 ? `${buf}_` : buf, w / 2, h * 0.52, BANNER_TEXT_PX, 'center', GLOW, 18)
     glowText(ctx, 'TYPE A-Z  BACKSPACE FIXES  START CONFIRMS', w / 2, h * 0.62, HUD_TEXT_PX, 'center', GLOW, 6)
