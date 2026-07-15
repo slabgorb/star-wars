@@ -325,7 +325,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 856,
+      "line": 857,
       "verbatim": "      return allTowersKilled(s) || s.surfaceScrollZ >= surfaceFieldDepth(s.wave)"
     },
     "recommendation": "accept",

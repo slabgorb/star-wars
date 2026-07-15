@@ -773,8 +773,9 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     // `enterPhase` spreads `...s`, so this event rides along.
     events.push({ type: 'level-clear', next: 'space' })
     // Reopen the space theme for the next wave (sw3-5) — `clearRun` bumps the wave
-    // to `state.wave + 1`, so the Imperial March takes over here at wave>=3 odd
-    // (ROM sub_6838). Rides through `clearRun`->`enterPhase` like the level-clear.
+    // to `state.wave + 1`, so the Imperial March takes over here on human waves
+    // {4,6,8,...} (GM.WAV >= 3 AND odd, WSMAIN.MAC:1421; base reconciled by sw7-2).
+    // Rides through `clearRun`->`enterPhase` like the level-clear.
     events.push({ type: 'music', track: musicTrackFor('space', state.wave + 1) })
     return clearRun({
       ...afterObstacles,

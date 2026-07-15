@@ -151,7 +151,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1044,
+      "line": 1045,
       "verbatim": "  return { pos: [0, 0, -EXHAUST_PORT_DISTANCE] }"
     },
     "recommendation": "fix",
@@ -253,7 +253,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1044,
+      "line": 1045,
       "verbatim": "  return { pos: [0, 0, -EXHAUST_PORT_DISTANCE] }"
     }
   },
@@ -320,7 +320,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 792,
+      "line": 793,
       "verbatim": "  if (collides(port, COCKPIT, COCKPIT_HIT_RADIUS)) {"
     },
     "recommendation": "accept",
