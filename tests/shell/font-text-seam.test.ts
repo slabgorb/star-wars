@@ -156,8 +156,12 @@ describe('SH2-5 — the framing screens flow through layoutText', () => {
   it('attract: marquee, start prompt, and the high-score board', () => {
     render(makeCtx(), attractState(), W, H, SCORES)
     expect(texts()).toContain('STAR WARS')
-    expect(texts()).toContain('PRESS START')
-    expect(texts()).toContain('HIGH SCORES')
+    // sw7-3 H-010 re-seat: the start prompt is the ROM's STR, not 'PRESS START'.
+    expect(texts()).toContain('PULL TRIGGER TO START')
+    // sw7-3 H-011 re-seat: the board title is the ROM's RF2, not 'HIGH SCORES'
+    // (accepts LEIA'S or LEIAS — the shared font has no apostrophe glyph).
+    expect(texts().some((t) => /^PRINCESS LEIA'?S REBEL FORCE$/.test(t))).toBe(true)
+    expect(texts()).not.toContain('HIGH SCORES')
     const row = texts().find((t) => t.includes('LUKE'))
     expect(row, 'no high-score row mentions the entrant').toBeDefined()
     expect(row).toContain('WAVE 6')
@@ -171,8 +175,10 @@ describe('SH2-5 — the framing screens flow through layoutText', () => {
   it('game over: banner, final score, and start prompt', () => {
     render(makeCtx(), gameOverState(), W, H, SCORES)
     expect(texts()).toContain('GAME OVER')
-    expect(texts()).toContain('SCORE 2500')
-    expect(texts()).toContain('PRESS START')
+    // sw7-3 H-020 re-seat: the game-over score is comma-grouped (was 'SCORE 2500').
+    expect(texts()).toContain(`SCORE ${formatScore(2500)}`)
+    // sw7-3 H-010 re-seat: the start prompt is the ROM's STR, not 'PRESS START'.
+    expect(texts()).toContain('PULL TRIGGER TO START')
   })
 })
 
