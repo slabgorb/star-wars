@@ -178,8 +178,19 @@ describe('the punch-list (regression pin)', () => {
     expect(punchList('TI3')).toEqual({ onlyInRom: 3, onlyInPort: 0 })
   })
 
-  it('RTH -> Darth Vader TIE', () => {
-    expect(punchList('RTH')).toEqual({ onlyInRom: 12, onlyInPort: 44 })
+  // sw5-2 RE-SEATS this pin. It used to encode the audit's headline defect —
+  // the Darth Vader TIE's edges were RE-AUTHORED by heuristic (story 8-10), so
+  // 12 real `.WL RTH` edges were missing and 44 invented ones had no ROM source:
+  // `{ onlyInRom: 12, onlyInPort: 44 }`. sw5-2 re-ports the edges from `.WL RTH`,
+  // so the port now matches the ROM exactly. The independent-oracle proof of the
+  // 72-edge draw list lives in tests/core/darth-tie-rom.test.ts; this pins the
+  // number a stakeholder reads off the contact sheet.
+  it('RTH -> Darth Vader TIE — clean after the re-port (was 12 / 44)', () => {
+    expect(punchList('RTH')).toEqual({ onlyInRom: 0, onlyInPort: 0 })
+    // '✓ edges match' is the one string the tool will not print unless a real
+    // comparison ran (verticesMatch true + hasDrawList true + zero drift).
+    expect(verdict('RTH').text).toBe('✓ edges match')
+    expect(verdict('RTH').drift).toBe(false)
   })
 
   // sw5-1 took the pin from 5 compared pairs to 8, gaining the three suspect
