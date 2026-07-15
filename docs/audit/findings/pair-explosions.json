@@ -1,0 +1,96 @@
+[
+  {
+    "id": "X-001",
+    "class": "CONFIRMED",
+    "title": "TIE death breaks into three pieces with a left/right lateral split",
+    "claim": "The ROM's BGAXP explodes a dead TIE into exactly three explosion-queue pieces: TP$TI1 = left wing (WSXPLD.MAC:162), TP$TI2 = right wing (:193), TP$TI3 = center globe (:221). Ours renders exactly three fragment models with the same lateral split: TIE_WING_FRAG_1 offset to -x (render.ts:394), TIE_WING_FRAG_2 to +x (:395), a third to +z (:396). Piece count (3) and the left/right split match.",
+    "reasoning": "BGAXP calls NXTFRE three times, once per piece, tagging them TP$TI1/TP$TI2/TP$TI3 with the comments 'TIE FIGHTER' / 'RIGHT WING' / 'CENTER GLOBE'. Our sw3-8 death cue draws three fragment wireframes spread from the kill point, FRAG_1 to -x and FRAG_2 to +x — the same left-wing/right-wing lateral break. The third piece differs in identity (ROM: center globe/cockpit ball; ours: a third wing fragment on +z) — that model-identity point belongs to pair-models — but the three-piece structure and the lateral split are a genuine match, recorded here.",
+    "source": { "file": "WSXPLD.MAC", "line": 193, "verbatim": "\tLDA #TP$TI2\t\t;TYPE 2, TIE FIGHTER RIGHT WING" },
+    "ours": { "file": "src/shell/render.ts", "line": 394, "verbatim": "      drawWireframe(ctx, TIE_WING_FRAG_1, at(-s, 0, 0), proj, w, h, TIE_GLOW)" }
+  },
+  {
+    "id": "X-002",
+    "class": "DIVERGENCE",
+    "title": "TIE explosion piece lifetime is too short and is not split wing-vs-globe",
+    "claim": "ROM per-piece life timers (loaded into XP$TMR, decremented once per 20.508 Hz game frame by DOXPLD): the two WINGS get #18 = 0x18 = 24 frames = 24/20.508 = 1.170 s (WSXPLD.MAC:165, :196); the CENTER GLOBE gets #10 = 0x10 = 16 frames = 16/20.508 = 0.780 s (:224). Ours uses a single flat TIE_DEATH_SECONDS = 0.7 s for all three fragments (state.ts:247). So our wings vanish at 0.7 s vs the ROM's 1.17 s (~40% too short), and we do not give the wings a longer life than the globe.",
+    "reasoning": "Radix is 16 (WSCOMN .RADIX 16); the timer immediates carry no trailing period, so #18/#10 are hex 24/16, not decimal. DOXPLD decrements XP$TMR by 1 per game frame (WSXPLD.MAC:488-490), and the game frame is 20.508 Hz (preflight §3), so XP$TMR values are frame counts convertible by /20.508. Our render comment ('A brief flash — the cabinet's death is quick') is the inverted intuition: the cabinet's TIE wings persist over a full second. A faithful port would use ~1.17 s for the wings and ~0.78 s for the globe rather than one 0.7 s constant.",
+    "source": { "file": "WSXPLD.MAC", "line": 165, "verbatim": "\tLDA #18" },
+    "ours": { "file": "src/core/state.ts", "line": 247, "verbatim": "export const TIE_DEATH_SECONDS = 0.7" },
+    "recommendation": "fix",
+    "size": "s"
+  },
+  {
+    "id": "X-003",
+    "class": "DIVERGENCE",
+    "title": "TIE explosion pieces flash white then color-cycle by age; ours is static green",
+    "claim": "The ROM colors each TIE piece from its remaining timer (VWTIN): while XP$TMR > 1F (31), it draws #VJFLS = 'REALLY FLASH' (WSXPLD.MAC:764, :766); otherwise it indexes the TVWCLE color/intensity table by 2×timer (:768) so the piece walks a color ramp as it ages. Ours draws all three fragments in one static color, TIE_GLOW (render.ts:394-396), with no flash and no age ramp.",
+    "reasoning": "VWTIN loads VJFLS for a fresh piece (timer above the table's 1F range) and TVWCLE[2*timer] as it ages — an intensity/hue ramp keyed to the countdown. The exact TVWCLE hues are VGCOLR bit-fields (VGCOLR&0F000 + color nibbles, :783) tied to the AVG color hardware and are NOT fully decoded here, so this finding claims the STRUCTURE (fresh flash, then a per-frame color/intensity ramp down), not specific hexes. Our fragments carry a fixed green with no time variation, so the 'blowing apart and cooling' read is absent.",
+    "source": { "file": "WSXPLD.MAC", "line": 766, "verbatim": "\tLDD #VJFLS\t\t;THEN REALLY FLASH" },
+    "ours": { "file": "src/shell/render.ts", "line": 396, "verbatim": "      drawWireframe(ctx, TIE_WING_FRAG_3, at(0, 0, s), proj, w, h, TIE_GLOW)" },
+    "recommendation": "fix",
+    "size": "m"
+  },
+  {
+    "id": "X-004",
+    "class": "STRUCTURAL",
+    "title": "Explosion pieces are simulated with real per-frame velocity; ours fakes motion in render from age",
+    "claim": "In the ROM a TIE explosion piece is a simulated entity: it carries a 3D velocity (the XP$M* 'munge' vector) and is integrated once per game frame by DOXPLD via MVTI1/2/3 — the wings 'KEEP ORIGINAL VELOCITY' (WSXPLD.MAC:565-566) and the globe moves away from the blast (:567), each drawn as a real perspective 3D object. Ours stores only {pos, age} (DyingTie) and fakes the fly-apart in the SHELL as a linear spread s = f * TIE_DEATH_SPREAD driven by age (render.ts:391) — no velocity, no perspective travel.",
+    "reasoning": "This is the expected float/dt-render vs integer/IRQ-sim gap, so it is STRUCTURAL, not a value divergence. Note the ownership split itself matches: the ROM spawns pieces in the sim (BGAXPLD), ages/moves them in the sim (DOXPLD, once per game frame), and only DRAWS them in the view pass (VWXPLD) — and ours likewise spawns/ages dyingTies in the pure core (sim.ts:270, :279) and only draws in render. What differs is that our pieces carry no motion state, so the shell approximates the trajectory from age alone.",
+    "source": { "file": "WSXPLD.MAC", "line": 565, "verbatim": "MVTI1:\t\t\t\t;LEFT WING\tKEEP ORIGINAL VELOCITY" },
+    "ours": { "file": "src/shell/render.ts", "line": 391, "verbatim": "      const s = f * TIE_DEATH_SPREAD" },
+    "recommendation": "accept"
+  },
+  {
+    "id": "X-005",
+    "class": "NO_COUNTERPART",
+    "title": "Tower/bunker destruction explosion (ballistic debris + ground shadow) is absent",
+    "claim": "The ROM has a full destruction explosion for ground objects: BGTWXP (tower, WSXPLD.MAC:317) and BGBKXP (bunker, :305) each spawn three pieces with a #20 = 0x20 = 32-frame life = 32/20.508 = 1.560 s (:330-331), launched UPWARD with a vertical velocity (:355-357, '728. TO 1024.' * 4) and pulled down by gravity SUBD #50.*4 = 200/frame (:559), freezing at ground level; each piece also draws a scaled ground SHADOW (VWBKN/VWTWN, :695-745), red for bunkers, white for towers. Ours renders NOTHING when a surface turret/tower/bunker is destroyed — stepSurface just filters it out and emits an enemy-death event; there is no dying-turret state and no render path for it.",
+    "reasoning": "Our surface kill loop removes the turret and pushes an 'enemy-death' event (sim.ts stepSurface), but render.ts's surface branch draws only live turrets — there is no analog of dyingTies for ground objects and no debris/shadow draw. The ROM's ground-object explosion is a substantial ballistic-debris animation with gravity and shadows; nothing in our code corresponds to it, so this is a missing subsystem (fix would add a dying-ground-object entity + render path, mirroring dyingTies but with launch velocity, gravity, and a floor shadow).",
+    "source": { "file": "WSXPLD.MAC", "line": 317, "verbatim": "BGTWXP::" },
+    "ours": null,
+    "recommendation": "fix",
+    "size": "l"
+  },
+  {
+    "id": "X-006",
+    "class": "DIVERGENCE",
+    "title": "Death Star finale is a 4-phase red-blue-white ring animation; ours is a single-amber ring+ray burst",
+    "claim": "The ROM finale (VWXPLN dispatching XP.PH0..PH3) is a four-phase concentric-circle / expanding-ring sequence that cycles color: PH0 RED circles dim-to-bright (WSXPLD.MAC:817, VGCRED), PH1 blue-from-center + red expansion (:839 VGCBLU / :852 VGCRED), PH2 white-from-center + blue expansion (:898 VGCWHT / :911 VGCBLU), PH3 continually expanding WHITE rings (:970 VGCWHT). It is built ONLY from concentric circles (DCIRCL) and smoothly-scaling rings (DRING) — no rays. Ours (drawDeathStarBoom) draws a single amber color '#ffdd66' (render.ts:566), 3 concentric rings (BOOM_RINGS=3, :559) PLUS a 16-ray starburst (BOOM_RAYS=16, :560) that has no ROM counterpart.",
+    "reasoning": "The XP.PH0-PH3 phase table (:811 TXPPHS) and the per-phase VGCRED/VGCBLU/VGCWHT color commands establish the red->blue->white progression; the secondary extract corroborates it independently (docs/star-wars-1983-source-findings.md:547, 'Death Star explosion ring colours by state: $6480 -> $61FF+$64FF -> ...'). DCIRCL draws concentric circles, DRING draws smoothly-scaling rings (:1001, :1041) — both rings, never a radial starburst. Our single-color amber blast with a ray fan is a stylized stand-in that reproduces neither the multi-phase color arc nor the pure-ring geometry; matching it is a rewrite of drawDeathStarBoom into a phased ring sequence.",
+    "source": { "file": "WSXPLD.MAC", "line": 817, "verbatim": "\tLDD #VGCOLR+<VGCRED*100>;COLOR COMMAND" },
+    "ours": { "file": "src/shell/render.ts", "line": 566, "verbatim": "  ctx.strokeStyle = '#ffdd66'" },
+    "recommendation": "fix",
+    "size": "l"
+  },
+  {
+    "id": "X-007",
+    "class": "NO_COUNTERPART",
+    "title": "Death Star finale 'prelim' — the station looms very large and enlarges before the blast — is absent",
+    "claim": "Before the ring explosion, the ROM plays a prelim phase (PH$DX1): the Death Star is seeded 'AT VERY LARGE' scale (WSMAIN.MAC:2171, DT.SCL = VGSCAL+100+04) and VEWDX1 draws it ENLARGING toward the viewer (WSMAIN.MAC:3386, 'JSR VWDTHB ;VIEW DETH STAR, ENLARGING') while end-of-Death-Star music starts; only then does PH$DX2 call BGXPLN to begin the explosion. Ours has no such beat: a port kill runs drawDeathStarBoom (a centered screen boom) and clearRun warps straight to the next wave's space phase — the Death Star never looms/enlarges on screen at the finish.",
+    "reasoning": "The finale is a three-sub-phase sequence in WSMAIN's phase table (:343-345 P. DX1/DX2/DX3): DX1 the station enlarges (VWDTHB) + end music, DX2 BGXPLN + VWXPLN begins the rings (WSMAIN.MAC:2210, VEWDX2 also draws a Death Star 'miniature'), DX3 the rings finish. Only the ring animation (DX2/DX3) has a rough counterpart in ours (X-006); the DX1 enlarge-and-loom prelim has none. (Note: the star-streak 'fly away backwards' escape, SMVDX1/2/3, is inside a .REPT 0 block and its calls are commented out in PHEDX1 — it never assembled, so it is deliberately NOT claimed here as shippable behavior.)",
+    "source": { "file": "WSMAIN.MAC", "line": 3386, "verbatim": "\tJSR VWDTHB\t\t;VIEW DETH STAR, ENLARGING" },
+    "ours": null,
+    "recommendation": "fix",
+    "size": "l"
+  },
+  {
+    "id": "X-008",
+    "class": "DIVERGENCE",
+    "title": "Death Star finale duration is ROM-defined by counter arithmetic, not 'no ROM timing'",
+    "claim": "Our code comment states the Death-Star boom dwell is a pure UX guess because 'no ROM timing exists', pinning DEATH_STAR_BOOM_SECONDS = 2.5 s (render.ts:846). That is inaccurate: the finale length IS defined by the ROM — VWXPLN advances XP.CNT through four phases (PH0 +2 to 3F, PH1 +2 to 3F, PH2 +3 to 50 then reload 80, PH3 -4 down to <8; WSXPLD.MAC:816/837/896/955) once per 20.508 Hz game frame, so the ring animation alone spans dozens of frames (order of several seconds), on top of the DX1 enlarge prelim — materially longer than a single 2.5 s ramp.",
+    "reasoning": "Each XP.PH* handler steps XP.CNT by a fixed delta per game-frame call and advances the phase at a threshold, so the total duration is deterministic and derivable from those counters. I do NOT give an exact seconds figure: the loop-bound sense depends on the HLL69F IFLO/IFHS structured-macro semantics (PH0's 'IFLO ;KEEP GOING' block reads anomalously against PH1/PH2's IFLO-draw/IFHS-advance pattern), which I have not fully decoded — so a precise frame count would be a guess. The defensible, load-bearing point is only that the ROM defines a duration via counters (contradicting our 'no ROM timing' comment) and that it is clearly longer than 2.5 s. Exact retune is blocked on decoding those macros.",
+    "source": { "file": "WSXPLD.MAC", "line": 955, "verbatim": "XP.PH3:" },
+    "ours": { "file": "src/shell/render.ts", "line": 846, "verbatim": "const DEATH_STAR_BOOM_SECONDS = 2.5" },
+    "recommendation": "accept"
+  },
+  {
+    "id": "X-009",
+    "class": "STRUCTURAL",
+    "title": "Explosion pieces live in a fixed 8-slot circular queue; ours is an unbounded array",
+    "claim": "The ROM caps concurrent explosion pieces at XP$EQ = 8 (WSXPLD.MAC:59) in a circular queue: NXTFRE bumps XP.HDQ and wraps to 0 at 8 (:447-454), overwriting the oldest piece — so with 3 pieces per TIE/ground-object explosion only ~2 explosions coexist before the queue recycles. Ours keeps dyingTies as an unbounded array (sim.ts:277), appending every kill's cue and only dropping them by age.",
+    "reasoning": "This is a fixed-pool integer design vs a growable float-time list — STRUCTURAL, not a value bug. In practice the cap rarely bites (only 3 TIE slots exist), and ours covers only TIE deaths, so the observable difference is small; recorded for completeness. Ours ages entries out by TIE_DEATH_SECONDS rather than by slot reuse, so it cannot exhibit the ROM's oldest-piece eviction under a burst of kills.",
+    "source": { "file": "WSXPLD.MAC", "line": 59, "verbatim": "XP$EQ\t==8.\t\t\t;MAX NUMBER OF EXPLOSION PIECES" },
+    "ours": { "file": "src/core/sim.ts", "line": 277, "verbatim": "  const dyingTies: DyingTie[] = [" },
+    "recommendation": "accept"
+  }
+]
