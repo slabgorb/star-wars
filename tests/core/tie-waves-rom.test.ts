@@ -60,7 +60,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { TIE_SPAWN_DISTANCE } from '../../src/core/state'
-import { program, TCH1, TCH2, initVm, tickChoreo, type ChoreoInstr } from '../../src/core/tie-vm'
+import { program, TCH1, TCH2, initVm, tickChoreo } from '../../src/core/tie-vm'
 import {
   SHAPE_LIVES,
   TWV_GROUPS,
