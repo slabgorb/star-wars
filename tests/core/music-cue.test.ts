@@ -9,11 +9,14 @@
 //   run start / space     Sound_24/$25    'space'
 //   Death Star surface    Sound_20/$21    'towers'   (ROM "Towers music")
 //   trench run            Sound_22        'trench'
-//   space @ wave>=3 odd   Sound_1D        'imperialMarch'  (replaces 'space')
+//   space @ ROM {4,6,8}   Sound_1D        'imperialMarch'  (replaces 'space')
 //
-// The last row is the space-wave loop `sub_6838`: it plays the Imperial March
-// INSTEAD of the space theme when the wave is >= 3 AND odd. The Imperial March
-// replaces ONLY the space theme — the towers/trench themes are wave-independent.
+// The last row is the space-wave loop (WSMAIN:1421 / sub_6838): it plays the
+// Imperial March INSTEAD of the space theme on human 1-based waves {4,6,8,...} —
+// the ROM gate `LDA GM.WAV / CMPA #4-1 / IFGE / ANDA #1 / IFNE` reads the 0-based
+// counter (GM.WAV >= 3 AND odd), which is human wave >= 4 AND even. (sw3-5 shipped
+// the 1-based misread {3,5,7,...}; sw7-2 corrected it — see wave-parity-gates.test.)
+// The Imperial March replaces ONLY the space theme — towers/trench are wave-independent.
 //
 // DESIGN (TEA's call, delegated by the story context): the cue is a first-class
 // core GameEvent, mirroring sw2-5 speech — the core decides WHICH track and WHEN
@@ -104,8 +107,8 @@ describe('MusicEvent — a core GameEvent variant (AC2)', () => {
       ...musicTracks(
         stepGame(playing({ phase: 'surface', phaseKills: towersForWave(1) }), NO_INPUT, DT),
       ),
-      // trench clear into wave 3 (odd, >=3): Imperial March replaces the space theme
-      ...musicTracks(stepGame(portKill(trenchAtWave(1983, 2)), NO_INPUT, DT)),
+      // trench clear into wave 4 (even, >=4): Imperial March replaces the space theme
+      ...musicTracks(stepGame(portKill(trenchAtWave(1983, 3)), NO_INPUT, DT)),
     ])
     expect(emitted).toEqual(new Set<string>(MUSIC_TRACKS))
   })
@@ -157,36 +160,39 @@ describe('music cue — entering the trench plays the trench theme (AC2)', () =>
   })
 })
 
-describe('music cue — the Imperial March replaces the space theme at wave>=3 odd (AC3)', () => {
-  it('plays the Imperial March entering wave 3 (odd, >=3) after a run clears', () => {
-    const out = stepGame(portKill(trenchAtWave(1983, 2)), NO_INPUT, DT)
-    // The whole run cleared and looped one wave harder into the space phase.
-    expect(out.phase).toBe('space')
-    expect(out.wave).toBe(3)
-    expect(out.events).toContainEqual({ type: 'level-clear', next: 'space' })
-    expect(musicTracks(out)).toContain('imperialMarch')
-    expect(musicTracks(out)).not.toContain('space')
-  })
-
-  it('plays the plain space theme entering wave 2 (even) after a run clears', () => {
+describe('music cue — the Imperial March replaces the space theme on ROM waves {4,6,8,...} (AC3)', () => {
+  // ROM gate WSMAIN:1421 reads the 0-based GM.WAV: March iff GM.WAV>=3 AND GM.WAV odd
+  // = human 1-based wave >= 4 AND even. sw7-2 corrected sw3-5's 1-based {3,5,7,...}
+  // misread. The exhaustive wave map lives in tests/core/wave-parity-gates.test.ts.
+  it('plays the plain space theme entering wave 2 (even but < 4) after a run clears', () => {
     const out = stepGame(portKill(trenchAtWave(1983, 1)), NO_INPUT, DT)
     expect(out.wave).toBe(2)
     expect(musicTracks(out)).toContain('space')
     expect(musicTracks(out)).not.toContain('imperialMarch')
   })
 
-  it('plays the plain space theme entering wave 4 (even, >=3) — the gate needs ODD, not just >=3', () => {
-    const out = stepGame(portKill(trenchAtWave(1983, 3)), NO_INPUT, DT)
-    expect(out.wave).toBe(4)
+  it('plays the plain space theme entering wave 3 (odd) — the March needs an EVEN wave', () => {
+    const out = stepGame(portKill(trenchAtWave(1983, 2)), NO_INPUT, DT)
+    expect(out.wave).toBe(3)
     expect(musicTracks(out)).toContain('space')
     expect(musicTracks(out)).not.toContain('imperialMarch')
   })
 
-  it('plays the Imperial March entering wave 5 (odd, >=3)', () => {
-    const out = stepGame(portKill(trenchAtWave(1983, 4)), NO_INPUT, DT)
-    expect(out.wave).toBe(5)
+  it('plays the Imperial March entering wave 4 (even, >= 4) after a run clears', () => {
+    const out = stepGame(portKill(trenchAtWave(1983, 3)), NO_INPUT, DT)
+    // The whole run cleared and looped one wave harder into the space phase.
+    expect(out.phase).toBe('space')
+    expect(out.wave).toBe(4)
+    expect(out.events).toContainEqual({ type: 'level-clear', next: 'space' })
     expect(musicTracks(out)).toContain('imperialMarch')
     expect(musicTracks(out)).not.toContain('space')
+  })
+
+  it('plays the plain space theme entering wave 5 (odd) — the gate needs EVEN, not just >= 4', () => {
+    const out = stepGame(portKill(trenchAtWave(1983, 4)), NO_INPUT, DT)
+    expect(out.wave).toBe(5)
+    expect(musicTracks(out)).toContain('space')
+    expect(musicTracks(out)).not.toContain('imperialMarch')
   })
 
   it('replaces ONLY the space theme — the towers/trench edges are unchanged at wave 3', () => {

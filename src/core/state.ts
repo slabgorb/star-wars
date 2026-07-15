@@ -613,11 +613,12 @@ export interface GameState {
    * on every phase entry (like `phaseKills`). */
   trenchShotsFired: number
   /** The trench voice-line timer (Wave 3, story sw3-4) — the ROM's `word_4B0E`.
-   * An integer tick counter that advances by 1 each trench step and resets to 0
-   * on every phase entry; the iconic voice lines fire when it hits their ROM
-   * thresholds (16/22/24), gated by run parity (see TRENCH_VOICE_CUES in sim.ts).
-   * A per-step tick, not dt-scaled, so the authentic thresholds stay reachable in
-   * the ~4.8s trench (docs/star-wars-1983-source-findings.md, trench voice timer). */
+   * A game-frame accumulator that advances by dt·TICK_HZ each trench step (sw7-1
+   * made it frame-true at 20.508 Hz) and resets to 0 on every phase entry; the
+   * iconic voice lines fire when it CROSSES their ROM thresholds (16/22/24), gated
+   * by 0-based BS.WAV parity (sw7-2; see TRENCH_VOICE_CUES in sim.ts). The thresholds
+   * fire at their authentic 0.78–1.17 s wall-clock times regardless of tick rate
+   * (docs/star-wars-1983-source-findings.md, trench voice timer). */
   trenchTimer: number
   /** Sim time (`t`) the FORCE_BONUS was last awarded, or `null` if it hasn't
    * been this run. Stamped by a clean port kill so the shell can show the

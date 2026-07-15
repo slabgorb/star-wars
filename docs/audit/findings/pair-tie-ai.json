@@ -29,7 +29,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1165,
+      "line": 1189,
       "verbatim": "const ROM_LATERAL_UNIT = 0x400 // 1024 — the ×$400 STARTING-LOCATION lateral step"
     }
   },
@@ -46,7 +46,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1176,
+      "line": 1200,
       "verbatim": "  [-2 * ROM_LATERAL_UNIT, 0], // 1D1"
     }
   },
@@ -131,7 +131,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1192,
+      "line": 1216,
       "verbatim": "  return { pos, vel: scale(dir, speed), kind: 'tie', orient: lookRotation(dir), bank }"
     }
   },
@@ -148,7 +148,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1112,
+      "line": 1136,
       "verbatim": "function moveEnemy(e: Enemy, dt: number): Enemy {"
     },
     "recommendation": "fix",
@@ -190,7 +190,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1123,
+      "line": 1147,
       "verbatim": "  const peeling = e.peeling ?? (dist <= TIE_NEAR_BOUND && lateralOffset >= COCKPIT_HIT_RADIUS)"
     },
     "recommendation": "accept",
@@ -266,7 +266,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1188,
+      "line": 1212,
       "verbatim": "  const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]"
     },
     "recommendation": "accept",

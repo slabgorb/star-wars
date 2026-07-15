@@ -51,10 +51,12 @@ const REQUIRED_SPEECH: SpeechName[] = [
   'redFiveStandingBy',
   'lookAtTheSizeOfThatThing',
   'greatShotKidThatWasOneInAMillion',
-  // sw3-4 — trench voice-line timer (word_4B0E, parity-gated by wave)
-  'lukeTrustMe', // trench timer 16, even run
-  'youreAllClearKid', // trench timer 24, even run
-  'theForceIsStrongInThisOne', // trench timer 22, odd run
+  // sw3-4 trench voice-line timer (word_4B0E); parity base corrected by sw7-2 —
+  // BS.WAV-even = human ODD waves, BS.WAV-odd = human EVEN waves (WSMAIN:1868).
+  'lukeTrustMe', // trench timer 16, human-odd wave
+  'youreAllClearKid', // trench timer 24, human-odd wave
+  'theForceIsStrongInThisOne', // trench timer 22, human-even wave
+  'letGoLuke', // trench timer 16, human-even wave — restored to a core cue by sw7-2 (U-007)
 ]
 
 // The authentic baked line names (snake_case → `${name}.wav`), scraped from the

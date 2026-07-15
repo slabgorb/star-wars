@@ -152,15 +152,18 @@ describe('sw2-4 — destroying the port emits a Death-Star-destroyed cue', () =>
   })
 
   it('preserves the existing payoff — the run still clears, scores, and cues speech', () => {
-    const base = trench(portAt([0, 0, -300]), { wave: 1, score: 500, trenchShotsFired: 2 })
+    // sw7-2: Han's line is wave-gated to human {4,6,8,...} (WSMAIN:1919). Kill the port
+    // on wave 4 (a speaking wave) so the winning-shot line still asserts alongside the
+    // clear/score payoff; the wave-gate map itself is in wave-parity-gates.test.ts.
+    const base = trench(portAt([0, 0, -300]), { wave: 4, score: 500, trenchShotsFired: 2 })
     const s0: GameState = { ...base, projectiles: [bolt([0, 0, -300])] }
     const s1 = stepGame(s0, NO_INPUT, 0.001)
     expect(s1.exhaustPort).toBeNull() // destroyed
     expect(s1.phase).toBe('space') // warped to the next wave
-    expect(s1.wave).toBe(2)
+    expect(s1.wave).toBe(5)
     expect(s1.score).toBe(500 + TRENCH_BONUS) // the bonus still lands
-    // Han's winning-shot line still fires on the port kill (sw2-5) — the new
-    // explosion cue rides ALONGSIDE it, not instead of it.
+    // Han's winning-shot line still fires on the port kill (sw2-5, wave-gated by sw7-2)
+    // — the new explosion cue rides ALONGSIDE it, not instead of it.
     expect(s1.events).toContainEqual({ type: 'speech', line: 'greatShotKidThatWasOneInAMillion' })
   })
 
