@@ -118,22 +118,28 @@ function firstCueTimes(
 }
 
 // Thresholds are GAME-FRAMES on the ROM's word_4B0E; wall-clock = frames / 20.508 Hz.
-const F_LUKE = 16 // even — "Luke, trust me"           → 0.780 s
-const F_FORCE = 22 // odd  — "The Force is strong…"      → 1.073 s
-const F_YAHOO = 24 // even — "Yahoo, you're all clear"   → 1.170 s
+// Parity base (corrected by sw7-2): the ROM gates on 0-based BS.WAV (WSMAIN:1868), so
+// "Luke, trust me"/"Yahoo" ride BS.WAV-even = human ODD waves {1,3,5,...}, while "Let
+// go Luke"/"The Force is strong" ride BS.WAV-odd = human EVEN waves {2,4,6,...}. This
+// timing suite is agnostic to WHICH wave carries a line — it swaps the fixture wave so
+// each line's wall-clock time is still driven (the parity map itself is pinned in
+// tests/core/wave-parity-gates.test.ts).
+const F_LUKE = 16 // human-odd — "Luke, trust me"          → 0.780 s
+const F_FORCE = 22 // human-even — "The Force is strong…"    → 1.073 s
+const F_YAHOO = 24 // human-odd — "Yahoo, you're all clear" → 1.170 s
 
 describe('sw7-1 · trench voice cues fire at their ROM wall-clock time, not step 16/22/24 (T-008)', () => {
   const DT = 1 / 60
 
-  it('even wave: "Luke, trust me" ≈ 0.78 s, "Yahoo…" ≈ 1.17 s (parity gate holds)', () => {
-    const at = firstCueTimes(1983, 2, DT, 90) // 90 steps = 1.5 s > 1.17 s
+  it('odd wave: "Luke, trust me" ≈ 0.78 s, "Yahoo…" ≈ 1.17 s (parity gate holds)', () => {
+    const at = firstCueTimes(1983, 1, DT, 90) // wave 1 (human odd); 90 steps = 1.5 s > 1.17 s
     expect(at['lukeTrustMe']).toBeCloseTo(F_LUKE / ROM_GAME_FRAME_HZ, 1) // 0.780 s (was 16/60 = 0.27 s)
     expect(at['youreAllClearKid']).toBeCloseTo(F_YAHOO / ROM_GAME_FRAME_HZ, 1) // 1.170 s
-    expect(at['theForceIsStrongInThisOne'] ?? null).toBeNull() // odd-only line stays silent
+    expect(at['theForceIsStrongInThisOne'] ?? null).toBeNull() // even-wave line stays silent
   })
 
-  it('odd wave: "The Force is strong in this one" ≈ 1.07 s', () => {
-    const at = firstCueTimes(1983, 1, DT, 90)
+  it('even wave: "The Force is strong in this one" ≈ 1.07 s', () => {
+    const at = firstCueTimes(1983, 2, DT, 90) // wave 2 (human even)
     expect(at['theForceIsStrongInThisOne']).toBeCloseTo(F_FORCE / ROM_GAME_FRAME_HZ, 1) // 1.073 s
     expect(at['lukeTrustMe'] ?? null).toBeNull()
     expect(at['youreAllClearKid'] ?? null).toBeNull()
@@ -146,8 +152,9 @@ describe('sw7-1 · trench cue timing is frame-rate independent — wall-clock, n
   // at a fixed wall-clock TIME regardless of tick rate. Drive the SAME even run coarse
   // and fine and demand "Luke" lands at the same second.
   it('"Luke, trust me" fires at the same sim-time at 30 Hz and 120 Hz stepping', () => {
-    const coarse = firstCueTimes(1983, 2, 1 / 30, 60)['lukeTrustMe'] // 60 steps = 2.0 s
-    const fine = firstCueTimes(1983, 2, 1 / 120, 240)['lukeTrustMe'] // 240 steps = 2.0 s
+    // wave 1 (human odd) is the "Luke, trust me" parity set (sw7-2, WSMAIN:1868).
+    const coarse = firstCueTimes(1983, 1, 1 / 30, 60)['lukeTrustMe'] // 60 steps = 2.0 s
+    const fine = firstCueTimes(1983, 1, 1 / 120, 240)['lukeTrustMe'] // 240 steps = 2.0 s
     expect(coarse).not.toBeUndefined()
     expect(fine).not.toBeUndefined()
     // Same instant, within the coarser step (1/30 ≈ 0.033 s). A per-step counter puts
