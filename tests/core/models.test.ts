@@ -751,14 +751,55 @@ describe('models — Darth Vader TIE ring topology (8-10)', () => {
     expect(m.edges.length).toBeGreaterThan(0)
   })
 
-  it('is a single connected wireframe (bent wings + pylons + ball, not fragmented)', () => {
-    // 8-10 (revised): like TIE_FIGHTER, deriveRings() on Vader's TIE finds
-    // cross-body quads whose closure boxes the ship, so the topology guard here is
-    // connectivity, not ring-closure. No-orphan-vertices and bilateral Y-symmetry
-    // remain covered by the universal suite above.
+  // sw5-2 REPLACES the old "single connected wireframe" guard.
+  //
+  // Story 8-10 authored DARTH_TIE's edges by structure and, to satisfy THIS
+  // guard, joined every sub-body with invented spokes and struts so the whole
+  // ship was one connected component. sw5-1's audit found 44 of those edges are
+  // in NO ROM draw list. sw5-2 re-ports the edges from `.WL RTH`, and the ROM
+  // does NOT stroke those joins: its draw list pen-UPs (`.BD` blank-moves)
+  // between six separate runs, so the authentic wireframe is SIX disjoint
+  // sub-bodies, not one:
+  //   right wing octagon · right strut+square · left wing octagon ·
+  //   left strut+square · body equator belts · front-window octagon.
+  // Per the story: the single-component guard assumed the authored structure and
+  // is WRONG about the ROM — so it is updated with rationale, not satisfied by
+  // reshaping the geometry. The authoritative, ROM-derived edge/component proof
+  // lives in tests/core/darth-tie-rom.test.ts (0/0 drift vs `.WL RTH`).
+  it('is the ROM\'s six pen-up sub-bodies, not one fabricated blob', () => {
     const m = findDarth()
     expect(m).toBeDefined()
     if (!m) return
-    expect(isSingleComponent(m)).toBe(true)
+
+    // The old fabrication was one component; the ROM draw list is six.
+    expect(isSingleComponent(m), 'no invented spokes join the sub-bodies').toBe(false)
+
+    const adj = new Map<number, number[]>()
+    for (let i = 0; i < m.vertices.length; i++) adj.set(i, [])
+    for (const [a, b] of m.edges) {
+      adj.get(a)!.push(b)
+      adj.get(b)!.push(a)
+    }
+    const seen = new Set<number>()
+    let components = 0
+    for (let s = 0; s < m.vertices.length; s++) {
+      if (seen.has(s)) continue
+      components++
+      const stack = [s]
+      seen.add(s)
+      while (stack.length) {
+        for (const w of adj.get(stack.pop()!)!) {
+          if (!seen.has(w)) {
+            seen.add(w)
+            stack.push(w)
+          }
+        }
+      }
+    }
+    expect(components, 'the six `.WL RTH` sub-bodies').toBe(6)
+    // Still no free-floating vertex — every one of the 56 is stroked (the
+    // universal no-orphan-vertices guard above covers this; asserted here too so
+    // "6 components" can never be reached by orphaning points).
+    expect(seen.size).toBe(56)
   })
 })
