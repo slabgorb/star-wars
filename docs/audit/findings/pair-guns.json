@@ -1,0 +1,215 @@
+[
+  {
+    "id": "G-001",
+    "class": "CONFIRMED",
+    "title": "Enemy fireball homing decays \u00d77/8 per game frame toward the player",
+    "claim": "ROM MOVAM (the 'AIM AT PLAYER' shot mover) computes, per axis, pos \u2190 pos \u2212 pos/8 = pos\u00d7(7/8) each game frame: `CLRD / SUBD 0(U) / JSR ASRD3 / ADDD 0(U) / STD 0(U)` (WSGUNS.MAC:484-488). ASRD3 is arithmetic-shift-right-D by 3 = \u00f78 (WSMATH.MAC:62-66). The shot is stored relative to the player (WSGUNS.MAC:172), so decaying toward 0 homes it onto the cockpit. Our homeShots uses the identical 7/8 ratio: `Math.pow(7 / 8, dt * TICK_HZ)`. The per-frame decay ratio matches exactly (the CADENCE at which it is applied is a separate finding, G-003).",
+    "reasoning": "The ROM comment on 485/491/497 says 'POS-(POS/4)' but the CODE calls ASRD3 (\u00f78), not ASRD2 (\u00f74) \u2014 the comment is stale; the executed factor is 7/8. Our sim ports the executed factor, not the comment. A pure geometric-decay homer with no straight-line velocity (our fireball vel is [0,0,0]) matches the ROM, which carries no velocity in the shot record either \u2014 MOVAM re-derives position by scaling each frame.",
+    "source": {
+      "file": "WSGUNS.MAC",
+      "line": 486,
+      "verbatim": "\tJSR ASRD3"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 1081,
+      "verbatim": "  const decay = Math.pow(7 / 8, dt * TICK_HZ)"
+    },
+    "verdict": "CONFIRMED",
+    "refutation_corrections": {
+      "match_holds_per_tick_not_at_the_governing_cadence": "MOVAM runs once per 20.508 Hz game frame, so the ROM applies 7/8 exactly 20.508 times/second. Our code applies it dt*TICK_HZ times/second with TICK_HZ=30 (state.ts:220) = 30 times/second. 30/20.508 = 1.463x, so the effective homing decay is ~1.46x too aggressive: our fireball converges onto the cockpit measurably faster than the cabinet's. The finding's title 'decays x7/8 per game frame' is only faithful if TICK_HZ = 20.508; as shipped our 'frame' is 1/30 s, not the ROM's 1/20.508 s game frame. The finding honestly defers the cadence to G-003, so this remains CONFIRMED (ratio real, correctly ported) rather than a kill \u2014 but the '7/8 homing matches' headline must be read strictly as 'the per-tick ratio matches', with the wall-clock rate 1.46x too fast. Shared root cause with G-003 / T-007 (TICK_HZ=30 should be 20.508)."
+    }
+  },
+  {
+    "id": "G-002",
+    "class": "CONFIRMED",
+    "title": "Enemy fireball pool is 6 concurrent gun-shells",
+    "claim": "The ROM GUN pool is G$EQ (==6) records of G$IZE (==6) bytes: `.BLKB G$IZE*G$EQ` (WSGLOB.MAC:599-603). Every enemy gun-shell \u2014 TIE cannon (FRAGUN), tower/bunker/panel guns, and the proton torpedo iterator \u2014 allocates from these 6 slots. Our MAX_FIREBALL_SLOTS = 6 matches.",
+    "reasoning": "One caveat, not a divergence: the ROM's 6 slots are a SINGLE global pool shared across all gun types and all phases, whereas ours caps space fireballs at maxConcurrentShots (a per-wave 1\u21926 ramp) and surface tower fire at MAX_FIREBALL_SLOTS=6 separately. The ceiling value (6) is faithful; the per-wave space ramp (gameRules FIRE_CONCURRENCY) is a separate ported table (story 9-5) and is the TIE-AI/cadence pair's concern. The TIE (alien) pool is a separate 3-record table (A$EQ==3, WSGLOB.MAC:589-590), matching WAVE_SIZE=3 \u2014 TIE-AI's scope.",
+    "source": {
+      "file": "WSGLOB.MAC",
+      "line": 603,
+      "verbatim": "\t.BLKB G$IZE*G$EQ"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 234,
+      "verbatim": "export const MAX_FIREBALL_SLOTS = 6"
+    }
+  },
+  {
+    "id": "G-003",
+    "class": "DIVERGENCE",
+    "title": "Fireball lifetime is 64 game frames = 3.12 s @ 20.508 Hz; ours computes 2.13 s (1.46\u00d7 too fast)",
+    "claim": "FRAGUN loads the shot timer with $40 (`LDB #40`, WSGUNS.MAC:150; radix 16 \u2192 64 decimal) and MOVAM decrements it each game frame, killing the shot at \u22640 \u2014 a 64-game-frame life. At the pinned game-logic rate of 20.508 Hz (preflight \u00a73), 64 \u00f7 20.508 = 3.12 s. Our ENEMY_SHOT_TTL = 64 / TICK_HZ = 64 / 30 = 2.13 s. The 64-frame COUNT is faithful; the seconds conversion is 30 / 20.508 = 1.46\u00d7 too fast because TICK_HZ is set to 30, not 20.508.",
+    "reasoning": "state.ts justifies TICK_HZ=30 with 'The real cabinet's rate is self-timed by vector-list length and is NOT pinned by the disassembly.' The primary source refutes that premise: WSINT.MAC:145-148 pins the game frame at 12 IRQs = 20.508 Hz (preflight \u00a73). Because the same TICK_HZ scales BOTH the fireball TTL and the 7/8 homing decay (G-001: decay applied dt\u00b7TICK_HZ times/s \u2192 30/s instead of 20.508/s), the whole fireball arrives and expires ~1.46\u00d7 too fast. Fix is to set TICK_HZ to 20.508 (or express fireball timers in game frames at that rate); shared with the TIE-AI/timing pairs which also ride TICK_HZ. Small code change, but it moves fireball balance, so size s.",
+    "source": {
+      "file": "WSGUNS.MAC",
+      "line": 150,
+      "verbatim": "\tLDB #40"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 230,
+      "verbatim": "export const ENEMY_SHOT_TTL = 64 / TICK_HZ"
+    },
+    "recommendation": "fix",
+    "size": "s",
+    "verdict": "CONFIRMED"
+  },
+  {
+    "id": "G-004",
+    "class": "DIVERGENCE",
+    "title": "The player laser is a hitscan beam (gun\u2192site), not a travelling projectile with speed/lifetime",
+    "claim": "In the ROM the player's laser is HITSCAN. Each game frame the lasers are drawn as lines from the gun ports to the current site/crosshair (VWLAZ) and collision resolves INSTANTLY against whatever object is nearest under the site: CLSLZ (space) picks min(CL.GDS gun-distance, CL.ADS alien-distance) recorded during object draw; CLGLZ (ground); CLBLZ (trench) clips the beam to a fixed forward line whose endpoint is $7000 = 28,672 units ahead (`LDD #7000 ;FARTHEST FORWARD POINT`, WSLAZR.MAC:418). There is no travelling shot, no PROJECTILE_SPEED, and no shot lifetime. Our model gives every bolt a world velocity (PROJECTILE_SPEED = 12,000 u/s) and a 3 s TTL, and resolves hits by world-space sphere overlap as the bolt flies (TIE_HIT_RADIUS 250, ENEMY_SHOT_HIT_RADIUS 150).",
+    "reasoning": "This is the single most consequential structural gap in this scope and it subsumes the whole sw2-1 PROJECTILE_SPEED tuning saga (900\u21925000\u219212000): the ROM has NO shot speed to tune. Consequences that exist in ours but not the ROM: bolts can miss by tunnelling between frames (which forced PROJECTILE_SPEED to be split 12000\u00d73 to keep the per-frame step under target diameters \u2014 an artefact of a model the ROM lacks); bolts take ~2.6 s to cross the 31,744-unit approach; a fired bolt persists after the crosshair moves. In the ROM, the shot resolves this frame on whatever the reticle covers. Our code cannot express hitscan at any constant setting \u2014 faithfulness would require replacing the projectile+world-sphere path with a nearest-object-under-reticle test. Recorded as a deliberate, playable modernization: recommend keeping it (wont_fix), but it is a genuine behavioural divergence, rewrite-scale, and it explains why several downstream radius/speed constants read as invented.",
+    "source": {
+      "file": "WSLAZR.MAC",
+      "line": 418,
+      "verbatim": "\tLDD #7000\t\t;FARTHEST FORWARD POINT"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 171,
+      "verbatim": "      vel: scale(aimDirection(aimX, aimY, input.aspect), PROJECTILE_SPEED),"
+    },
+    "recommendation": "wont_fix",
+    "verdict": "CONFIRMED"
+  },
+  {
+    "id": "G-005",
+    "class": "STRUCTURAL",
+    "title": "Proton-torpedo arming box is \u00b1$200 (\u00b1512 units); we arm on the \u00b196/108 porthole instead \u2014 a world-scale adaptation",
+    "claim": "WSLAZR CLBLZ arms the torpedo when the laser endpoint lands inside a \u00b1$200 box about the porthole (BS.PLC): `ADDD #200 / IFGE ... SUBD #400 / IFLE` on both axes (WSLAZR.MAC:490-499) \u2014 +$200\u22650 && \u2212$200\u22640 is a \u00b1$200 = \u00b1512-unit box \u2014 then `STA PT.LZF` launches the torpedo (FRPTGN). Our code arms on PORT_HIT_RADIUS = 108 (the \u00b196 porthole) via sweptCollides, NOT the \u00b1512 box.",
+    "reasoning": "This is a documented, justified deviation, not a hidden one (state.ts:436-474 quotes WSLAZR verbatim and explains). The ROM box is measured against TMPTX, the endpoint of a laser drawn a fixed $7000 (28,672 units) ahead of the ship (WSLAZR.MAC:418), so \u00b1512 encodes the cabinet's engagement STANDOFF, not a tolerance around the hole. Our whole trench is 2,400 units long with no $7000 standoff to measure against; dropping \u00b1512 in as a proximity radius would let a shot out on the support berm (\u00b1160) or outer base (\u00b1256) win the run \u2014 which pair-trench/sw5-4 pinned as a MISS from this same object. The load-bearing STRUCTURE \u2014 arm early (out where the yoke can reach), resolve late (inside the $800 end-wall window) \u2014 is faithfully ported (portTorpedoArmed latch + late resolve). Differs only because our world scale lacks the ROM's forward standoff. Accept.",
+    "source": {
+      "file": "WSLAZR.MAC",
+      "line": 490,
+      "verbatim": "\tADDD #200"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 728,
+      "verbatim": "    sweptCollides(port, sub(b.pos, scale(b.vel ?? ZERO, dt)), b.pos, PORT_HIT_RADIUS),"
+    },
+    "recommendation": "accept"
+  },
+  {
+    "id": "G-006",
+    "class": "NO_COUNTERPART",
+    "title": "The proton torpedo is a distinct animated homing projectile (FRPTGN/MVPTGN/VWPTGN); ours is a boolean latch",
+    "claim": "On arming, WSGUNS FRPTGN spawns the torpedo just ahead of the ship (`M$TX + #100`, WSGUNS.MAC:1205-1207) and marks PT.LIV. Each frame MVPTGN advances it forward (+$300), clamps its height to (dist \u2212 $1000) and \u2014 critically \u2014 funnels its lateral offset PT.Y to dist/16 (`JSR ASRD4`, WSGUNS.MAC:1248; ASRD4 = \u00f716), so both offsets drive to 0 as it nears the hole: it physically cannot miss. VWPTGN draws the two turquoise torpedo sparklers (VJGNT). Our sim has no torpedo entity \u2014 portTorpedoArmed is a boolean and the outcome resolves instantly at the $800 window.",
+    "reasoning": "A faithful modernization of the 'the machine flies it home' mechanic, documented in state.ts. The load-bearing invariant \u2014 once armed, the torpedo converges to the hole (dist/16 lateral \u2192 0) so the shot is unmissable \u2014 is reproduced by our arm-early/resolve-as-direct-hit logic. Absent-but-intended (no animated torpedo, no VWPTGN draw), not a defect. Recorded so the coverage pass knows the torpedo animation/funnel is unported by design.",
+    "source": {
+      "file": "WSGUNS.MAC",
+      "line": 1248,
+      "verbatim": "\tJSR ASRD4\t\t;(BUT ALWAYS A POSITIVE RESULT)"
+    },
+    "ours": null,
+    "recommendation": "accept"
+  },
+  {
+    "id": "G-007",
+    "class": "NO_COUNTERPART",
+    "title": "Four-gun alternating fire (LZ.ALT toggles left-pair vs right-pair each shot)",
+    "claim": "TSTLAZ increments LZ.ALT on every fire edge (`INC LZ.ALT ;EDGED ALTERNATION`, WSLAZR.MAC:104). VWLAZ then fires the two LEFT gun ports (upper-left + lower-left) when LZ.ALT bit 0 is set (`ANDA #01 ... IFNE ;YES, FIRE LEFT LAZARS`, WSLAZR.MAC:155-157) and the two RIGHT ports when clear (WSLAZR.MAC:207-209), so all four ports cycle over two shots. Our sim fires a single bolt from one muzzle; there is no gun-port model.",
+    "reasoning": "Cosmetic. All four beams converge on the same site and collision is site-based (G-004), so which pair lit has no gameplay effect. The visual 4-gun cross-fire is unported. Absent by design; recorded for completeness of the laser-fire mechanics.",
+    "source": {
+      "file": "WSLAZR.MAC",
+      "line": 156,
+      "verbatim": "\tANDA #01\t\t;FIRE SWITCH EDGE?"
+    },
+    "ours": null,
+    "recommendation": "accept"
+  },
+  {
+    "id": "G-008",
+    "class": "NO_COUNTERPART",
+    "title": "Laser splash / hit-picture FX on impact are unported",
+    "claim": "On a glancing miss (LZ.HIT set to \u22121, e.g. beam hits a trench wall/tower/ground) WSLAZR sets SP.TYP (quadrant mask), SP.COL (color by surface), SP.LOC (distance scale) and TCSPLS.SPLASH draws a spark burst: 16 random splash vectors (TSPLSH) reflected into all four quadrants (URQUAD/ULQUAD/DLQUAD/DRQUAD), picked by P.RND (`LDA P.RND ;RANDOM NUMBER`, TCSPLS.MAC:111). On a solid hit (LZ.HIT = 4) the laser instead freezes on the target showing the hit picture for 4 frames. Our renderer draws neither splash sparks nor a stuck-laser hit picture.",
+    "reasoning": "Render/FX only, no simulation effect. TCSPLS ('SPLASH ROUTINES FOR LASER SHOTS') and the WSLAZR splash/hit-picture paths have no counterpart in our shell. Absent by design (our shot FX is a plain bolt + explosion cue). Recorded so the models/render pairs know the splash-vector picture set is unported.",
+    "source": {
+      "file": "TCSPLS.MAC",
+      "line": 13,
+      "verbatim": "SPLASH:"
+    },
+    "ours": null,
+    "recommendation": "accept"
+  },
+  {
+    "id": "G-009",
+    "class": "DIVERGENCE",
+    "title": "Fireball\u2192player hit is a forward-depth closing sweep, not a fixed 80-unit sphere",
+    "claim": "In VWGUN a LIVE gun-shell registers a player hit when its forward depth (M.XT, scaled \u00d72) falls within the frame's closing distance: max(player forward speed M$VX, $200 minimum) \u2014 `SUBD M$VX+M.S1` / else `SUBD #200 ;MIN DISTANCE LEST SHOTS ARE TOO LARGE` (WSGUNS.MAC:960-967) \u2014 plus the gun's own forward speed, `SUBD #100+10 ;MAX GUN SPEED PLUS FUDGE` (WSGUNS.MAC:968), combined with a screen-cursor-reach test. It is a swept forward-DEPTH threshold (~$310 units of closing distance/frame), not a spherical radius. Our sim resolves a fireball hit by world-space sphere overlap at COCKPIT_HIT_RADIUS = 80 about the origin.",
+    "reasoning": "Different collision geometry: the ROM asks 'did the shell's depth close past this frame's swept step?' (so a faster ship eats shells from further out \u2014 `?PLAYER SHIP FAST ENUF?`), while we ask 'is the shell within 80 units of the cockpit sphere?'. The exact ROM world radius is not cleanly decodable here \u2014 M.XT is a \u00d72-scaled, perspective-adjacent quantity, so I do not claim 80 is 'wrong' by a specific factor. What is certain is the MODEL differs (depth-sweep + speed dependence vs static sphere). Because our fireballs home on-axis (G-001), a static origin sphere does catch them, so the divergence is mostly invisible in play; recorded as an accepted model simplification, flagged as not-fully-decoded.",
+    "source": {
+      "file": "WSGUNS.MAC",
+      "line": 965,
+      "verbatim": "\tSUBD #200\t\t;MIN DISTANCE LEST SHOTS ARE TOO LARGE"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 317,
+      "verbatim": "    if (collides(s.pos, COCKPIT, COCKPIT_HIT_RADIUS)) {"
+    },
+    "recommendation": "accept",
+    "verdict": "CONFIRMED"
+  },
+  {
+    "id": "G-010",
+    "class": "DIVERGENCE",
+    "title": "Only enemy gun-shells damage the player in space; a TIE body ramming the cockpit does not (ours costs a shield)",
+    "claim": "In the ROM the ONLY space player-damage path is a live gun-shell reaching the player: VWGUN calls `JSR GNAHIT ;RECORD GUNS HIT ON OUR SHIELDS` (WSGUNS.MAC:997), and GNAHIT is titled 'ALIEN GUN HIT PLAYER' (WSGUNS.MAC:1137). The alien SHIP has no body-collision damage path \u2014 WSCPU's only player\u2194alien routine is CPHTSA ('SPACE LAZAR HIT ALIEN SHIP', the player's laser hitting the ship), never the reverse. This verifies the prior audit's 'only fireballs damage' from primary source. Our sim additionally costs a shield when a TIE reaches COCKPIT_HIT_RADIUS (sim.ts:308-315).",
+    "reasoning": "Our body-collision is a deliberate, documented deviation (state.ts note: 'the model itself has no body collision, but the story deliberately keeps it \u2014 see the session deviations', story 9-3 AC#3) and it only fires for a near-dead-center TIE \u2014 normally TIEs peel away at TIE_NEAR_BOUND before reaching the cockpit, so it rarely triggers. Genuine divergence from ROM behaviour (the ROM lets a TIE fly through you harmlessly; only its cannon fire hurts), but low-impact and intentional. Accept. Overlaps the TIE-AI pair's collision scope; filed here because 'what damages the player' is this scope's charge.",
+    "source": {
+      "file": "WSGUNS.MAC",
+      "line": 1137,
+      "verbatim": "GNAHIT:\t\t\t\t;ALIEN GUN HIT PLAYER"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 309,
+      "verbatim": "    if (collides(e.pos, COCKPIT, COCKPIT_HIT_RADIUS)) {"
+    },
+    "recommendation": "accept",
+    "verdict": "CONFIRMED",
+    "refutation_corrections": "Cross-batch reconciliation with pair-tie-ai A-010 (per coverage-review \u00a72b): A-010 and G-010 describe the SAME behaviour, cite the SAME code (sim.ts:308-315), share the SAME class (DIVERGENCE), and rule OPPOSITE (A-010 fix, G-010 accept). My primary-source read resolves the shared fact \u2014 the ROM has no TIE-body-vs-player collision (verified above) \u2014 in BOTH their favour, so neither should ship as 'refuted'. Adopt G-010's `accept`: it is the better-reasoned of the two (it weighs A-011's near-bound peel, which A-010 does not) and it is a documented intentional deviation (story 9-3 AC#3). Demote A-010 to a cross-reference of G-010; do NOT hand back a refuted-A-010 next to a confirmed-G-010 on the identical behaviour."
+  },
+  {
+    "id": "G-011",
+    "class": "CONFIRMED",
+    "title": "A fireball launches from the firing TIE's own position",
+    "claim": "FRAGUN positions the new gun-shell at the alien's location relative to the player: `LDD M$TX(X) / SUBD M$TX+M.S1 / STD 0(U) ;POSITION SHOT RELATIVE TO PLAYER` (WSGUNS.MAC:170-172), and likewise Y/Z. Our sim spawns the fireball at the firing TIE's own world position (`pos: [...e.pos]`, sim.ts:240). Match.",
+    "reasoning": "The shot is born at the shooter and then homes (G-001) \u2014 both in the ROM and in ours. (Player-relative vs world-origin coordinates are the same geometry: the ROM keeps everything relative to the player at the origin, exactly as our cockpit sits at [0,0,0].)",
+    "source": {
+      "file": "WSGUNS.MAC",
+      "line": 172,
+      "verbatim": "\tSTD 0(U)\t\t;POSITION SHOT RELATIVE TO PLAYER"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 240,
+      "verbatim": "        pos: [...e.pos] as Vec3,"
+    }
+  },
+  {
+    "id": "G-012",
+    "class": "DIVERGENCE",
+    "title": "Player fire is edge-triggered with an 8-frame laser sweep; ours is a fixed 0.25 s auto-fire cooldown",
+    "claim": "On each trigger edge TSTLAZ sets the laser edge counter to 8 (`LDB #8 / STB LZ.EDG`, WSLAZR.MAC:106-107) and the laser is 'on' (can hit) for that 8-game-frame sweep, decremented one per frame (WSLAZR.MAC:110-113); a fresh edge restarts it. 8 \u00f7 20.508 Hz \u2248 0.39 s per sweep. The laser is driven off the fire-button edge latch VG.LON, consumed once per game frame \u2014 there is no fixed seconds-cooldown in the laser module. Our FIRE_INTERVAL = 0.25 s (auto-fire \u22484/s while held) \u2248 0.25 \u00d7 20.508 = 5.1 game frames.",
+    "reasoning": "Lower-confidence, honestly scoped: the exact ROM re-fire cadence depends on how the fire-button edge/auto-repeat is generated in the input path (VG.LON is SET in WSINT.MAC:188-192, and the trigger-cadence logic lives in WSINT/WSSITE \u2014 outside these three modules), so I cannot pin the precise per-shot interval from WSGUNS/WSLAZR/TCSPLS alone. What IS certain from my scope: the laser event is 8 game frames long and is edge-driven (one sweep per VG.LON latch, TSTLAZ), not gated by a 0.25 s timer. Our fixed-seconds auto-fire cooldown is an invented cadence. Flagged for the timing/input pair to pin the true interval; accept pending that.",
+    "source": {
+      "file": "WSLAZR.MAC",
+      "line": 106,
+      "verbatim": "\tLDB #8"
+    },
+    "ours": {
+      "file": "src/core/state.ts",
+      "line": 165,
+      "verbatim": "export const FIRE_INTERVAL = 0.25"
+    },
+    "recommendation": "accept",
+    "verdict": "CONFIRMED",
+    "refutation_corrections": "Strengthening (not a defect in the finding, which honestly scoped itself as 'lower-confidence / cannot pin the interval from WSGUNS/WSLAZR/TCSPLS alone'): the divergence is not merely an unpinned re-fire interval \u2014 the firing MODEL differs. Decoding VG.LON at WSINT.MAC:188-192 shows the ROM fires exactly one shot per trigger falling-edge with no auto-repeat (semi-auto), whereas ours auto-fires at 4/s while the button is held (level-triggered). So the accurate divergence is 'ROM edge-triggered semi-auto, 8-frame sweep per pull' vs 'ours level-triggered 0.25 s auto-fire'. This also means the 8-frame LZ.EDG value is the laser's on/collision DURATION per shot, a different quantity from a re-fire interval \u2014 do not port 8 frames as a cooldown."
+  }
+]

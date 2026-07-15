@@ -1,0 +1,414 @@
+[
+  {
+    "id": "U-001",
+    "class": "CONFIRMED",
+    "title": "Sound-board timebase derived: IRQ 4.096 ms; music voice / FX driver advance every 2nd tick = 8.192 ms",
+    "claim": "The sound board is a SEPARATE 6809. Its 6532 RIOT timer is armed with LDA #06 -> E1024T (1024-prescale, count 6 = 6*1024 = 6144 sound-CPU cycles) and the timer IRQ does INC SYNC to kick the mainline; the mainline consumes one SYNC per IRQ and does INC $INTCT 'FOR EVERY 4 MILLS'. At the board's ~1.5 MHz that reload is 6144/1.5e6 = 4.096 ms (244.14 Hz) per IRQ. The music driver (PKDR) and FX driver (AUDDO) each advance ONE voice/effect on every OTHER pass, so the per-voice music tick and per-effect FX tick are 8.192 ms (122.07 Hz). Our tooling encodes exactly this: music-data.mjs TICK_SECONDS = 0.008192.",
+    "reasoning": "Derived from the sound modules only, per brief. INIT arms the timer: SNDAUX.MAC:355 'LDA #06 ;SET UP 4 MS IRQ TIMER' and the timer-IRQ re-arm SNDAUX.MAC:244 'LDA #06 ;MAKE INTO 4 MS'; E1024T is the 6532 1024-prescale timer-with-interrupt register (SNDCMN.MAC:136). Count 6 * prescale 1024 = 6144 cycles; the author labels this '4 MS' three times (SNDAUX:244,355; SNDGLB.MAC:22 'SYNC UP THE MAINLINE TO A 4 MS RATE'), and $INTCT increments once per IRQ (SNDAUX.MAC:102 'COUNTER FOR EVERY 4 MILLS'). The precise 4.096 ms (not a round 4.0) follows from the ~1.5 MHz sound clock (6144/1.5e6), and the per-voice 8.192 ms follows because PKDR updates voices 1/3/5/7 on one tick and 2/4/6/8 on the next. This corroborates prior finding sw6-4 (commit 89a6a30) and the music-bake header, so ours TICK_SECONDS matches. Refuter note: the exact sound-board master clock is a hardware/MAME fact, not spelled out in the .MAC files; the source gives 6144 cycles/IRQ and the author's '4 MS' label.",
+    "source": {
+      "file": "SNDAUX.MAC",
+      "line": 355,
+      "verbatim": "\tLDA #06\t\t;SET UP 4 MS IRQ TIMER"
+    },
+    "ours": {
+      "file": "tools/music-bake/music-data.mjs",
+      "line": 28,
+      "verbatim": "export const TICK_SECONDS = 0.008192"
+    }
+  },
+  {
+    "id": "U-002",
+    "class": "CONFIRMED",
+    "title": "FX driver (AUDDO) runs on the 8-mill boundary (every 2nd IRQ) = 8.192 ms; our bake tick matches",
+    "claim": "The special-effects engine AUDDO is dispatched only when $INTCT is even: the mainline does LDA $INTCT / LSRA / IFCC (carry clear = bit0 zero = even) / JSR AUDDO. Since $INTCT ticks every 4.096 ms IRQ, AUDDO (and hence each FX record's `duration` field) advances every OTHER IRQ = 8.192 ms. Our bake-sfx.mjs SW_BEAT = 0.008192 s.",
+    "reasoning": "SNDAUX.MAC:165-168 gates AUDDO behind LSRA of $INTCT; the sibling comment SNDAUX.MAC:167 reads '?8 MILL BOUNDARY?'. Note the AUDDO section subtitle SNDAUD.MAC:1084 mislabels it 'UPDATE AUDIO EVERY 16 MILS' and the stale header comment in our own sfx-data.mjs still says '4.096 ms' twice (lines 15,26) - both are wrong; the operative dispatch code (SNDAUX:165-168) and the corrected bake constant (SW_BEAT, fixed in sw6-4) agree on 8.192 ms. bake-sfx.mjs:136 was 0.004096 until sw6-4 and every effect baked at 4.096 ms played twice too fast; it is now correct.",
+    "source": {
+      "file": "SNDAUX.MAC",
+      "line": 167,
+      "verbatim": "\tIFCC\t\t\t;?8 MILL BOUNDARY?"
+    },
+    "ours": {
+      "file": "tools/pokey-bake/bake-sfx.mjs",
+      "line": 136,
+      "verbatim": "export const SW_BEAT = 0.008192; // FX driver tick \u2014 the 8 ms boundary, not the 4 ms IRQ"
+    }
+  },
+  {
+    "id": "U-003",
+    "class": "CONFIRMED",
+    "title": "Player-fire cue corresponds to the cabinet's X-Wing lasers (AUDXL)",
+    "claim": "The player firing the cannon transmits AUDXL ('START XWING LASAR', WSLAZR.MAC:134; also fired for shooting initials at TCHSCR.MAC:605). Our 'fire' GameEvent plays audio.play('fire') -> player_fire.wav, whose sfx-data record is label-confirmed to command $3A 'snd_Fire_Guns (\"Fire lasers\")'. Same moment (player pulled trigger), same sound family (X-Wing lasers).",
+    "reasoning": "The main board's only player-laser sound path is AUDXL (WSLAZR.MAC:134). Our fire pump arm main.ts:153 emits the player_fire sample. The transmit-code numbering differs (the ROM's PBX mailbox assigns AUD/PM/SPK sequential IDs from SNDPBX.MAC, while our sfx-data records annotate the third-party disassembly's off_7F61 command bytes like $3A) - that is a provenance-annotation detail, not an audible one; the mapping player-trigger -> X-Wing-laser sound is faithful.",
+    "source": {
+      "file": "WSLAZR.MAC",
+      "line": 134,
+      "verbatim": "\tJSR AUDXL\t\t;START XWING LASAR"
+    },
+    "ours": {
+      "file": "src/main.ts",
+      "line": 153,
+      "verbatim": "          audio.play('fire')"
+    }
+  },
+  {
+    "id": "U-004",
+    "class": "CONFIRMED",
+    "title": "The four looping tracks map to the correct ROM tunes (PMTH5 / PM4TH+PMREB / PMRRP / PMDAR)",
+    "claim": "Our PHASE_MUSIC/musicTrackFor picks: space->'space' (bakes PMTH5 main theme + PMTHB theme-B), surface->'towers' (bakes PM4TH 'battle music in fourths' + PMREB 'finish ground with rebel'), trench->'trench' (bakes PMRRP rebel-theme-with-repeats), plus imperialMarch->PMDAR Vader's theme. These match the ROM call sites: PM4TH at WSMAIN.MAC:1636, PMREB at WSMAIN.MAC:1673, PMRRP at WSMAIN.MAC:1865, PMTH5 at WSMAIN.MAC:1430, PMDAR at WSMAIN.MAC:1426, and the SNDPM entry-point moment labels (SNDPM.MAC:337-400).",
+    "reasoning": "music-data.mjs TRACKS (lines 92-175) baked TH5+THB into 'space', SW4(=PM4TH)+REB into 'towers', RR(=PMRRP) into 'trench', DAR into 'imperialMarch' - each tune lifted from SWMUS TUNTAB by tuneIndices. The 'towers' track's SW4->REB composition faithfully mirrors the ROM's ground sequence (PM4TH during the towers, PMREB to 'FINISH GROUND WITH REBEL'). The tune-to-phase correspondence is correct; the WAVE at which the Imperial March substitutes is NOT (see U-005).",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1636,
+      "verbatim": "\tJSR PM4TH\t\t;BATTLE MUSIC IN FOURTHS"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 883,
+      "verbatim": "  surface: 'towers',"
+    }
+  },
+  {
+    "id": "U-005",
+    "class": "DIVERGENCE",
+    "title": "Imperial March replaces the space theme on the wrong wave set (ours {3,5,7,...}; ROM {4,6,8,...})",
+    "claim": "ROM plays PMDAR (Vader's theme) instead of PMTH5 when GM.WAV >= 3 AND GM.WAV is odd, where GM.WAV is the ZERO-based wave index (WSMAIN.MAC:1421-1426). GM.WAV>=3 means 1-based wave >= 4 (sibling block comment 'WAVE 4 OR HIGHER'), and GM.WAV odd means 1-based wave EVEN (comment WSMAIN:1425 '?ANDIF EVEN (ODD-1) WAVE?'), so the March plays on 1-based waves {4,6,8,...}. Ours: musicTrackFor returns 'imperialMarch' when `wave >= 3 && wave % 2 === 1` with `wave` ONE-based (state.ts:673 wave:1), i.e. 1-based waves {3,5,7,...}. The two sets are DISJOINT: we start it one wave early and on the opposite parity.",
+    "reasoning": "GM.WAV is 0-based: CMPA #4-1 (=3) with the identical block at WSMAIN:1919-1921 carrying the comment '?WAVE 4 OR HIGHER?' fixes GM.WAV+1 = human wave; ANDA #1/IFNE selects GM.WAV odd, which the author annotates as human-EVEN ('ODD-1'). So ROM March set = {GM.WAV in 3,5,7,...} = human {4,6,8,...}. Our `wave` is documented 1-based (state.ts:528 'Which wave the run is on (1-based)'), so `wave>=3 && wave%2===1` = human {3,5,7,...}. Fix: gate on `wave >= 4 && wave % 2 === 0` (or equivalently on a 0-based index >= 3 and odd). Note the port kill calls musicTrackFor('space', state.wave + 1) (sim.ts:767), so the rule is evaluated for the UPCOMING wave - correct plumbing, wrong predicate.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1422,
+      "verbatim": "\tCMPA #4-1"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 890,
+      "verbatim": "  if (phase === 'space' && wave >= 3 && wave % 2 === 1) return 'imperialMarch'"
+    },
+    "recommendation": "fix",
+    "size": "s",
+    "verdict": "CONFIRMED"
+  },
+  {
+    "id": "U-006",
+    "class": "DIVERGENCE",
+    "title": "\"Great shot kid\" is spoken on every exhaust-port kill; ROM speaks it only on waves {4,6,8,...}",
+    "claim": "ROM speaks SPKGRE ('GREAT SHOT KID, THAT WAS 1 IN A MILLION') on the winning shot ONLY when GM.WAV >= 3 AND GM.WAV is odd (WSMAIN.MAC:1919-1924) - the same 0-based gate as the Imperial March, i.e. 1-based waves {4,6,8,...}; on all other waves the explode branch runs silent (BRA 80$). Ours emits { type: 'speech', line: 'greatShotKidThatWasOneInAMillion' } UNCONDITIONALLY inside the detonation block (sim.ts:755, comment 'cued on ANY port kill').",
+    "reasoning": "WSMAIN:1919 'LDA GM.WAV' / 1920 'CMPA #4-1' (IFGE) / 1922 'ANDA #1' (IFNE) / 1924 'JSR SPKGRE'; the ELSE path is empty. So the cabinet reserves Han's line for the same even-wave-4+ set as PMDAR. We say it every time. Fix: gate the greatShotKid push behind the same corrected wave predicate as U-005. Shares the root-cause misreading of GM.WAV parity/base with U-005.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1924,
+      "verbatim": "\tJSR SPKGRE\t\t;GREAT SHOT KID, THAT WAS 1 IN A MILLION"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 755,
+      "verbatim": "    events.push({ type: 'speech', line: 'greatShotKidThatWasOneInAMillion' })"
+    },
+    "recommendation": "fix",
+    "size": "s",
+    "verdict": "CONFIRMED"
+  },
+  {
+    "id": "U-007",
+    "class": "DIVERGENCE",
+    "title": "Odd-wave trench is missing \"Let go, Luke\" (SPKLET @ PH.TIM 16); we cue only one of its two lines",
+    "claim": "ROM's ODD base-star-wave trench branch fires TWO voice lines: SPKLET ('LET GO LUKE') at PH.TIM==16 (WSMAIN.MAC:1885) and SPKSTR ('THE FORCE IS STRONG WITH THIS ONE') at PH.TIM==22 (WSMAIN.MAC:1889). Our TRENCH_VOICE_CUES odd branch has only { timer: 22, ... 'theForceIsStrongInThisOne' } (sim.ts:916) - the letGoLuke@16 cue is absent, even though the sample (let_go_luke.wav) and catalogue entry already exist.",
+    "reasoning": "WSMAIN.MAC:1868-1891: LDA BS.WAV / LSRA / IFCC selects EVEN BS.WAV (SPKTRU@16, SPKYAU@24 - which we match exactly, see U-008), and the ELSE (odd) branch does SPKLET@16 then SPKSTR@22. Our even branch matching the ROM even branch byte-for-byte is strong evidence the wave-parity mapping is aligned; the odd branch is simply short one entry. Fix: add { timer: 16, parity: 'odd', line: 'letGoLuke' } to TRENCH_VOICE_CUES.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1885,
+      "verbatim": "\tJSR SPKLET\t\t;LET GO LUKE"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 916,
+      "verbatim": "  { timer: 22, parity: 'odd', line: 'theForceIsStrongInThisOne' }, // Sound_16"
+    },
+    "recommendation": "fix",
+    "size": "s",
+    "verdict": "CONFIRMED",
+    "refutation_corrections": "The finding's reasoning ('Our even branch matching the ROM even branch byte-for-byte is strong evidence the wave-parity mapping is aligned') is wrong: the mapping is INVERTED, not aligned. BS.WAV = GM.WAV clamped (WSMAIN:1702-1707) and is 0-based (line 1870 comment 'BEGIN WITH WAVE 0'), while our parity comes from 1-based state.wave (sim.ts:610). So ROM's BS.WAV-odd branch fires on human waves {2,4,6,...} but our parity:'odd' fires on {1,3,5,...}. Adding {timer:16,parity:'odd','letGoLuke'} is still correct RELATIVE to our existing (also-'odd') theForceIsStrongInThisOne entry, but note that the whole trench-cue table is wired to the inverted wave set (same base-offset bug flagged under U-008), so it will play on the wrong waves until the BS.WAV/wave parity is reconciled (sw3-7)."
+  },
+  {
+    "id": "U-008",
+    "class": "CONFIRMED",
+    "title": "Even-wave trench voice cues match: \"Luke, trust me\" @16 and \"Yahoo, you're all clear\" @24",
+    "claim": "ROM's EVEN base-star-wave trench branch speaks SPKTRU ('LUKE, TRUST ME') at PH.TIM==16 (WSMAIN.MAC:1874) and SPKYAU ('YAHOO, YOURE ALL CLEAR KID') at PH.TIM==24 (WSMAIN.MAC:1878). Our TRENCH_VOICE_CUES even branch is { timer: 16, ... 'lukeTrustMe' } and { timer: 24, ... 'youreAllClearKid' } (sim.ts:914-915) - identical thresholds (decimal 16./24.) and lines.",
+    "reasoning": "The thresholds #16. and #24. carry trailing dots = decimal (radix 16 file), so 16 and 24 are the correct integer frame counts, exactly our timer values. The gate LDA BS.WAV / LSRA / IFCC (carry clear = BS.WAV even) corresponds to our parity:'even'. Confirms the even path; the odd path is the only gap (U-007).",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1874,
+      "verbatim": "\tJSR SPKTRU\t\t;LUKE, TRUST ME"
+    },
+    "ours": {
+      "file": "src/core/sim.ts",
+      "line": 914,
+      "verbatim": "  { timer: 16, parity: 'even', line: 'lukeTrustMe' }, // Sound_18"
+    },
+    "verdict": "CONFIRMED",
+    "refutation_corrections": "Two defects the 'match' framing hides. (1) TIMING (ties to T-008): the trenchTimer that fires these advances `state.trenchTimer + 1` once per stepGame call (sim.ts:609), and stepGame runs on the shared @arcade/shared createLoop whose hz DEFAULTS to 60 (main.ts:136 passes no hz; loop.js:39 hz=60). ROM PH.TIM increments once per 20.508 Hz game frame. So our cues fire at 16/60=0.27 s and 24/60=0.40 s vs ROM 16/20.508=0.78 s and 24/20.508=1.17 s \u2014 2.93x early, bunched into the first ~0.4 s. Frame-count values are right; wall-clock timing is not. (2) PARITY-BASE INVERSION: the reasoning claim 'the gate ... (carry clear = BS.WAV even) corresponds to our parity:even' is FALSE. BS.WAV = GM.WAV (0-based, WSMAIN:1702-1707), our parity uses 1-based state.wave (sim.ts:610), so BS.WAV even <=> human {1,3,5,...} while parity:'even' <=> human {2,4,6,...}. Our even cues are wired to the ROM's odd-wave set. The lines/thresholds match the ROM even branch as data, but ride the wrong waves at the wrong wall-clock time \u2014 it is not the clean CONFIRMED the title implies; annotate as 'values correct; parity base inverted and timing 2.93x fast (blocked on T-008 / sw3-7).'"
+  },
+  {
+    "id": "U-009",
+    "class": "STRUCTURAL",
+    "title": "Music is discrete tune cues fired at timed moments in the ROM, not one continuous WAV loop per phase",
+    "claim": "The cabinet fires music as one-shot POKEY tunes at scripted instants, not as a looping background bed swapped on phase edges. During the space intro it plays a SEQUENCE off PH.TIM: PMTH5 (or PMDAR) at frame 40, PMTHB 'THEME B FOLLOWS MAIN THEME' at frame 200 (WSMAIN.MAC:1435), PMDES at frame 400 (WSMAIN.MAC:1439). Tunes play once (some with internal repeats, e.g. PMRRP 'REBEL THEME WITH REPEATS'). Ours: every MusicTrack rings on one shared, continuously looping WebAudio 'music' channel (MUSIC_CHANNELS, audio.ts:79) started on a phase edge and looped until swapped.",
+    "reasoning": "WSMAIN:1415-1447 shows PH.TIM-gated JSR PMTH5/PMTHB/PMDES cues (the CMPD constants evaluate left-to-right: 2*20.=40, 2+7+1*20.=200, 2+7+1+9+1*20.=400 frames). This is a WebAudio-vs-POKEY structural difference: we synthesize a phase-length loop from the baked tune; the cabinet issues timed one-shots that the driver plays through. Faithful phase feel, different mechanism. Also note our levelClear ('wave_clear') and playerSpawn ('spawn') SFX have no dedicated ROM transmit code - the cabinet marks those transitions musically (PMTHB/PMDES), so they are shell-invented feedback cues that happen to reuse authentic ROM FX waveforms.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1435,
+      "verbatim": "\tJSR PMTHB\t\t;THEME B FOLLOWS MAIN THEME"
+    },
+    "ours": {
+      "file": "src/shell/audio.ts",
+      "line": 79,
+      "verbatim": "export const MUSIC_CHANNELS: Record<MusicName, string> = {"
+    },
+    "recommendation": "accept"
+  },
+  {
+    "id": "U-010",
+    "class": "NO_COUNTERPART",
+    "title": "No proton-torpedo \"death knell\" tune (PMSF2) when firing into the exhaust port",
+    "claim": "Firing the proton torpedo into the exhaust port transmits PMSF2 ('SPECIAL EFFECT(PROTON TORPEDO)', SNDPM.MAC:330) - the call site WSGUNS.MAC:1220 'JSR PMSF2 ;SOUND THE DEATH KNELL', assisted by AUDPH. We have no counterpart: the port-kill frame reuses the levelClear fanfare SFX (main.ts:189) and emits no dedicated tune. PMSF2 is not among the four baked tracks (music-data.mjs TRACKS).",
+    "reasoning": "PMSF2 is a distinct SNDPM entry point (SNDPBX.MAC:110 'PM SF2 ;SPECIAL EFFECT 2: FIRING INTO EXHAUST PORT'). Adding it needs the tune extracted into music-data.mjs (via its TUNTAB indices) + baked + a MusicTrack/emission - the pm-player/bake pipeline exists but does not currently cover this tune.",
+    "source": {
+      "file": "WSGUNS.MAC",
+      "line": 1220,
+      "verbatim": "\tJSR PMSF2\t\t;SOUND THE DEATH KNELL"
+    },
+    "ours": null,
+    "recommendation": "fix",
+    "size": "m"
+  },
+  {
+    "id": "U-011",
+    "class": "NO_COUNTERPART",
+    "title": "No Cantina tune (PMCNT) on the high-score screen",
+    "claim": "The high-score screen plays PMCNT ('CANTENA (HI SCORE)', SNDPM.MAC:344) - call site WSMAIN.MAC:1164 'JSR PMCNT ;CANTINA MUSIC'. We play no music on high-score entry; PMCNT is not among our four baked tracks.",
+    "reasoning": "SNDPBX.MAC:103 'PM CNT ;CANTENA: HIGH SCORE'. Wiring it needs the tune baked + a music cue on the high-score-entry edge (our name-entry flow lives in main.ts). Bake pipeline exists but does not currently extract this tune.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1164,
+      "verbatim": "\tJSR PMCNT\t\t;CANTINA MUSIC"
+    },
+    "ours": null,
+    "recommendation": "fix",
+    "size": "m"
+  },
+  {
+    "id": "U-012",
+    "class": "NO_COUNTERPART",
+    "title": "No end tune (PMEND) after the Death Star explosion",
+    "claim": "After the Death Star blows, the cabinet plays PMEND ('(AFTER DETH STAR EXPLOSION)', SNDPM.MAC:351) - call site WSMAIN.MAC:2179 'JSR PMEND ;START END OF DETH STAR MUSIC'. Our finale reuses the enemy-death SFX for the boom (death-star-destroyed -> main.ts:203) and plays no victory tune; PMEND is not baked.",
+    "reasoning": "SNDPBX.MAC:106 'PM END ;AFTER DEATH STAR EXPLOSION'. Needs tune extraction+bake + a cue on the death-star-destroyed / DX finale. Not covered by current bake output.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 2179,
+      "verbatim": "\tJSR PMEND\t\t;START END OF DETH STAR MUSIC"
+    },
+    "ours": null,
+    "recommendation": "fix",
+    "size": "m"
+  },
+  {
+    "id": "U-013",
+    "class": "NO_COUNTERPART",
+    "title": "No Ben's Theme (PMBEN) at start-of-tower / game-over-no-high-score",
+    "claim": "PMBEN ('BENS THEME (START OF TOWER)', SNDPM.MAC:337) plays at the start of the tower phase and again on losing with no high score - the call site WSMAIN.MAC:2161 'JSR PMBEN ;BEN'S THEME WHEN LOSE GAME WITH NO HIGH SCORE'. Our surface phase opens the 'towers' battle track (PM4TH) and the game-over screen has no tune; PMBEN is not baked.",
+    "reasoning": "SNDPBX.MAC:102 'PM BEN ;BEN THEME:START TOWER'. Note the SNDPM entry-point label calls it 'START OF TOWER' while the 2161 call site is the game-over-no-high-score use - the same tune serves both moments. Needs bake + wiring on the game-over(-no-high-score) edge (main.ts owns that edge). Not covered by current bake output.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 2161,
+      "verbatim": "\tJSR PMBEN\t\t;BEN'S THEME WHEN LOSE GAME WITH NO HIGH SCORE"
+    },
+    "ours": null,
+    "recommendation": "fix",
+    "size": "m"
+  },
+  {
+    "id": "U-014",
+    "class": "NO_COUNTERPART",
+    "title": "No descent tune (PMDES) on the space -> Death Star surface transition",
+    "claim": "The space intro sequence ends with PMDES ('DESCENT TO DETH STAR', SNDPM.MAC:393) at PH.TIM frame 400, just before the descend-to-surface phase flip (WSMAIN.MAC:1439 'JSR PMDES'). We have no descent cue: our space->surface edge simply swaps the looping 'space' track for 'towers'. PMDES is not baked.",
+    "reasoning": "SNDPBX.MAC:105 'PM DES ;DESCENT INTO DETH STAR'. This is part of the timed intro sequence in U-009 (PMTH5 -> PMTHB -> PMDES). Needs bake + a cue on the descent transition. Not covered by current bake output.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1439,
+      "verbatim": "\tJSR PMDES"
+    },
+    "ours": null,
+    "recommendation": "fix",
+    "size": "m"
+  },
+  {
+    "id": "U-015",
+    "class": "NO_COUNTERPART",
+    "title": "Missing the exhaust-port(miss => \"R2 No\" (SPKR2N) voice line",
+    "claim": "When the player misses the exhaust port and bashes the end wall, R2 curses: SPKR2N ('R2 NO') - WSMAIN.MAC:1914 'JSR SPKR2N ;R2 SWEARS AT PLAYER FOR MISSING EXHAUST PORT'. We emit the exhaust-port-missed GameEvent and play the player-explosion SFX (main.ts:210) but cue NO speech, even though the r2_scream.wav sample and the SPEECH['r2Scream'] catalogue entry already exist.",
+    "reasoning": "SNDPBX.MAC:82 'SPK R2N ;R2 NO'. Pure wiring: add an r2Scream (=R2 NO) speech cue on the exhaust-port-missed path; the sample is already baked (speech-data.mjs) and mapped (audio.ts).",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1914,
+      "verbatim": "\tJSR SPKR2N\t\t;R2 SWEARS AT PLAYER FOR MISSING EXHAUST PORT"
+    },
+    "ours": null,
+    "recommendation": "fix",
+    "size": "s"
+  },
+  {
+    "id": "U-016",
+    "class": "NO_COUNTERPART",
+    "title": "Surface entry also says \"This is Red Five, I'm going in\" (SPKTHI); we cue only \"size of that thing\"",
+    "claim": "Entering the Death Star surface the cabinet speaks BOTH SPKTHI ('THIS IS RED FIVE, I'M GOING IN', WSMAIN.MAC:1515) and, shortly after, SPKSIZ ('LOOK AT THE SIZE OF THAT THING', WSMAIN.MAC:1550). Our ENTER_PHASE_SPEECH surface edge cues only lookAtTheSizeOfThatThing (sim.ts:898). SPKTHI is unwired though red_five_i_m_going_in.wav / SPEECH['redFiveImGoingIn'] already exist.",
+    "reasoning": "SNDPBX.MAC:94 'SPK THI ;THIS IS RED FIVE, I'M GOING IN'. Pure wiring (sample baked + catalogued). Could sequence SPKTHI then SPKSIZ on the surface entry.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 1515,
+      "verbatim": "\tJSR SPKTHI\t\t;THIS IS RED FIVE, I'M GOING IN"
+    },
+    "ours": null,
+    "recommendation": "fix",
+    "size": "s"
+  },
+  {
+    "id": "U-017",
+    "class": "NO_COUNTERPART",
+    "title": "No attract/intro/game-over speech (\"The Force will be with you\" / \"Always\" / \"Remember\")",
+    "claim": "The intro/game-over sequence speaks SPKFOR ('THE FORCE WILL BE WITH YOU', WSMAIN.MAC:387), SPKALW ('ALWAYS', WSMAIN.MAC:394), and on losing SPKREM ('REMEMBER...', WSMAIN.MAC:2141) + SPKFOA ('FORCE WILL BE WITH YOU ALWAYS', WSMAIN.MAC:2142). We cue none of these; the samples the_force_will_be_with_you.wav / always.wav / remember.wav are baked and catalogued but unwired.",
+    "reasoning": "SNDPBX.MAC:72-86 lists SPK FOA/FOR/REM. These are attract/title and game-over framing lines. Wiring needs an attract/game-over speech hook (main.ts owns those edges); the samples exist. Sized m because the trigger points (attract loop, game-over) may need new emission plumbing rather than an existing event.",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 387,
+      "verbatim": "\tJSR SPKFOR\t\t;'THE FORCE WILL BE WITH YOU'"
+    },
+    "ours": null,
+    "recommendation": "fix",
+    "size": "m"
+  },
+  {
+    "id": "U-018",
+    "class": "NO_COUNTERPART",
+    "title": "Combat-reaction voice lines are unreachable without absent mechanics (Vader-on-tail, R2 damage, wingmen)",
+    "claim": "The cabinet speaks a family of reactive lines the sim cannot currently trigger: SPKSHK 'I CANT SHAKE HIM' (WSGUNS.MAC:163), SPKHIT 'IM HIT BUT NOT BAD, R2 SEE WHAT YOU CAN DO' (WSGUNS.MAC:1173), SPKLOS 'I'VE LOST R2' (WSGAS.MAC:85), SPKR2T 'R2 TRY AND INCREASE THE POWER' (WSGAS.MAC:94), SPKSTA 'STAY IN ATTACK FORMATION' (WSMAIN.MAC:3860), SPKIMO 'I'M ON THE LEADER' (WSMAIN:3862), SPKHAV 'I HAVE YOU NOW' (WSMAIN:3865). All seven samples are baked/catalogued but have no reachable cue.",
+    "reasoning": "These depend on mechanics the core lacks: a Vader/enemy-on-your-tail state (SHK/HAV), R2-droid damage/gas mechanics (HIT/LOS/R2T - WSGAS is 'GAS AND SCORE'), and wingman/formation choreography (STA/IMO). Recorded as absent because the samples exist but the gameplay hooks do not; wont_fix until those subsystems land.",
+    "source": {
+      "file": "WSGUNS.MAC",
+      "line": 163,
+      "verbatim": "\tJSR SPKSHK\t\t;I CANT SHAKE HIM"
+    },
+    "ours": null,
+    "recommendation": "wont_fix"
+  },
+  {
+    "id": "U-019",
+    "class": "NO_COUNTERPART",
+    "title": "No TIE fly-by \"passby\" doppler SFX (AUDPB/AUDPS/AUDPBZ + the SPKELE elephant)",
+    "claim": "When a TIE passes the cockpit the cabinet plays a doppler whoosh: AUDPB approach ('APPROACH OF PASSBY SOUND', WSMAIN.MAC:3798), AUDPS short-exit doppler (WSMAIN:3810), stopped with AUDPBZ (WSCPU.MAC:439), and the SPKELE 'ELEPHANT PASSBY' layered on top (WSMAIN:3797). We have no passby sound at all; none of AUDPB/PS/PBZ/ELE is baked or wired.",
+    "reasoning": "SNDPBX.MAC:120-125 lists AUD PB/PBZ/PS; SNDAUD.MAC:150-203 has the dedicated PB3F/PB4F/PS3C/PS4F channel-control blocks. This is a continuous, doppler-panned effect tied to the passby-alien tracking (WSGLOB Q.PBB/Q.PBD). Needs FX-table transcription into sfx-data.mjs + a passby event; sized l (new mechanic + multi-record FX transcription).",
+    "source": {
+      "file": "WSMAIN.MAC",
+      "line": 3798,
+      "verbatim": "\tJSR AUDPB\t\t;APPROACH OF PASSBY SOUND"
+    },
+    "ours": null,
+    "recommendation": "fix",
+    "size": "l"
+  },
+  {
+    "id": "U-020",
+    "class": "NO_COUNTERPART",
+    "title": "No R2-D2 sound set (AUDDR/AUDRC/AUDRD/AUDRS/AUDRY)",
+    "claim": "The cabinet has a suite of R2 SFX: AUDDR 'DEAD R2, SWAN SONG' (WSGAS.MAC:86), AUDRC 'GAS AT 1 COOKS R2' (WSGAS.MAC:90), AUDRD 'R2 DONE' (WSGAS.MAC:95), AUDRS 'R2 SHAVE' (WSGUNS.MAC:1174), AUDRY 'R2 YES SOUND' (WSMAIN.MAC:1516). None is baked or wired; the sim has no R2 gas/damage mechanic to fire them.",
+    "reasoning": "SNDPBX.MAC:118-129 lists AUD DR/RC/RD/RS/RY. They are tied to the R2/gas subsystem (WSGAS 'GAS AND SCORE') and the ready-to-attack beat (AUDRY at WSMAIN:1516 alongside SPKTHI). Needs FX-table transcription + the R2/gas mechanic; sized l.",
+    "source": {
+      "file": "WSGAS.MAC",
+      "line": 86,
+      "verbatim": "\tJSR AUDDR\t\t;DEAD R2, SWAN SONG"
+    },
+    "ours": null,
+    "recommendation": "fix",
+    "size": "l"
+  },
+  {
+    "id": "U-021",
+    "class": "NO_COUNTERPART",
+    "title": "No dedicated Death Star final-explosion SFX (AUDDF); we reuse the enemy-death sample",
+    "claim": "The Death Star finale transmits AUDDF ('FINAL DETH STAR EXPLOSION', WSXPLD.MAC:830, also 890/949) - a bespoke big-explosion effect distinct from the alien-ship explosion (AUDSX). Our death-star-destroyed event reuses enemy_explosion.wav (main.ts:203). AUDDF is not baked.",
+    "reasoning": "SNDPBX.MAC:116 'AUD DF ;DETH STAR FINAL EXPLOSION'. A single dedicated FX record; transcribe from SNDAUD FX tables into sfx-data.mjs + point death-star-destroyed at it. Sized m (one effect, existing bake pipeline).",
+    "source": {
+      "file": "WSXPLD.MAC",
+      "line": 830,
+      "verbatim": "\tJSR AUDDF\t\t;FINAL DETH STAR EXPLOSION"
+    },
+    "ours": null,
+    "recommendation": "fix",
+    "size": "m"
+  },
+  {
+    "id": "U-022",
+    "class": "NO_COUNTERPART",
+    "title": "Shooting down an enemy fireball has its own cabinet cue (AUDSS); we reuse the enemy-death sample",
+    "claim": "Shooting an alien shot out of the air transmits AUDSS ('PLAYER SHOT ALIEN SHOTS' / 'HIT ALIEN SHOT', WSGUNS.MAC:1195; also TCHSCR.MAC:588). Our fireball-destroyed event reuses enemy_explosion.wav (main.ts:177), as does trench-obstacle-destroyed (main.ts:183). AUDSS is not baked.",
+    "reasoning": "SNDPBX.MAC:131 'AUD SS ;PLAYER SHOT ALIEN SHOTS'. Our own event comments already flag the reuse as a placeholder ('a bespoke sound swap in later'). Transcribe the AUDSS FX record + point fireball-destroyed at it. Sized m.",
+    "source": {
+      "file": "WSGUNS.MAC",
+      "line": 1195,
+      "verbatim": "\tJSR AUDSS\t\t;HIT ALIEN SHOT "
+    },
+    "ours": null,
+    "recommendation": "fix",
+    "size": "m"
+  },
+  {
+    "id": "U-023",
+    "class": "STRUCTURAL",
+    "title": "Cabinet has continuous SFX with explicit STOP codes (AUDTCZ/AUDPBZ); our model is one-shot samples",
+    "claim": "Several cabinet effects are SUSTAINED tones held until a separate stop command: the TIE cannon starts with AUDTC (WSGUNS.MAC:180) and is silenced by AUDTCZ 'TIE FIGHTER CANNON STOPPED' (WSGUNS.MAC:1193); the passby is stopped by AUDPBZ (WSCPU.MAC:439). Our engine plays fixed-length WAV one-shots per SoundName on per-effect voice-stealing channels (audio.ts CHANNELS) - there is no sustained-until-stop concept, so the *Z stop codes have no counterpart.",
+    "reasoning": "SNDPBX.MAC:121/134 'AUD PBZ ;STOP PASSBY SOUND' and 'AUD TCZ ;TIE FIGHTER CANNON END SOUND'. This is a WebAudio-vs-POKEY structural difference: POKEY holds a register value until rewritten, so the driver needs an explicit end code; a decoded WAV sample simply ends. Our enemy-fire one-shot is a faithful proxy for the audible cannon burst but cannot model start/hold/stop. Accept as structural.",
+    "source": {
+      "file": "WSGUNS.MAC",
+      "line": 1193,
+      "verbatim": "\tJSR AUDTCZ\t\t;TIE FIGHTER CANNON STOPPED"
+    },
+    "ours": {
+      "file": "src/shell/audio.ts",
+      "line": 47,
+      "verbatim": "const CHANNELS: Record<SoundName, string> = {"
+    },
+    "recommendation": "accept"
+  },
+  {
+    "id": "U-024",
+    "class": "CONFIRMED",
+    "title": "Speech catalogue matches the shipped SWVOC3 vocabulary (all 23 phrases P1-P23)",
+    "claim": "SWVOC3's address-lookup table SPKVTB (SWVOC3.MAC:12) enumerates 23 phrases P1..P23 (P0=P1): USE THE FORCE LUKE, REMEMBER, I'M ON THE LEADER, THE FORCE IS STRONG WITH THIS ONE, RED FIVE STANDING BY, THIS IS RED FIVE I'M GOING IN, R2 TRY AND INCREASE THE POWER, YOU'RE ALL CLEAR KID, LET GO LUKE, (BREATHING), YAH-HOO, I HAVE YOU NOW, LOOK AT THE SIZE OF THAT THING, STAY IN ATTACK FORMATION, THE FORCE WILL BE WITH YOU, ALWAYS, R2 NO, ELEPHANT/PASSBY, I'M HIT BUT NOT BAD..., I'VE LOST R2, GREAT SHOT KID, I CAN'T SHAKE HIM, LUKE TRUST ME. Our SPEECH map (audio.ts:94) has exactly these 23, all baked in speech-data.mjs.",
+    "reasoning": "One-to-one: P1..P23 -> useTheForceLuke, remember, imOnTheLeader, theForceIsStrongInThisOne, redFiveStandingBy, redFiveImGoingIn, r2TryAndIncreaseThePower, youreAllClearKid, letGoLuke, vaderBreathing (P10 BREATHING), yahoo, iHaveYouNow, lookAtTheSizeOfThatThing, stayInAttackFormation, theForceWillBeWithYou, always, r2Scream (P17 R2 NO), tieFighter (P18 ELEPHANT/PASSBY - naming quirk), imHitButNotBad..., iveLostR2, greatShotKid... (ROM comment reads 'THAT WAS 2 IN A MILLION' - a source-comment typo of the movie's 'one in a million'; audio unaffected), iCantShakeHim, lukeTrustMe. Full coverage; two cosmetic name mismatches (r2Scream=R2 NO, tieFighter=ELEPHANT passby). The SPK code list in SNDPBX additionally has utility codes I (init chip), SKP (skip) and composite sentences (FOA=FOR+ALW) that are not atomic vocabulary phrases.",
+    "source": {
+      "file": "SWVOC3.MAC",
+      "line": 12,
+      "verbatim": "SPKVTB::"
+    },
+    "ours": {
+      "file": "src/shell/audio.ts",
+      "line": 94,
+      "verbatim": "export const SPEECH = {"
+    }
+  },
+  {
+    "id": "U-025",
+    "class": "CONFIRMED",
+    "title": "Music tune data + POKEY clock baked from primary source (SWMUS/SNDPM), 1.512 MHz note table",
+    "claim": "music-data.mjs lifts NOTTAB and the four tracks' note streams from the ORIGINAL SWMUS.MAC/SNDPM.MAC (not the disassembly), tracked by SHA256, honoring the radix-16/trailing-dot traps. The POKEY note divisors are computed for the cabinet's clock: SNDPM.MAC:1083 titles NOTTAB 'RPM NOTE TABLE (FOR 1.512 MHZ CLOCK)', and our POKEY_CLOCK_HZ = 1512000 (music-data.mjs:23).",
+    "reasoning": "gen-music-data.mjs parses SWMUS TUNTAB by tuneIndices and SNDPM's NOTTAB/FETAB/AMPTAB, correctly reading .TUNE indices as decimal (LDB #<2*'TNUM'.>) - the header documents the exact trap that reading them as hex would scatter PMTH5's voices into the descent tune. The 1.512 MHz value is the POKEY audio clock (distinct from the ~1.5 MHz feeding the 6532 IRQ timer in U-001); both are internally consistent. This is the model auditor-doc case: the port sourced tune data from the primary MAC rather than the disasm.",
+    "source": {
+      "file": "SNDPM.MAC",
+      "line": 1083,
+      "verbatim": "        .SBTTL RPM NOTE TABLE (FOR 1.512 MHZ CLOCK)"
+    },
+    "ours": {
+      "file": "tools/music-bake/music-data.mjs",
+      "line": 23,
+      "verbatim": "export const POKEY_CLOCK_HZ = 1512000"
+    }
+  }
+]
