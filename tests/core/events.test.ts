@@ -66,6 +66,7 @@ const ALL_EVENTS: GameEvent[] = [
   { type: 'level-clear', next: 'surface' },
   { type: 'player-spawn' },
   { type: 'terrain-crash' },
+  { type: 'object-crash', kind: 'tower', pos: [0, 0, 0] }, // sw7-5: ship↔standing-object crash (D-020)
   { type: 'fireball-destroyed', pos: [0, 0, -400] },
   { type: 'trench-obstacle-destroyed', kind: 'turret' },
   { type: 'force-bonus', amount: 5000 },
@@ -90,6 +91,7 @@ function discriminant(e: GameEvent): string {
     case 'level-clear':   return e.next
     case 'player-spawn':  return 'spawn'
     case 'terrain-crash': return 'crash'
+    case 'object-crash': return `crash-${e.kind}@${e.pos.join(',')}`
     case 'fireball-destroyed': return `fb@${e.pos.join(',')}`
     case 'trench-obstacle-destroyed': return `obs-${e.kind}`
     case 'force-bonus': return `force@${e.amount}`
@@ -107,24 +109,27 @@ function discriminant(e: GameEvent): string {
 }
 
 describe('GameEvent — discriminated union (AC1)', () => {
-  it('covers sixteen distinct, documented event types', () => {
-    // Sixteen: the original eight (story 8-7/8-18), 'trench-obstacle-destroyed'
+  it('covers seventeen distinct, documented event types', () => {
+    // Seventeen: the original eight (story 8-7/8-18), 'trench-obstacle-destroyed'
     // (fidelity epic task 3), 'force-bonus' (fidelity epic task 4 — findings
     // ## Exhaust port & run outcome), 'tower-bonus' (sw3-3 — the cleared-all-
     // towers 50,000 bonus), 'speech' (sw2-5 — voice lines are now core-cued
     // events), sw2-4's two exhaust-port outcome cues 'death-star-destroyed'
     // (the winning-shot explosion, positioned) / 'exhaust-port-missed' (the port
     // slipped past the cockpit un-destroyed), 'name-entered' (SH2-13 — the
-    // initials-entry commit cue), and 'music' (sw3-5 — the phase music channel
-    // swaps a looping track on each phase edge; findings ## Sound hooks).
+    // initials-entry commit cue), 'music' (sw3-5 — the phase music channel
+    // swaps a looping track on each phase edge; findings ## Sound hooks), and
+    // 'object-crash' (sw7-5 / D-020 — the ship flew into a standing surface
+    // tower/bunker; the ROM's BG1GLW+AUDCR shield-spending crash).
     const kinds = ALL_EVENTS.map((e) => e.type)
-    expect(new Set(kinds).size).toBe(16)
+    expect(new Set(kinds).size).toBe(17)
     expect(new Set(kinds)).toEqual(
       new Set([
         'fire', 'enemy-fire', 'enemy-death', 'player-death',
         'level-clear', 'player-spawn', 'terrain-crash', 'fireball-destroyed',
         'trench-obstacle-destroyed', 'force-bonus', 'tower-bonus', 'speech',
         'death-star-destroyed', 'exhaust-port-missed', 'name-entered', 'music',
+        'object-crash',
       ]),
     )
   })

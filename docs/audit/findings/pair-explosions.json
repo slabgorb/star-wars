@@ -165,7 +165,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 277,
+      "line": 281,
       "verbatim": "  const dyingTies: DyingTie[] = ["
     },
     "recommendation": "accept"

@@ -3,7 +3,7 @@
     "id": "H-001",
     "class": "CONFIRMED",
     "title": "In-game gun-sight colour is turquoise/cyan",
-    "claim": "WSSITE draws the site with colour command VGCTRQ*100+VGCOPC (VGCTRQ = colour code 3, turquoise). Our crosshair strokes with GLOW = '#00e5ff' (cockpit cyan). Turquoise \u2248 cyan \u2014 the aiming reticle colour matches.",
+    "claim": "WSSITE draws the site with colour command VGCTRQ*100+VGCOPC (VGCTRQ = colour code 3, turquoise). Our crosshair strokes with GLOW = '#00e5ff' (cockpit cyan). Turquoise ≈ cyan — the aiming reticle colour matches.",
     "reasoning": "VWCURS (WSSITE.MAC:48-50) loads `VGCTRQ*100+VGCOPC` as the SITE COLOR before drawing the cursor; VGCTRQ is the turquoise register. drawCrosshair (render.ts:698-740) strokes the cross + chevrons with GLOW, defined as '#00e5ff'. Both are the same cyan/turquoise family, so the reticle colour is faithful.",
     "source": {
       "file": "WSSITE.MAC",
@@ -19,9 +19,9 @@
   {
     "id": "H-002",
     "class": "STRUCTURAL",
-    "title": "Site travel is asymmetric (\u00b15.5 grids H, \u00b14 grids V); ours clamps a symmetric \u00b11 NDC box",
-    "claim": "WSSITE's VWPLAN limits the site/hood shift to \u00b15.5 grids horizontally (LDB #55.*2) and \u00b14 grids vertically (WSSITE.MAC:84, LDB #40.*2) \u2014 an asymmetric ~1.375:1 box that roughly tracks the 4:3 screen. crosshairNdc clamps aimX and aimY identically to [-1, 1] \u2014 a symmetric NDC square.",
-    "reasoning": "The ROM's horizontal cursor range (5.5 grids) is larger than the vertical (4 grids); the ratio 5.5/4 = 1.375 approximates the cabinet's aspect. Our aim lives in normalised device coords and is clamped to the same \u00b11 on both axes (gameRules.ts:47), then mapped to the aspect-corrected viewport at draw time \u2014 so the on-screen reach ends up aspect-shaped too, but the underlying clamp is symmetric, not the ROM's authored \u00b15.5/\u00b14. This is a coordinate-system difference (float NDC vs integer grids), not a gameplay bug.",
+    "title": "Site travel is asymmetric (±5.5 grids H, ±4 grids V); ours clamps a symmetric ±1 NDC box",
+    "claim": "WSSITE's VWPLAN limits the site/hood shift to ±5.5 grids horizontally (LDB #55.*2) and ±4 grids vertically (WSSITE.MAC:84, LDB #40.*2) — an asymmetric ~1.375:1 box that roughly tracks the 4:3 screen. crosshairNdc clamps aimX and aimY identically to [-1, 1] — a symmetric NDC square.",
+    "reasoning": "The ROM's horizontal cursor range (5.5 grids) is larger than the vertical (4 grids); the ratio 5.5/4 = 1.375 approximates the cabinet's aspect. Our aim lives in normalised device coords and is clamped to the same ±1 on both axes (gameRules.ts:47), then mapped to the aspect-corrected viewport at draw time — so the on-screen reach ends up aspect-shaped too, but the underlying clamp is symmetric, not the ROM's authored ±5.5/±4. This is a coordinate-system difference (float NDC vs integer grids), not a gameplay bug.",
     "source": {
       "file": "WSSITE.MAC",
       "line": 64,
@@ -38,8 +38,8 @@
     "id": "H-003",
     "class": "NO_COUNTERPART",
     "title": "No X-wing cockpit hood / four gun ports that parallax with the yoke",
-    "claim": "VWPLAN (WSSITE.MAC:59-113) draws the visible X-wing cockpit: the hood bottom-middle (VJSTBM) and four laser gun ports \u2014 top-left (VJSTTR), bottom-left (VJSTBL), top-right (VJSTTL), bottom-right (VJSTBR) \u2014 all shifted by the yoke (SI.RSX/SI.RSY) to give an in-cockpit parallax. Our render draws no cockpit frame at all; the player laser flashes from fixed screen corners only at the instant of firing.",
-    "reasoning": "The ROM composites a static-ish cockpit hood + gun barrels around the moving site so the player feels seated inside the X-wing; the barrels shift opposite the aim. render.ts has no cockpit-overlay pass \u2014 only the reticle (drawCrosshair) and the momentary converging laser lines from the four screen corners (render.ts:495-509). This is a deliberate simplification (no cockpit chrome), so there is no counterpart line to quote.",
+    "claim": "VWPLAN (WSSITE.MAC:59-113) draws the visible X-wing cockpit: the hood bottom-middle (VJSTBM) and four laser gun ports — top-left (VJSTTR), bottom-left (VJSTBL), top-right (VJSTTL), bottom-right (VJSTBR) — all shifted by the yoke (SI.RSX/SI.RSY) to give an in-cockpit parallax. Our render draws no cockpit frame at all; the player laser flashes from fixed screen corners only at the instant of firing.",
+    "reasoning": "The ROM composites a static-ish cockpit hood + gun barrels around the moving site so the player feels seated inside the X-wing; the barrels shift opposite the aim. render.ts has no cockpit-overlay pass — only the reticle (drawCrosshair) and the momentary converging laser lines from the four screen corners (render.ts:495-509). This is a deliberate simplification (no cockpit chrome), so there is no counterpart line to quote.",
     "source": {
       "file": "WSSITE.MAC",
       "line": 103,
@@ -112,7 +112,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 1008,
+      "line": 1010,
       "verbatim": "  glowText(ctx, 'GAME OVER', w / 2, h * 0.24, BANNER_TEXT_PX, 'center', TIE_GLOW, 24)"
     }
   },
@@ -138,7 +138,7 @@
     "class": "CONFIRMED",
     "title": "\"FOR USING THE FORCE\" bonus banner text matches (amount is per-wave in ROM)",
     "claim": "The clean-trench-run reward is displayed as <n> followed by message < FOR USING THE FORCE> (TCMES.MAC:622, drawn by VWFRC in WSGAS which prints a 6-digit score then DOMESS on MS.USE+1). Our banner draws `${amount} FOR USING THE FORCE`. The trailing text matches exactly.",
-    "reasoning": "VWFRC (WSGAS.MAC:419-437) views a per-wave force score (GETFRP \u2192 TSCFRC table) and then appends message MS.USE+1 = ` FOR USING THE FORCE`. Our render.ts:873 draws FORCE_BONUS (a FIXED 5,000) + ' FOR USING THE FORCE'. The string is confirmed; the prefixed AMOUNT differs \u2014 the ROM value scales with the wave, ours is fixed \u2014 but the exact point value is pair-score-shields' scope, not HUD's. Recording the text match here.",
+    "reasoning": "VWFRC (WSGAS.MAC:419-437) views a per-wave force score (GETFRP → TSCFRC table) and then appends message MS.USE+1 = ` FOR USING THE FORCE`. Our render.ts:873 draws FORCE_BONUS (a FIXED 5,000) + ' FOR USING THE FORCE'. The string is confirmed; the prefixed AMOUNT differs — the ROM value scales with the wave, ours is fixed — but the exact point value is pair-score-shields' scope, not HUD's. Recording the text match here.",
     "source": {
       "file": "TCMES.MAC",
       "line": 622,
@@ -155,7 +155,7 @@
     "class": "DIVERGENCE",
     "title": "Start prompt reads \"PRESS START\", not the ROM's \"PULL TRIGGER TO START\"",
     "claim": "The cabinet's start prompt is message STR = <PULL TRIGGER TO START> (TCMES.MAC:549). Our attract/game-over screens draw 'PRESS START'.",
-    "reasoning": "The ROM has no 'PRESS START' string; the start invitation is `PULL TRIGGER TO START` (STR), consistent with the yoke-trigger cabinet. render.ts:993 (and 1020) draws 'PRESS START'. A text-content divergence \u2014 swap the string. (Our browser control is a key/click, so 'PULL TRIGGER' is aspirational, but the authentic wording is the ROM's.)",
+    "reasoning": "The ROM has no 'PRESS START' string; the start invitation is `PULL TRIGGER TO START` (STR), consistent with the yoke-trigger cabinet. render.ts:993 (and 1020) draws 'PRESS START'. A text-content divergence — swap the string. (Our browser control is a key/click, so 'PULL TRIGGER' is aspirational, but the authentic wording is the ROM's.)",
     "source": {
       "file": "TCMES.MAC",
       "line": 549,
@@ -168,7 +168,8 @@
     },
     "recommendation": "fix",
     "size": "s",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-3"
   },
   {
     "id": "H-011",
@@ -189,14 +190,15 @@
     "recommendation": "fix",
     "size": "s",
     "verdict": "CONFIRMED",
-    "refutation_corrections": "Two sub-claim inaccuracies in the finding, corrected from primary source: (1) 'RF1 = <REBEL FORCE>' is not supported \u2014 there is NO literal <REBEL FORCE> message in the table. TCMES.MAC:604 is `.NEXTMESS -320.,000.,VJMFL,RF1`, and .NEXTMESS (macro def TCMES.MAC:512-525) writes XY+color for a message SLOT but emits NO .ASCIN text of its own \u2014 it re-positions the FOLLOWING message's text. So RF1 is the SAME 'PRINCESS LEIA'S REBEL FORCE' header re-centred for the half-screen initials-entry layout (VWHSCR posts MS.RF1 'REBEL FORCE MIDDLE OF SCREEN' + THSY1 when UPDFLG is entering initials, TCHSCR.MAC:59-63), not a distinct short string. The comments' 'REBEL FORCE' is shorthand. (2) 'There is no HIGH SCORES string in the ROM message table' is imprecise: there IS `<RESET HIGH SCORES>` at TCMES.MAC:657 \u2014 but it is an OPERATOR SERVICE-MENU option (adjacent to RESET TIMING INFO / RESET OPTIONS / TEST NOVRAM / STARTING SHIELD), never a player-facing board title. The finding's conclusion is right for the player-facing title; the absolute 'no HIGH SCORES string' overstates it."
+    "refutation_corrections": "Two sub-claim inaccuracies in the finding, corrected from primary source: (1) 'RF1 = <REBEL FORCE>' is not supported — there is NO literal <REBEL FORCE> message in the table. TCMES.MAC:604 is `.NEXTMESS -320.,000.,VJMFL,RF1`, and .NEXTMESS (macro def TCMES.MAC:512-525) writes XY+color for a message SLOT but emits NO .ASCIN text of its own — it re-positions the FOLLOWING message's text. So RF1 is the SAME 'PRINCESS LEIA'S REBEL FORCE' header re-centred for the half-screen initials-entry layout (VWHSCR posts MS.RF1 'REBEL FORCE MIDDLE OF SCREEN' + THSY1 when UPDFLG is entering initials, TCHSCR.MAC:59-63), not a distinct short string. The comments' 'REBEL FORCE' is shorthand. (2) 'There is no HIGH SCORES string in the ROM message table' is imprecise: there IS `<RESET HIGH SCORES>` at TCMES.MAC:657 — but it is an OPERATOR SERVICE-MENU option (adjacent to RESET TIMING INFO / RESET OPTIONS / TEST NOVRAM / STARTING SHIELD), never a player-facing board title. The finding's conclusion is right for the player-facing title; the absolute 'no HIGH SCORES string' overstates it.",
+    "remediated_by": "sw7-3"
   },
   {
     "id": "H-012",
     "class": "DIVERGENCE",
     "title": "Initials-entry prompt reads \"ENTER YOUR INITIALS\", not \"SHOOT YOUR INITIALS\"",
     "claim": "The cabinet prompt for the initials screen is message HSZ = <SHOOT YOUR INITIALS> (TCMES.MAC:603), part of the HS1..HSZ block (`MESSAGE FROM REBEL COMMAND POST` / `YOU ARE A TRUE REBEL PILOT` / `THE FORCE IS WITH YOU` / `SHOOT YOUR INITIALS`). Our screen draws 'ENTER YOUR INITIALS'.",
-    "reasoning": "The verb is SHOOT (you aim the site at a letter grid and fire \u2014 see H-013), not ENTER. render.ts:1015 draws 'ENTER YOUR INITIALS'. The wording divergence follows from the mechanism divergence; the string alone is an easy fix.",
+    "reasoning": "The verb is SHOOT (you aim the site at a letter grid and fire — see H-013), not ENTER. render.ts:1015 draws 'ENTER YOUR INITIALS'. The wording divergence follows from the mechanism divergence; the string alone is an easy fix.",
     "source": {
       "file": "TCMES.MAC",
       "line": 603,
@@ -204,19 +206,20 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 1015,
+      "line": 1020,
       "verbatim": "    glowText(ctx, 'ENTER YOUR INITIALS', w / 2, h * 0.42, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)"
     },
-    "recommendation": "fix",
+    "recommendation": "accept",
     "size": "s",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "ruling": "sw7-3: kept ENTER YOUR INITIALS. The ROM verb SHOOT assumes the shoot-a-letter-grid entry (H-013, accepted as structural); our clone uses keyboard entry, so ENTER accurately describes the input. Accepted divergence, not a fidelity miss."
   },
   {
     "id": "H-013",
     "class": "STRUCTURAL",
     "title": "Initials entry is shoot-a-letter-grid (flashing current initial); ours is keyboard typing",
     "claim": "GETINT (TCHSCR.MAC:523-610) enters initials by moving the site over an A-Z + RUB + END grid (TINTXY, octagon hit-test) and reading the FALLING EDGE of the fire button to commit each of 3 initials; the current initial FLASHES via FRAME+1 AND 01 (TCHSCR.MAC:107-109). Our entry reads keyboard letters/Backspace (stepNameEntry), with a static '_' cursor.",
-    "reasoning": "The arcade flow: aim, hold on a letter, pull the trigger; RUB backs up, END commits; the in-progress letter blinks at ~frame/2 (\u224810 Hz). main.ts:109-111 binds A-Z + Backspace to enterInitial (sim.ts:424-427 \u2192 @arcade/shared/name-entry), confirmed by a fresh Start press. This is a genuine input-model difference (yoke+trigger vs keyboard) inherent to a browser clone with no cabinet yoke \u2014 structural, not a bug. The flashing-current-initial affordance is also absent (render.ts:1017 draws a steady buffer + '_').",
+    "reasoning": "The arcade flow: aim, hold on a letter, pull the trigger; RUB backs up, END commits; the in-progress letter blinks at ~frame/2 (≈10 Hz). main.ts:109-111 binds A-Z + Backspace to enterInitial (sim.ts:424-427 → @arcade/shared/name-entry), confirmed by a fresh Start press. This is a genuine input-model difference (yoke+trigger vs keyboard) inherent to a browser clone with no cabinet yoke — structural, not a bug. The flashing-current-initial affordance is also absent (render.ts:1017 draws a steady buffer + '_').",
     "source": {
       "file": "TCHSCR.MAC",
       "line": 570,
@@ -224,7 +227,7 @@
     },
     "ours": {
       "file": "src/main.ts",
-      "line": 110,
+      "line": 113,
       "verbatim": "  if (/^[a-zA-Z]$/.test(e.key) || e.key === 'Backspace') state = enterInitial(state, e.key)"
     },
     "recommendation": "accept"
@@ -234,7 +237,7 @@
     "class": "CONFIRMED",
     "title": "High-score table holds 10 entries (NHSCRS)",
     "claim": "The ROM keeps NHSCRS entries: UPDATE walks HSCORS until HSCORS+<4*NHSCRS> (TCHSCR.MAC:434) and DOINTS/INTSCR seeds exactly 10 default scores (TCHSCR.MAC:729-738). Our board caps at MAX_HIGH_SCORES = 10 (@arcade/shared/highscore), wired via makeHighScoreStorage.",
-    "reasoning": "INTSCR lists 10 default words-pairs and INTINT 10 initials-triples, and NHSCRS bounds the scan/shift loops; the shared highscore module caps insertHighScore/qualifiesForHighScore at 10. Capacity matches. (Ours-side citation is the star-wars usage site; the numeric constant lives in @arcade/shared/highscore, which per the audit rule may not be cited from node_modules \u2014 noted as a limitation.)",
+    "reasoning": "INTSCR lists 10 default words-pairs and INTINT 10 initials-triples, and NHSCRS bounds the scan/shift loops; the shared highscore module caps insertHighScore/qualifiesForHighScore at 10. Capacity matches. (Ours-side citation is the star-wars usage site; the numeric constant lives in @arcade/shared/highscore, which per the audit rule may not be cited from node_modules — noted as a limitation.)",
     "source": {
       "file": "TCHSCR.MAC",
       "line": 434,
@@ -242,14 +245,14 @@
     },
     "ours": {
       "file": "src/main.ts",
-      "line": 29,
+      "line": 30,
       "verbatim": "const highScoreStorage = makeHighScoreStorage('star-wars', makeHighScoreRowGuard('wave'))"
     }
   },
   {
     "id": "H-015",
     "class": "DIVERGENCE",
-    "title": "No seeded default high-score table (ROM ships OBI 1,285,353 \u2026 RLM 380,655)",
+    "title": "No seeded default high-score table (ROM ships OBI 1,285,353 … RLM 380,655)",
     "claim": "DOINTS copies 10 default entries from INTINT/INTSCR into the table on reset: initials OBI/WAN/HAN/GJR/MLH/JED/NLA/EJD/EAR/RLM (TCHSCR.MAC:718-727) with BCD scores 1,285,353 / 1,110,936 / 1,024,650 / 872,551 / 813,553 / 704,899 / 518,000 / 492,159 / 384,766 / 380,655 (TCHSCR.MAC:729-738). Our board starts empty and shows 'NO SCORES YET'.",
     "reasoning": "INTSCR:.WORD 0128,5353 decodes as the 8-digit BCD 01285353 = 1,285,353 (TCHSCR is RADIX 16, but each byte is a BCD digit-pair); INTINT:.BYTE 0F,02,09 = O(15),B(2),I(9) = OBI (A=1..Z=26). A fresh cabinet greets the player with those iconic Rebel names. render.ts:1037-1039 shows an empty board until a real score lands. Small: seed a default table.",
     "source": {
@@ -264,7 +267,8 @@
     },
     "recommendation": "fix",
     "size": "s",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-3"
   },
   {
     "id": "H-016",
@@ -279,15 +283,15 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 404,
+      "line": 408,
       "verbatim": "const MAX_INITIALS = 3"
     }
   },
   {
     "id": "H-017",
     "class": "NO_COUNTERPART",
-    "title": "No rotating attract sequence \u2014 flight-instructions (INS) and scoring (SCR) pages are absent",
-    "claim": "The attract loop cycles four phases: BNR (banner) \u2192 INS (flight instructions) \u2192 SCR (scoring page) \u2192 HIS (hi-score table) (WSMAIN TPHASE, WSMAIN.MAC:335-338). INS is a 5-rule briefing (FLI..FLZ, TCMES.MAC:553-568) and SCR is a per-object points page (SCR..SCZ: TIE 1,000 / Darth 2,000 / bunkers 200 / towers 200 / turrets 100 / fireballs 33 / exhaust port 25,000 / all tower tops 50,000, TCMES.MAC:573-581). Our attract screen is a single static STAR WARS title + start prompt + hi-score board \u2014 neither the instructions nor the scoring page exists.",
+    "title": "No rotating attract sequence — flight-instructions (INS) and scoring (SCR) pages are absent",
+    "claim": "The attract loop cycles four phases: BNR (banner) → INS (flight instructions) → SCR (scoring page) → HIS (hi-score table) (WSMAIN TPHASE, WSMAIN.MAC:335-338). INS is a 5-rule briefing (FLI..FLZ, TCMES.MAC:553-568) and SCR is a per-object points page (SCR..SCZ: TIE 1,000 / Darth 2,000 / bunkers 200 / towers 200 / turrets 100 / fireballs 33 / exhaust port 25,000 / all tower tops 50,000, TCMES.MAC:573-581). Our attract screen is a single static STAR WARS title + start prompt + hi-score board — neither the instructions nor the scoring page exists.",
     "reasoning": "drawAttract (render.ts:986-998) renders only title + 'PRESS START' + board; there is no phase cycle and no INS/SCR content anywhere in the shell. Two whole attract pages missing. Sizeable (multi-page text layout + a rotation timer).",
     "source": {
       "file": "WSMAIN.MAC",
@@ -301,9 +305,9 @@
   {
     "id": "H-018",
     "class": "NO_COUNTERPART",
-    "title": "No intro story crawl (the receding \"OBI-WAN KENOBI IS GONE \u2026\" special messages)",
+    "title": "No intro story crawl (the receding \"OBI-WAN KENOBI IS GONE …\" special messages)",
     "claim": "The banner phase runs a set of 8 SPECIAL messages that recede into the distance (the \"STAR WARS effect\", VWSPMS/SPMESS): OBI-WAN KENOBI IS GONE BUT HIS / PRESENCE IS FELT WITHIN THE FORCE. / THE EMPIRE'S DEATH STAR, UNDER THE / COMMAND OF DARTH VADER, NEARS THE / REBEL PLANET.  YOU MUST JOIN THE / REBELLION TO STOP THE EMPIRE. / THE FORCE WILL BE WITH YOU. / ALWAYS (TCMES.MAC:625-632). Our clone has no story crawl.",
-    "reasoning": "SPMESS entries are staged on an alarm table (TSPMAL) and scaled toward a vanishing point (VWSPMS, TCMES.MAC:245-286) \u2014 the iconic scrolling intro. Nothing in the shell renders these lines. Medium: a receding-text pass over the attract screen plus the eight strings.",
+    "reasoning": "SPMESS entries are staged on an alarm table (TSPMAL) and scaled toward a vanishing point (VWSPMS, TCMES.MAC:245-286) — the iconic scrolling intro. Nothing in the shell renders these lines. Medium: a receding-text pass over the attract screen plus the eight strings.",
     "source": {
       "file": "TCMES.MAC",
       "line": 625,
@@ -317,8 +321,8 @@
     "id": "H-019",
     "class": "CONFIRMED",
     "title": "In-run score uses comma grouping + leading-zero suppression, like VW8DIG",
-    "claim": "The ROM score readout inserts a comma glyph (VJNUMS) every 3 digits and suppresses leading zeros via BT.SUP (VW8DIG/VWBYTE, TCMES.MAC:786-835). Our formatScore uses toLocaleString('en-US') \u2192 comma-grouped, no leading zeros.",
-    "reasoning": "VWBYTE keeps BT.SUP counting down leading zeros to blanks and VW8DIG drops a VJNUMS comma after the high digit-pairs (TCMES.MAC:791). hud.ts:23-25 returns `points.toLocaleString('en-US')` (e.g. 12066 \u2192 '12,066'), matching the cabinet's comma grouping and zero-suppression for the in-run HUD score (render.ts:806).",
+    "claim": "The ROM score readout inserts a comma glyph (VJNUMS) every 3 digits and suppresses leading zeros via BT.SUP (VW8DIG/VWBYTE, TCMES.MAC:786-835). Our formatScore uses toLocaleString('en-US') → comma-grouped, no leading zeros.",
+    "reasoning": "VWBYTE keeps BT.SUP counting down leading zeros to blanks and VW8DIG drops a VJNUMS comma after the high digit-pairs (TCMES.MAC:791). hud.ts:23-25 returns `points.toLocaleString('en-US')` (e.g. 12066 → '12,066'), matching the cabinet's comma grouping and zero-suppression for the in-run HUD score (render.ts:806).",
     "source": {
       "file": "TCMES.MAC",
       "line": 791,
@@ -334,8 +338,8 @@
     "id": "H-020",
     "class": "DIVERGENCE",
     "title": "Game-over and high-score-board scores are NOT comma-grouped",
-    "claim": "The ROM comma-groups every score it prints (VW8DIG inserts VJNUMS commas \u2014 TCMES.MAC:791 \u2014 and the hi-score table is drawn with VW8DIG, TCHSCR.MAC:239). Our game-over line draws the raw `SCORE ${state.score}` (render.ts:1009) and the board draws `String(e.score).padStart(6, ' ')` (render.ts:1044) \u2014 both without commas, unlike the comma-grouped in-run HUD (see H-019).",
-    "reasoning": "formatScore (comma-grouped) is used for the in-run HUD but bypassed on the framing screens: the game-over score and the hi-score ladder print the bare integer. The ROM is consistent \u2014 VW8DIG everywhere \u2014 so a 6-digit board score shows '128,535' on a cabinet but '128535' here. Route these two sites through formatScore.",
+    "claim": "The ROM comma-groups every score it prints (VW8DIG inserts VJNUMS commas — TCMES.MAC:791 — and the hi-score table is drawn with VW8DIG, TCHSCR.MAC:239). Our game-over line draws the raw `SCORE ${state.score}` (render.ts:1009) and the board draws `String(e.score).padStart(6, ' ')` (render.ts:1044) — both without commas, unlike the comma-grouped in-run HUD (see H-019).",
+    "reasoning": "formatScore (comma-grouped) is used for the in-run HUD but bypassed on the framing screens: the game-over score and the hi-score ladder print the bare integer. The ROM is consistent — VW8DIG everywhere — so a 6-digit board score shows '128,535' on a cabinet but '128535' here. Route these two sites through formatScore.",
     "source": {
       "file": "TCMES.MAC",
       "line": 791,
@@ -348,13 +352,14 @@
     },
     "recommendation": "fix",
     "size": "s",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-3"
   },
   {
     "id": "H-021",
     "class": "NO_COUNTERPART",
     "title": "No \"50,000 FOR SHOOTING ALL TOWERS\" reward banner (RWD)",
-    "claim": "Clearing every surface tower shows message RWD = <50,000 FOR SHOOTING ALL TOWERS> (TCMES.MAC:609), alongside ATP = <CLEARED ALL LASER TOWERS>. We award the 50,000 (SURFACE_CLEAR_BONUS) and emit a tower-bonus event, but draw no banner \u2014 main.ts even flags it as a TODO.",
+    "claim": "Clearing every surface tower shows message RWD = <50,000 FOR SHOOTING ALL TOWERS> (TCMES.MAC:609), alongside ATP = <CLEARED ALL LASER TOWERS>. We award the 50,000 (SURFACE_CLEAR_BONUS) and emit a tower-bonus event, but draw no banner — main.ts even flags it as a TODO.",
     "reasoning": "The all-towers bonus is banked in sim.ts and cued for audio (main.ts:191-197), whose own comment says \"A bespoke '50,000 FOR SHOOTING ALL TOWERS' banner is a HUD follow-on.\" No HUD string is drawn. The reward text (and the paired 'CLEARED ALL LASER TOWERS') is missing. Small: one banner keyed off the existing tower-bonus stamp.",
     "source": {
       "file": "TCMES.MAC",
@@ -368,7 +373,7 @@
   {
     "id": "H-022",
     "class": "NO_COUNTERPART",
-    "title": "In-flight coaching / bonus HUD messages are absent (SFB/STF/ACW/BON/BRE/BSE/SHIELD GONE \u2026)",
+    "title": "In-flight coaching / bonus HUD messages are absent (SFB/STF/ACW/BON/BRE/BSE/SHIELD GONE …)",
     "claim": "The ROM posts a family of in-play HUD messages our clone never shows: SHOOT FIREBALLS (SFB, TCMES.MAC:618), SHOOT TIE FIGHTERS (STF), AVOID CATWALKS (ACW), POINTS NEXT TOWER / TOWERS (NXT/TWR), STARTING WAVE BONUS (BON), BONUS FOR REMAINING ENERGY + ADDED TO DEFLECTOR SHIELD (BRE/BSE), and SHIELD GONE (SHG, drawn by VWGONE when energy hits zero). None of these appear in our HUD.",
     "reasoning": "render.ts draws only four trench banners plus the SCORE/WAVE/SHIELD header; the coaching prompts, the per-wave STARTING WAVE BONUS callout, the end-of-wave BONUS FOR REMAINING ENERGY tally, and the SHIELD GONE warning have no counterpart. Medium: a message-queue affordance plus ~8 strings and their triggers.",
     "source": {
@@ -385,7 +390,7 @@
     "class": "STRUCTURAL",
     "title": "Shield gauge is a fuel-gauge (VJFUEL title + segmented bars); ours is a trapezoid+chevron+ticks with a \"SHIELD\" label",
     "claim": "VWGAS (WSGAS.MAC:113-163) draws the deflector energy as a titled gauge: the VJFUEL title graphic, bar segments selected from TGALL by S.GAS, and a single BCD numeral of the remaining count (VWBYT1). Our drawShieldMeter draws a wireframe trapezoid + centre chevron + per-shield tick marks + numeral + the literal word 'SHIELD'.",
-    "reasoning": "The ROM's silhouette is a fuel/energy bar with a VJFUEL icon; the word 'SHIELD' appears in the ROM only as part of 'SHIELD GONE' (SHG). Our gauge (render.ts:921-963) is traced from a cabinet screenshot into a different vector shape and adds a 'SHIELD' text label (render.ts:961). Different rendering of the same datum (remaining shield energy) \u2014 structural, and the numeral itself does track the count.",
+    "reasoning": "The ROM's silhouette is a fuel/energy bar with a VJFUEL icon; the word 'SHIELD' appears in the ROM only as part of 'SHIELD GONE' (SHG). Our gauge (render.ts:921-963) is traced from a cabinet screenshot into a different vector shape and adds a 'SHIELD' text label (render.ts:961). Different rendering of the same datum (remaining shield energy) — structural, and the numeral itself does track the count.",
     "source": {
       "file": "WSGAS.MAC",
       "line": 126,
@@ -402,8 +407,8 @@
     "id": "H-024",
     "class": "DIVERGENCE",
     "title": "Shield gauge colour is a fixed green; the ROM ramps colour by remaining energy (TGCLR)",
-    "claim": "VWGAS indexes a colour table TGCLR by S.GAS*2 (WSGAS.MAC:121-124, repeated at 149-152) so the gauge changes colour as energy drops, and brightens on refuel (S.CAN \u2192 OR #0FF). Our gauge uses one constant HUD_SHIELD_COLOR = '#22e600' for every shield level.",
-    "reasoning": "TGCLR gives a per-level colour ramp (healthy \u2192 warning \u2192 critical); our render.ts:787 hard-codes a single green and the comment already admits the low-shield ramp is unreproduced. This is a real divergence, but the exact TGCLR palette entries would need decoding from WSGAS's data tables before a faithful ramp could be authored \u2014 hence accept for now rather than a blind fix.",
+    "claim": "VWGAS indexes a colour table TGCLR by S.GAS*2 (WSGAS.MAC:121-124, repeated at 149-152) so the gauge changes colour as energy drops, and brightens on refuel (S.CAN → OR #0FF). Our gauge uses one constant HUD_SHIELD_COLOR = '#22e600' for every shield level.",
+    "reasoning": "TGCLR gives a per-level colour ramp (healthy → warning → critical); our render.ts:787 hard-codes a single green and the comment already admits the low-shield ramp is unreproduced. This is a real divergence, but the exact TGCLR palette entries would need decoding from WSGAS's data tables before a faithful ramp could be authored — hence accept for now rather than a blind fix.",
     "source": {
       "file": "WSGAS.MAC",
       "line": 123,
@@ -412,18 +417,18 @@
     "ours": {
       "file": "src/shell/render.ts",
       "line": 787,
-      "verbatim": "const HUD_SHIELD_COLOR = '#22e600' // PROVISIONAL(findings ## HUD & framing, ## Colors & intensities) \u2014 register pinned (healthy tier only), hex matched to a cabinet screenshot"
+      "verbatim": "const HUD_SHIELD_COLOR = '#22e600' // PROVISIONAL(findings ## HUD & framing, ## Colors & intensities) — register pinned (healthy tier only), hex matched to a cabinet screenshot"
     },
     "recommendation": "accept",
     "verdict": "CONFIRMED",
-    "refutation_corrections": "Decoded TGCLR palette (index = S.GAS): 0 -> VGCOFF (blanked), 1-2 -> VGCRED (critical), 3-4 -> VGCYLW (warning), 5-9 -> VGCGRN (healthy); colours carry VGCOPC. Refuel pulse: while S.CAN>0, the selected colour is OR'd with #0FF (GSVALL, WSGAS.MAC:179-181) to flash bright, decrementing each frame. A faithful ramp is thus three fixed hues (green/yellow/red) keyed on the shield count plus a brief bright-flash on pickup \u2014 no interpolation."
+    "refutation_corrections": "Decoded TGCLR palette (index = S.GAS): 0 -> VGCOFF (blanked), 1-2 -> VGCRED (critical), 3-4 -> VGCYLW (warning), 5-9 -> VGCGRN (healthy); colours carry VGCOPC. Refuel pulse: while S.CAN>0, the selected colour is OR'd with #0FF (GSVALL, WSGAS.MAC:179-181) to flash bright, decrementing each frame. A faithful ramp is thus three fixed hues (green/yellow/red) keyed on the shield count plus a brief bright-flash on pickup — no interpolation."
   },
   {
     "id": "H-025",
     "class": "STRUCTURAL",
     "title": "Letterforms are a shared VGAN-lineage face; font comment mislabels provenance as \"1981 ROM\"",
-    "claim": "Star Wars ships its own alphanumeric glyph table WSVGAN.MAC (RADIX 10; Ed Logg's VGAN 'UPDATED/REVISED/ENHANCED AND SUBJUGATED FOR STAR WARS', June '83 \u2014 WSVGAN.MAC:6), with stroke vectors per glyph plus special forms (\u00bd via CH.HLF, \u00a9 via CH.COP, tick-based comma/apostrophe). Our font module re-exports @arcade/shared/font and its comment calls it 'the 1981 ROM VGMSGA alphabet' \u2014 the shared cross-cabinet face (ADR-0002), not Star Wars' 1983 WSVGAN.",
-    "reasoning": "Both descend from Atari's VGAN vector alphabet, so the caps-only forms are close, but our face is the shared library glyph set, not WSVGAN's byte-for-byte vectors, and the font.ts provenance note ('1981 ROM VGMSGA') is inaccurate for Star Wars (its VGMSGA is the 1983 WSVGAN adaptation). Deliberate shared-face convergence \u2014 structural \u2014 with a documentation nit worth correcting. The exact glyph geometry lives in @arcade/shared/font, which the audit rule forbids citing from node_modules (noted as a limitation).",
+    "claim": "Star Wars ships its own alphanumeric glyph table WSVGAN.MAC (RADIX 10; Ed Logg's VGAN 'UPDATED/REVISED/ENHANCED AND SUBJUGATED FOR STAR WARS', June '83 — WSVGAN.MAC:6), with stroke vectors per glyph plus special forms (½ via CH.HLF, © via CH.COP, tick-based comma/apostrophe). Our font module re-exports @arcade/shared/font and its comment calls it 'the 1981 ROM VGMSGA alphabet' — the shared cross-cabinet face (ADR-0002), not Star Wars' 1983 WSVGAN.",
+    "reasoning": "Both descend from Atari's VGAN vector alphabet, so the caps-only forms are close, but our face is the shared library glyph set, not WSVGAN's byte-for-byte vectors, and the font.ts provenance note ('1981 ROM VGMSGA') is inaccurate for Star Wars (its VGMSGA is the 1983 WSVGAN adaptation). Deliberate shared-face convergence — structural — with a documentation nit worth correcting. The exact glyph geometry lives in @arcade/shared/font, which the audit rule forbids citing from node_modules (noted as a limitation).",
     "source": {
       "file": "WSVGAN.MAC",
       "line": 6,

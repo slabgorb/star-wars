@@ -277,7 +277,8 @@
     },
     "recommendation": "fix",
     "size": "m",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-5"
   },
   {
     "id": "D-017",
@@ -292,7 +293,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 500,
+      "line": 527,
       "verbatim": "      vel: scale(toCockpit(muzzle), ENEMY_SHOT_SPEED),"
     },
     "recommendation": "accept",
@@ -325,7 +326,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 857,
+      "line": 884,
       "verbatim": "      return allTowersKilled(s) || s.surfaceScrollZ >= surfaceFieldDepth(s.wave)"
     },
     "recommendation": "accept",
@@ -344,7 +345,8 @@
     },
     "ours": null,
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "remediated_by": "sw7-5"
   },
   {
     "id": "D-021",
@@ -359,7 +361,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 457,
+      "line": 464,
       "verbatim": "  if (altitude < MIN_SKIM_ALTITUDE) {"
     },
     "recommendation": "accept",
@@ -378,7 +380,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 382,
+      "line": 407,
       "verbatim": "export const TURRET_SCROLL_SPEED = 600"
     },
     "recommendation": "accept",

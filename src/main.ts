@@ -6,6 +6,7 @@
 
 import { initialState, type GameState, type Phase } from './core/state'
 import { stepGame, enterPhase, beginNameEntry, enterInitial } from './core/sim'
+import { seedDefaultHighScores } from './core/highScores'
 import {
   qualifiesForHighScore,
   insertHighScore,
@@ -62,7 +63,9 @@ window.addEventListener('keydown', unlockAudio)
 // pure core's initialState() is a fresh PLAYING run; the shell frames it.
 let state: GameState = { ...initialState(), mode: 'attract' }
 // Local high scores, loaded once and kept in the shell (IO, not simulation).
-let highScores = highScoreStorage.load()
+// sw7-3 H-015: a fresh cabinet (empty storage) is seeded with the ROM's 10
+// default Rebel entries (DOINTS-on-reset); a real ladder is left untouched.
+let highScores = seedDefaultHighScores(highScoreStorage.load())
 
 // Dev-only phase-jump (story 11-4): jump the run straight to a phase to eyeball
 // its scene — the surface grid (11-5) / the trench channel (11-6) — without
@@ -168,6 +171,13 @@ const loop = createLoop(
           audio.play('playerSpawn')
           break
         case 'terrain-crash':
+          audio.play('terrainCrash')
+          break
+        case 'object-crash':
+          // The ship flew into a standing tower/bunker (sw7-5 / D-020) — the
+          // ROM's AUDCR crash. Reuse the terrain-crash scrape cue (the standing
+          // no-new-asset pattern); the dedicated event lets a bespoke AUDCR
+          // sample swap in later without touching the core.
           audio.play('terrainCrash')
           break
         case 'fireball-destroyed':

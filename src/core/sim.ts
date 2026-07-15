@@ -36,6 +36,10 @@ import {
   CATWALK_HIT_RADIUS,
   SKIM_ALTITUDE,
   MIN_SKIM_ALTITUDE,
+  MAX_SKIM_ALTITUDE,
+  BUNKER_MUZZLE_HEIGHT,
+  BUNKER_CRASH_CEILING,
+  OBJECT_CRASH_LATERAL,
   ALTITUDE_RATE,
   TURRET_SPAWN_INTERVAL,
   TURRET_SCROLL_SPEED,
@@ -453,6 +457,9 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
   // --- Terrain skim: yoke flies up/down; can't pass the floor; scrape crashes
   let altitude = state.altitude + aimY * ALTITUDE_RATE * dt
   if (altitude < 0) altitude = 0
+  // The ROM's flight-band ceiling (sw7-5): GD$MXT caps the climb below the
+  // tower tops, so towers can't be hopped and the maze can fight back.
+  if (altitude > MAX_SKIM_ALTITUDE) altitude = MAX_SKIM_ALTITUDE
   let damage = 0
   if (altitude < MIN_SKIM_ALTITUDE) {
     damage++ // crashed into the surface — costs a shield...
@@ -472,29 +479,49 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     if (field.length === 0) field = mazeField(state.wave)
     surfaceMazeLaid = true
   }
-  const turrets = field
-    .map((turret): Turret => {
-      const pos: Vec3 = [turret.pos[0], turret.pos[1], turret.pos[2] + TURRET_SCROLL_SPEED * dt]
-      // age toward fire grace; keep the kind (bunker/tower/bishop) riding along
-      return { ...turret, pos, age: (turret.age ?? 0) + dt }
-    })
-    .filter((turret) => turret.pos[2] < 0) // drop those that have scrolled past
+  const scrolled = field.map((turret): Turret => {
+    const pos: Vec3 = [turret.pos[0], turret.pos[1], turret.pos[2] + TURRET_SCROLL_SPEED * dt]
+    // age toward fire grace; keep the kind (bunker/tower/bishop) riding along
+    return { ...turret, pos, age: (turret.age ?? 0) + dt }
+  })
+  const turrets = scrolled.filter((turret) => turret.pos[2] < 0) // still ahead of the cockpit
 
-  // --- A tower lobs a fireball from its white cap on the fire cadence -------
-  // Only towers past their fire grace may shoot (Story sw2-3): a freshly-risen
-  // tower holds fire for TOWER_FIRE_GRACE so round-1 firing is a readable beat,
-  // not instant. The fireball erupts from the white cap up at TOWER_HEIGHT (the
-  // tower's gun), not from the floor, and heads for the cockpit from there.
-  // Bunkers don't fire (sw3-11): a shorty lobbing from TOWER_HEIGHT would erupt
-  // from empty air — whether bunkers fire at all (and from where) is an open
-  // ROM question logged in the story's Delivery Findings.
-  const armed = turrets.filter(
-    (turret) => turret.kind !== 'bunker' && (turret.age ?? 0) >= TOWER_FIRE_GRACE,
-  )
+  // --- Ship↔object collision (sw7-5 / D-020): the maze fights back ----------
+  // ROM GDVIEW: closing on a standing tower glows the shields and crashes
+  // (`JSR BG1GLW` / `JSR AUDCR ;AND CRASH INTO TOWER`, WSGRND.MAC:901-912) with
+  // NO height gate — a tower can't be overflown (the flight band tops out below
+  // the cap). A bunker crashes only when the ship is BELOW its top
+  // (WSGRND.MAC:940-946) — cruise clears it. One crash = one shield: BG1GLW
+  // latches through GS.GLW (WSGLOW.MAC:58-64). The clone latches on the cull
+  // edge instead: an object crashes on the single frame it sweeps past the
+  // cockpit plane (its scrolled z crosses 0), the same speed-widened moment as
+  // the ROM's `M.XP - $200 - speed` time-window — the crashed object is NOT destroyed
+  // (no enemy-death, no score) — it flies off behind, like the cabinet's.
+  for (const passed of scrolled) {
+    if (passed.pos[2] < 0) continue // still in flight — only plane-crossers crash
+    if (Math.abs(passed.pos[0]) > OBJECT_CRASH_LATERAL) continue // off the flight line
+    const kind = passed.kind ?? 'tower' // absent kind == tower (sw3-11 back-compat)
+    if (kind === 'bunker' && altitude >= BUNKER_CRASH_CEILING) continue // overflown
+    damage++
+    events.push({ type: 'object-crash', kind, pos: [...passed.pos] as Vec3 })
+  }
+
+  // --- Every standing ground object fires on the cadence --------------------
+  // Only objects past their fire grace may shoot (Story sw2-3): a freshly-risen
+  // one holds fire for TOWER_FIRE_GRACE so round-1 firing is a readable beat,
+  // not instant. Towers/bishops fire from the white cap up at TOWER_HEIGHT (the
+  // tower's gun); BUNKERS FIRE TOO (sw7-5 / D-016 — the ROM's "open question"
+  // is answered: GDGUN dispatches PC$BNK to GDBNKGN, `LBHI GDBNKGN ;>2==>BUNKER
+  // GUN`, WSGRND.MAC:1200), from their LOW body (BUNKER_MUZZLE_HEIGHT), within
+  // the clone's homing-fireball model (house rule D-017 — not the ROM's
+  // directional FRB*GN guns; its distance-weighted fire chance is a logged
+  // Delivery Finding, not ported).
+  const armed = turrets.filter((turret) => (turret.age ?? 0) >= TOWER_FIRE_GRACE)
   let enemyFireCooldown = state.enemyFireCooldown - dt
   if (enemyFireCooldown <= 0 && armed.length > 0 && enemyShots.length < MAX_FIREBALL_SLOTS) {
     const shooter = armed[nextInt(rng, armed.length)]
-    const muzzle: Vec3 = [shooter.pos[0], shooter.pos[1] + TOWER_HEIGHT, shooter.pos[2]]
+    const muzzleY = (shooter.kind ?? 'tower') === 'bunker' ? BUNKER_MUZZLE_HEIGHT : TOWER_HEIGHT
+    const muzzle: Vec3 = [shooter.pos[0], shooter.pos[1] + muzzleY, shooter.pos[2]]
     enemyShots.push({
       pos: muzzle,
       vel: scale(toCockpit(muzzle), ENEMY_SHOT_SPEED),
