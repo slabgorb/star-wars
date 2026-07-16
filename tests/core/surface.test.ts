@@ -231,8 +231,11 @@ describe('Wave 2 — collisions, scoring & lives', () => {
   })
 
   it('turret fire reaching the cockpit costs a shield and is consumed', () => {
+    // "Reaching the cockpit" means reaching THE SHIP, which skims at `altitude` (sw7-16). The
+    // fixture used to fire at [0,0,0] and land a hit only because the hit-test was pinned to the
+    // origin while the pilot flew SKIM_ALTITUDE above it. Fire laid on the floor passes under him.
     const base = surface()
-    const s0 = { ...base, enemyShots: [bolt([0, 0, 0])] }
+    const s0 = { ...base, enemyShots: [bolt([0, base.altitude, 0])] }
     const s1 = stepGame(s0, NO_INPUT, 0.001)
     expect(s1.lives).toBe(base.lives - 1)
     expect(s1.enemyShots).toHaveLength(0)
