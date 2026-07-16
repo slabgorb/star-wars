@@ -35,7 +35,7 @@
 import { describe, it, expect } from 'vitest'
 import type { GameEvent } from '../../src/core/events'
 import { stepGame } from '../../src/core/sim'
-import { initialState, SPACE_WAVE_QUOTA, MIN_SKIM_ALTITUDE } from '../../src/core/state'
+import { initialState, SPACE_WAVE_QUOTA, SKIM_ALTITUDE, MIN_SKIM_ALTITUDE } from '../../src/core/state'
 import type { Enemy, Turret, Projectile, GameState } from '../../src/core/state'
 import { NO_INPUT } from '../../src/core/input'
 import { IDENTITY } from '@arcade/shared/math3d'
@@ -240,7 +240,12 @@ describe('event emission — surface phase gameplay moments (AC1, Wave 2+)', () 
   })
 
   it("emits 'player-death' (cause 'turret') when a turret bolt lands on the cockpit", () => {
-    const shot: Projectile = { pos: [0, 0, 0], vel: [0, 0, 0], ttl: 1 }
+    // "On the cockpit" means ON THE SHIP, which on the surface flies at `altitude` — NOT the
+    // origin (sw7-16). This fixture sat at [0,0,0] and passed only because the hit-test used to
+    // sit there too, while the eye flew SKIM_ALTITUDE above it; the origin is the floor, and a
+    // shot on the floor must miss the pilot. The event under test is unchanged — only the place
+    // the pilot actually is has been corrected.
+    const shot: Projectile = { pos: [0, SKIM_ALTITUDE, 0], vel: [0, 0, 0], ttl: 1 }
     const out = stepGame(playing({ phase: 'surface', enemyShots: [shot] }), NO_INPUT, DT)
     expect(out.events).toContainEqual({ type: 'player-death', cause: 'turret' })
   })

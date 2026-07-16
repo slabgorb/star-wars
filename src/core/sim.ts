@@ -162,17 +162,17 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   const projectiles = advance(state.projectiles, dt)
   let fireCooldown = state.fireCooldown - dt
   if (input.fire && fireCooldown <= 0) {
-    // THE GUN IS ON THE SHIP (story sw5-6). In the trench the ship is `trenchView` — the pilot
-    // flies 512..3840 above the floor — so a bolt must leave from THERE, not from the world
-    // origin. Spawning at [0,0,0] while the eye rode 768 units higher put the crosshair ray and
-    // the bolt ray on parallel lines 768 apart: every wall turret and square became unhittable
-    // (they sit at eye height, so the crosshair landed dead on them and the bolt sailed
-    // underneath), while the port was won by aiming at empty sky. What you aim at is what you hit.
+    // THE GUN IS ON THE SHIP (story sw5-6; surface edition sw7-16). Wherever the pilot's eye
+    // rides, the bolt leaves from THERE. Spawning at the world origin while the eye flies above it
+    // puts the crosshair ray and the bolt ray on parallel lines, and everything the crosshair
+    // lands on is missed underneath by exactly that gap. In the trench the ship is `trenchView`
+    // (the pilot flies 512..3840 above the floor); on the surface it is [0, altitude, 0] (40..238
+    // above it). Only in space is the ship the fixed cockpit at the origin. `shipPoint` is that
+    // one point, per phase — see it for the whole story.
     //
     // ROM: `WSGUNS.MAC FRPTGN` spawns the shot at the ship — `LDD M$TX / ADDD #100 ;JUST A BIT IN
-    // FRONT`, `LDD M$TY` (lateral), `LDD M$TZ` (height). Other phases keep the fixed cockpit: their
-    // camera and collision world already share the origin.
-    const muzzle: Vec3 = state.phase === 'trench' ? [...state.trenchView] as Vec3 : ([...COCKPIT] as Vec3)
+    // FRONT`, `LDD M$TY` (lateral), `LDD M$TZ` (height).
+    const muzzle: Vec3 = shipPoint(state)
     projectiles.push({
       pos: muzzle,
       vel: scale(aimDirection(aimX, aimY, input.aspect), PROJECTILE_SPEED),
@@ -493,6 +493,11 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     events.push({ type: 'terrain-crash' }) // its own cue, not a player-death
   }
 
+  // THE SHIP, now that it has flown this frame (sw7-16 / R11a). The eye is here (render.ts
+  // `cameraView`), so the maze aims its fire HERE and the cockpit hit-test is centred HERE — the
+  // origin is the floor, `altitude` below the pilot, and nothing about him lives there.
+  const ship = surfaceShip(altitude)
+
   // --- Ground objects: lay the authored WSGRND maze once, then scroll it in --
   // sw4-3: the surface is the wave's fixed, hand-authored WSGRND tower maze —
   // NOT a random spawner. Lay the whole field on the first surface frame (unless
@@ -550,7 +555,10 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     const muzzle: Vec3 = [shooter.pos[0], shooter.pos[1] + muzzleY, shooter.pos[2]]
     enemyShots.push({
       pos: muzzle,
-      vel: scale(toCockpit(muzzle), ENEMY_SHOT_SPEED),
+      // At the SHIP, not at the origin (sw7-16): the pilot is flying `altitude` above the floor,
+      // so fire laid on the origin passes harmlessly under him. Deliberately not `toCockpit` —
+      // that one is space's, and belongs to the TIE flight model.
+      vel: scale(normalize(sub(ship, muzzle)), ENEMY_SHOT_SPEED),
       ttl: ENEMY_SHOT_TTL,
     })
     enemyFireCooldown = ENEMY_FIRE_INTERVAL
@@ -583,8 +591,10 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
   const liveBolts = projectiles.filter((_, i) => !spentBolt.has(i))
 
   // --- Cockpit damage: any turret bolt that lands (cause 'turret') ----------
+  // Centred on the SHIP, not the origin (sw7-16): the hit sphere flies with the pilot. Left at the
+  // origin it both missed fire that reached him and "hit" him with fire that passed under.
   const liveShots = enemyShots.filter((s) => {
-    if (collides(s.pos, COCKPIT, COCKPIT_HIT_RADIUS)) {
+    if (collides(s.pos, ship, COCKPIT_HIT_RADIUS)) {
       damage++
       events.push({ type: 'player-death', cause: 'turret' })
       return false
@@ -1334,7 +1344,50 @@ function spawnTie(rng: Rng, speed: number, spawnIndex: number, spaceWave: number
   return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), bank }
 }
 
-/** Unit vector from a world position back toward the cockpit at the origin. */
+/**
+ * THE SURFACE SHIP (story sw7-16 / R11a): the pilot skims the Death Star at `altitude`, dead
+ * centre laterally. This IS the eye — `render.ts cameraView` builds the surface view matrix from
+ * the same point — so it is also the muzzle, the point incoming fire aims at, and the centre of
+ * the cockpit hit-test. One point, three jobs; that is the whole fix.
+ */
+function surfaceShip(altitude: number): Vec3 {
+  return [0, altitude, 0]
+}
+
+/**
+ * THE SHIP — the one point the pilot's eye, his gun, and everything aimed at him all share, in
+ * whichever phase he is flying (stories sw5-6 + sw7-16). Each phase seats the pilot somewhere
+ * different, and the collision world does NOT follow him:
+ *
+ *   space    the fixed cockpit at the origin — the only phase where eye and origin coincide
+ *   surface  [0, altitude, 0] — he flies 40..238 above the floor (MIN/MAX_SKIM_ALTITUDE)
+ *   trench   `trenchView` — he flies 512..3840 above it (TRENCH_EYE_MIN/MAX), and steers
+ *
+ * sw5-6 learned the lesson in the trench: with the gun left at the origin, the crosshair ray and
+ * the bolt ray run parallel, separated by the pilot's height, so the player misses what he aims at
+ * and hits what he does not. It fixed the trench and left a comment claiming the other phases
+ * "already share the origin" — false for the surface from the moment the camera lifted (stories
+ * 11-2/11-5), and the live report ("I shoot way lower than the crosshairs indicate") was the bill.
+ * sw7-16 pays it. What you aim at is what you hit, in EVERY phase.
+ *
+ * NOTE this is the ship at the START of the step. The surface's `stepSurface` re-flies the ship
+ * before it aims the maze's fire at him, so it builds its own `surfaceShip(altitude)` from the
+ * fresh height rather than calling this — the trench muzzle reads a step-old `trenchView` the same
+ * way. The gap is one frame of climb (<= ALTITUDE_RATE * dt), three orders under the 40..238 error
+ * this exists to kill.
+ */
+function shipPoint(s: GameState): Vec3 {
+  if (s.phase === 'trench') return [...s.trenchView] as Vec3
+  if (s.phase === 'surface') return surfaceShip(s.altitude)
+  return [...COCKPIT] as Vec3
+}
+
+/** Unit vector from a world position back toward the cockpit at the origin.
+ *
+ * ⚠ SPACE ONLY — this is the TIE flight model's homing target (`spawnTie`, `moveEnemy`), where the
+ * ship really is the origin. It is NOT the surface's ship: `stepSurface` aims its fire with
+ * `surfaceShip(altitude)` instead. Retargeting this helper would break space the way the surface
+ * was broken before sw7-16 (guarded by `tests/core/surface-aim-wysiwyg.test.ts`, section (d)). */
 function toCockpit(pos: Vec3): Vec3 {
   return normalize(sub(COCKPIT, pos))
 }
