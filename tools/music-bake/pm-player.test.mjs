@@ -67,6 +67,12 @@ const REACHED = {
   CKEY: [OP.CKEY, 0],
   FENV: [OP.FENV, FENV.OFS], // only NUL and OFS are ever selected
   AENV: [OP.AENV, AENV.QKR], // only SDR, HRD, QKR, TIE are ever selected
+  // sw7-8: the death knell (SF2) reaches all three — see the dedicated
+  // observable-effect suite below (review R-3: reachability alone is not
+  // enough; a sign-flipped CRATE passed every test in the repo).
+  CRATE: [OP.CRATE, 1],
+  VC: [OP.VC, 0xa0],
+  SYN: [OP.SYN, 0xff],
 }
 // …and these are the ones it never reaches. AC-2 lets them go unimplemented — but
 // they must THROW, not quietly do nothing.
@@ -330,5 +336,79 @@ describe('sw6-1 AC-2/AC-4 — NOTTAB, the note -> AUDF table (SNDPM.MAC:1085)', 
   it('covers every note the four tunes actually play (0x19 .. 0x49)', () => {
     // Measured range across all 24 in-scope voices: C2 (25) through C6 (73).
     expect(NOTTAB.length).toBeGreaterThan(0x49)
+  })
+})
+
+// ── sw7-8 (review R-3/R-4) — CRATE/VC/SYN must have OBSERVABLE effects ────────
+//
+// Reachability is not enough: a sign-flipped CRATE (the knell DECELERATING —
+// audibly wrong) survived every test in the repo until this suite. Each of the
+// three opcodes the knell reaches gets a pin on what it DOES, not just that it
+// parses.
+import { renderVoice } from './pm-player.mjs'
+import { TUNES } from './music-data.mjs'
+
+describe('sw7-8 — .CRATE is an accelerando: the rate GROWS by the operand (PKCRAT)', () => {
+  // PKCRAT (SNDPM.MAC:1012): `SUBA ORATE / NEGA / STA ORATE` on the pre-negated
+  // rate — new −rate' = −(rate + arg). Three same-written-duration notes with
+  // `.CRATE 50` between them must occupy strictly SHRINKING tick spans.
+  const F5 = 0x42
+  const E5 = 0x41
+  const D5 = 0x3f
+
+  it('successive notes under .CRATE +50 occupy strictly shrinking tick spans', () => {
+    const frames = renderVoice([
+      OP.NRATE, 100,
+      F5, 0x20,
+      OP.CRATE, 50, // rate 100 -> 150
+      E5, 0x20,
+      OP.CRATE, 50, // rate 150 -> 200
+      D5, 0x20,
+      ...ENDT,
+    ])
+    // Onset spans, measured by which note's divisor each tick holds.
+    const spans = new Map()
+    for (const f of frames) spans.set(f.divisor, (spans.get(f.divisor) ?? 0) + 1)
+    const [tF5, tE5, tD5] = [NOTTAB[F5], NOTTAB[E5], NOTTAB[D5]].map((d) => spans.get(d) ?? 0)
+    expect(tF5).toBeGreaterThan(0)
+    expect(tE5).toBeGreaterThan(0)
+    expect(tD5).toBeGreaterThan(0)
+    expect(tE5).toBeLessThan(tF5) // faster after the first .CRATE…
+    expect(tD5).toBeLessThan(tE5) // …and faster again after the second
+  })
+
+  it("the REAL knell accelerates: its render beats the constant-rate floor", () => {
+    // Pure ROM arithmetic, no magic numbers: 48 loop passes, each note loading
+    // odur += (4 >> 1) * 128 = 256, opening rate .NRATE 0CF = 207. A knell that
+    // did NOT accelerate would need ceil(48·256/207) ticks; the .CRATE +1 per
+    // pass must beat that floor. A sign-flipped CRATE (decelerando) lands far
+    // ABOVE it — this is the assertion that kills the surviving mutant.
+    const frames = renderVoice(TUNES.deathKnell.segments[0].voices[0])
+    const constantRateFloor = Math.ceil((48 * 256) / 0xcf)
+    expect(frames.length).toBeLessThan(constantRateFloor)
+    expect(frames.length).toBeGreaterThanOrEqual(48) // one tick per toll, minimum
+  })
+})
+
+describe('sw7-8 — .VC sets the voice-control byte that reaches the POKEY (PKCON)', () => {
+  it("the AUDC distortion bits come from .VC's operand, not the default", () => {
+    const F5 = 0x42
+    const withVc = renderVoice([OP.VC, 0x40, F5, 0x20, ...ENDT])
+    const withoutVc = renderVoice([F5, 0x20, ...ENDT])
+    expect(withVc[0].audc & 0xf0).toBe(0x40) // gravelly, per the operand
+    expect(withoutVc[0].audc & 0xf0).toBe(0xa0) // POKVI's pure-tone default
+  })
+})
+
+describe('sw7-8 — .SYN is RECORDED, so its deferral is provable intent (R-4)', () => {
+  it('decodeVoice exposes the synth flag the stream set', () => {
+    // The glide itself is deferred (Delivery Finding, sw7-8); this pins that
+    // the flag survives decoding, so removing the OP.SYN handler (which would
+    // fall through to the unknown-opcode throw) or dropping the recording is
+    // a red test, not a silent regression.
+    const v = decodeVoice([OP.SYN, 0xff, 0x41, 0x16, ...ENDT])
+    expect(v.syn).toBe(0xff)
+    const off = decodeVoice([0x41, 0x16, ...ENDT])
+    expect(off.syn).toBe(0)
   })
 })

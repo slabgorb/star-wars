@@ -167,3 +167,56 @@ describe('sw6-1 AC-7 — the bake is headless and reproducible', () => {
     expect(quiet(tail), 'loop ends with dead air').toBe(false)
   }, SLOW)
 })
+
+// ── sw7-8 (review R-3) — the five one-shot TUNES bake through the same gate ──
+//
+// The CATALOGUE was widened so the tunes ride the render path — but nothing
+// exercised it: a silent (or clipped, or nondeterministic) death_knell.wav
+// would have shipped with a green suite. Same quality gate as the four loops,
+// minus the seamless-loop check (one-shots don't wrap).
+describe('sw7-8 — the five tunes bake to real audio, not silence', () => {
+  const TUNES = ['deathKnell', 'cantina', 'finale', 'bensTheme', 'descent']
+
+  // ROM-derived duration floors (seconds), at 80% slack: the knell is 48
+  // accelerating tolls (~0.44 s); the others are full tunes.
+  const MIN_SECONDS = {
+    deathKnell: 0.3,
+    cantina: 20,
+    finale: 10,
+    bensTheme: 10,
+    descent: 5,
+  }
+
+  it.each(TUNES)('bakes %s to real, unclipped audio of its ROM-scale length', (tune) => {
+    const { samples, sampleRate } = bakeOnce(tune)
+    expect(sampleRate).toBe(RATE)
+    expect(samples.length).toBeGreaterThan(RATE * MIN_SECONDS[tune])
+
+    let sum = 0
+    let peak = 0
+    for (const s of samples) {
+      sum += s * s
+      const a = Math.abs(s)
+      if (a > peak) peak = a
+    }
+    const rms = Math.sqrt(sum / samples.length)
+
+    expect(peak).toBeGreaterThan(0.05)
+    expect(rms).toBeGreaterThan(0.01)
+    expect(peak).toBeLessThanOrEqual(1.0) // no clipping
+  }, SLOW)
+
+  it('tune bakes are deterministic too — the knell twice, sample-identical', () => {
+    // The cheapest tune (~0.44 s) carries the determinism pin for the new
+    // CATALOGUE path; the four-track determinism test keeps guarding the loops.
+    const a = bakeOnce('deathKnell')
+    const b = bakeTrack('deathKnell', { sampleRate: RATE })
+    expect(a.samples).not.toBe(b.samples)
+    expect(a.samples.length).toBe(b.samples.length)
+    for (let i = 0; i < a.samples.length; i++) {
+      if (a.samples[i] !== b.samples[i]) {
+        throw new Error(`tune bake is not deterministic: sample ${i} differs`)
+      }
+    }
+  }, SLOW)
+})

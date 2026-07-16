@@ -129,6 +129,30 @@ describe('sw7-8 — speech is SERIAL, like the chip that spoke it', () => {
     ])
   })
 
+  it('a FAILED fetch is skipped and the line queued behind it still plays (review R-2)', async () => {
+    // The silent-death mode this epic exists to end, at the queue's head: if a
+    // line's fetch rejects and its queued cues are NOT purged, the dead head
+    // sits at speechQueue[0] forever (pumpSpeech's not-yet-decoded guard never
+    // pops it) and every later line in the run is silenced. The purge must
+    // (a) skip the failed line and (b) let the line behind it through.
+    vi.stubGlobal('fetch', (input: string) =>
+      input.endsWith(SPEECH.redFiveImGoingIn)
+        ? Promise.reject(new Error('R2 404'))
+        : Promise.resolve({ arrayBuffer: () => Promise.resolve({ __url: input }) }),
+    )
+    const engine = createAudioEngine()
+    engine.resume()
+    engine.speak('redFiveImGoingIn') // this fetch dies
+    engine.speak('lookAtTheSizeOfThatThing') // this line must still be heard
+    await settle()
+    expect(startedFiles()).toEqual([SPEECH.lookAtTheSizeOfThatThing])
+    // …and the queue is fully drained, not jammed: a later cue plays too.
+    current().onended?.()
+    engine.speak('useTheForceLuke')
+    await settle()
+    expect(startedFiles()).toEqual([SPEECH.lookAtTheSizeOfThatThing, SPEECH.useTheForceLuke])
+  })
+
   it('a line cued AFTER the previous one ended plays without waiting on anything', async () => {
     // The queue must drain completely — a stuck "busy" latch after the last
     // onended would silence every later line in the run.

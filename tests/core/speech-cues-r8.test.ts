@@ -57,6 +57,7 @@ import {
   type Projectile,
 } from '../../src/core/state'
 import { NO_INPUT } from '../../src/core/input'
+import { TRENCH_EYE_SEAT } from '../../src/core/trench-channel'
 import type { Vec3 } from '@arcade/shared/math3d'
 
 const DT = 1 / 60
@@ -165,5 +166,28 @@ describe('speech cue — the farewell speaks on EVERY game over (U-017, WSMAIN.M
     const s1 = stepGame(playing({ lives: 2, enemyShots: [bolt([0, 0, 0])] }), NO_INPUT, DT)
     expect(s1.gameOver).toBe(false)
     expect(spokenLines(s1)).toEqual([])
+  })
+
+  it('a DOUBLE death on one frame speaks the farewell ONCE (review R-1)', () => {
+    // The Reviewer's probe: a catwalk within CATWALK_HIT_RADIUS of the ship and
+    // the port reaching the cockpit can cross the plane on the SAME frame (they
+    // scroll in lockstep). Two fatal branches both fire — the catwalk crash and
+    // the port miss — but the player died ONCE, and the ROM's PHIEGM speaks the
+    // farewell once per game over, not once per cause. Without an idempotence
+    // guard the trio stacks and the serial queue orates six lines over the
+    // wreck. One death, one goodbye.
+    const s1 = stepGame(
+      trench(portAt([0, 0, 0]), {
+        lives: 1,
+        trenchObstacles: [{ kind: 'catwalk', pos: [0, TRENCH_EYE_SEAT, 0] }],
+      }),
+      NO_INPUT,
+      DT,
+    )
+    expect(s1.gameOver).toBe(true)
+    // Both fatal causes really did land on this frame — the staging is real.
+    expect(s1.events.map((e) => e.type)).toContain('exhaust-port-missed')
+    expect(s1.events.filter((e) => e.type === 'terrain-crash').length).toBeGreaterThanOrEqual(2)
+    expect(spokenLines(s1)).toEqual(FAREWELL) // exactly one trio, in order
   })
 })
