@@ -293,8 +293,8 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 553,
-      "verbatim": "      vel: scale(toCockpit(muzzle), ENEMY_SHOT_SPEED),"
+      "line": 561,
+      "verbatim": "      vel: scale(normalize(sub(ship, muzzle)), ENEMY_SHOT_SPEED),"
     },
     "recommendation": "accept",
     "verdict": "CONFIRMED"
@@ -326,7 +326,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 934,
+      "line": 944,
       "verbatim": "      return allTowersKilled(s) || s.surfaceScrollZ >= surfaceFieldDepth(s.wave)"
     },
     "recommendation": "accept",
