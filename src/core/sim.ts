@@ -987,9 +987,13 @@ const ENTER_PHASE_SPEECH: Partial<Record<Phase, readonly SpeechLine[]>> = {
  * (SNDSPK.MAC:100-103): exactly our baked FOR + ALW lines. So the death frame
  * cues three lines in utterance order; the shell's serial queue does the rest.
  * Every death site calls this with its post-hit lives — the trio belongs to the
- * DEATH, not to any one cause. */
+ * DEATH, not to any one cause. IDEMPOTENT per frame (review R-1): two fatal
+ * causes can land on one frame (a catwalk and the port scroll in lockstep and
+ * can cross the cockpit plane together), but the player died once and PHIEGM
+ * speaks the farewell once per game over — never once per cause. */
 function pushFarewell(events: GameEvent[], lives: number): void {
   if (lives > 0) return
+  if (events.some((e) => e.type === 'speech' && e.line === 'remember')) return
   events.push({ type: 'speech', line: 'remember' })
   events.push({ type: 'speech', line: 'theForceWillBeWithYou' })
   events.push({ type: 'speech', line: 'always' })

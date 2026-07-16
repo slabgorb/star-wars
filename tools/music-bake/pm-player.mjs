@@ -278,7 +278,15 @@ class Voice {
 export function decodeVoice(bytes) {
   const v = new Voice(bytes)
   const notes = []
-  const settingsNow = () => ({ tempo: v.rate, freqEnvelope: v.freqEnv, ampEnvelope: v.ampEnv, volume: v.vol })
+  const settingsNow = () => ({
+    tempo: v.rate,
+    freqEnvelope: v.freqEnv,
+    ampEnvelope: v.ampEnv,
+    volume: v.vol,
+    // sw7-8 (review R-4): the recorded .SYN flag, exposed so its deferred-glide
+    // status is provable intent — dropping the OP.SYN handler is a red test.
+    syn: v.syn,
+  })
   let opening = null
 
   let steps = 0
