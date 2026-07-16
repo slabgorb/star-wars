@@ -74,26 +74,39 @@ describe('sw6-1 AC-7 — the bake is headless and reproducible', () => {
     expect(existsSync(here('./bake-music.mjs'))).toBe(true)
   })
 
-  it('emits filenames that AGREE with the shell MUSIC manifest', () => {
+  it('emits filenames that AGREE with the shell MUSIC + TUNES manifests', () => {
     // AC-7: "manifest and filenames must agree in the same PR". The manifest is
     // the thing production actually fetches; a bake that writes space.wav while
     // the game asks for space_theme.wav is a 404 and therefore silence — which
-    // is precisely the bug this epic exists to end.
+    // is precisely the bug this epic exists to end. sw7-8 widened the bake with
+    // the five one-shot TUNES, so OUTPUT_FILES now mirrors BOTH manifests.
     const audio = readFileSync(join(repoRoot, 'src', 'shell', 'audio.ts'), 'utf8')
-    const block = audio.slice(audio.indexOf('export const MUSIC ='))
-    const manifest = {}
-    for (const [, key, file] of block.matchAll(/(\w+):\s*'([\w.]+\.wav)'/g)) {
-      manifest[key] = file
-      if (Object.keys(manifest).length === 4) break
+    const scrape = (marker, count) => {
+      const block = audio.slice(audio.indexOf(marker))
+      const entries = {}
+      for (const [, key, file] of block.matchAll(/(\w+):\s*'([\w.]+\.wav)'/g)) {
+        entries[key] = file
+        if (Object.keys(entries).length === count) break
+      }
+      return entries
     }
+    const music = scrape('export const MUSIC =', 4)
+    const tunes = scrape('export const TUNES =', 5)
 
-    expect(manifest).toEqual({
+    expect(music).toEqual({
       space: 'space_theme.wav',
       towers: 'towers_theme.wav',
       trench: 'trench_theme.wav',
       imperialMarch: 'imperial_march.wav',
     })
-    expect(OUTPUT_FILES).toEqual(manifest)
+    expect(tunes).toEqual({
+      deathKnell: 'death_knell.wav',
+      cantina: 'cantina.wav',
+      finale: 'finale.wav',
+      bensTheme: 'bens_theme.wav',
+      descent: 'descent.wav',
+    })
+    expect(OUTPUT_FILES).toEqual({ ...music, ...tunes })
   })
 
   it.each(TRACKS)('bakes %s to real audio, not silence', (track) => {
@@ -152,5 +165,58 @@ describe('sw6-1 AC-7 — the bake is headless and reproducible', () => {
 
     const tail = samples.subarray(samples.length - Math.floor(sampleRate * 0.05)) // last 50 ms
     expect(quiet(tail), 'loop ends with dead air').toBe(false)
+  }, SLOW)
+})
+
+// ── sw7-8 (review R-3) — the five one-shot TUNES bake through the same gate ──
+//
+// The CATALOGUE was widened so the tunes ride the render path — but nothing
+// exercised it: a silent (or clipped, or nondeterministic) death_knell.wav
+// would have shipped with a green suite. Same quality gate as the four loops,
+// minus the seamless-loop check (one-shots don't wrap).
+describe('sw7-8 — the five tunes bake to real audio, not silence', () => {
+  const TUNES = ['deathKnell', 'cantina', 'finale', 'bensTheme', 'descent']
+
+  // ROM-derived duration floors (seconds), at 80% slack: the knell is 48
+  // accelerating tolls (~0.44 s); the others are full tunes.
+  const MIN_SECONDS = {
+    deathKnell: 0.3,
+    cantina: 20,
+    finale: 10,
+    bensTheme: 10,
+    descent: 5,
+  }
+
+  it.each(TUNES)('bakes %s to real, unclipped audio of its ROM-scale length', (tune) => {
+    const { samples, sampleRate } = bakeOnce(tune)
+    expect(sampleRate).toBe(RATE)
+    expect(samples.length).toBeGreaterThan(RATE * MIN_SECONDS[tune])
+
+    let sum = 0
+    let peak = 0
+    for (const s of samples) {
+      sum += s * s
+      const a = Math.abs(s)
+      if (a > peak) peak = a
+    }
+    const rms = Math.sqrt(sum / samples.length)
+
+    expect(peak).toBeGreaterThan(0.05)
+    expect(rms).toBeGreaterThan(0.01)
+    expect(peak).toBeLessThanOrEqual(1.0) // no clipping
+  }, SLOW)
+
+  it('tune bakes are deterministic too — the knell twice, sample-identical', () => {
+    // The cheapest tune (~0.44 s) carries the determinism pin for the new
+    // CATALOGUE path; the four-track determinism test keeps guarding the loops.
+    const a = bakeOnce('deathKnell')
+    const b = bakeTrack('deathKnell', { sampleRate: RATE })
+    expect(a.samples).not.toBe(b.samples)
+    expect(a.samples.length).toBe(b.samples.length)
+    for (let i = 0; i < a.samples.length; i++) {
+      if (a.samples[i] !== b.samples[i]) {
+        throw new Error(`tune bake is not deterministic: sample ${i} differs`)
+      }
+    }
   }, SLOW)
 })

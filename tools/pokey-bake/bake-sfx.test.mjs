@@ -132,6 +132,9 @@ describe('sw6-4 — the clock scales TIME ONLY, which is why an ear signoff miss
     wave_clear: 0.446,
     spawn: 0.479,
     terrain_crash: 0.888,
+    // sw7-8 — the two dedicated effects (SNDAUD.MAC AUDDF/AUDSS):
+    death_star_boom: 2.379, // 288 ticks of finite decay + 20 ms tail (own 2.5 s cap)
+    fireball_hit: 0.135, // a 14-tick rising crackle
   }
 
   it('covers every effect the game fetches', () => {

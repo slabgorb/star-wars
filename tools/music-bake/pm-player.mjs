@@ -81,7 +81,11 @@ const OP_NAME = Object.fromEntries(Object.entries(OP).map(([k, v]) => [v, k]))
 // character (or its whole line), and a tune missing one of four voices still sounds
 // like music, so nothing downstream would ever notice. This game was silent for a
 // full epic precisely because a failure path shrugged instead of shouting.
-const UNIMPLEMENTED = new Set([OP.CRATE, OP.CHK, OP.RCHK, OP.VC, OP.PKC, OP.SYN, OP.CALL, OP.GOSUB, OP.RETURN])
+//
+// sw7-8 moved CRATE/VC/SYN out of this set (the death knell uses all three) and
+// implemented them below. CALL/GOSUB/RETURN stay: gen-music-data FLATTENS them at
+// generation time, so a stream that still carries one is a generator bug — shout.
+const UNIMPLEMENTED = new Set([OP.CHK, OP.RCHK, OP.PKC, OP.CALL, OP.GOSUB, OP.RETURN])
 
 // FETAB (SNDPM.MAC:1189) ships exactly two entries: NUL and OFS (GLOCK). The other
 // five instrument names (HRN/TRB/BAS/GLK/WW) are declared in SWMUS.MAC but HRN is
@@ -114,6 +118,7 @@ class Voice {
     this.loopCount = 0
     this.loopPc = 0
     this.onote = 0
+    this.syn = 0 // VSF — recorded by .SYN, not yet audible (see the OP.SYN case)
     this.done = false
   }
 
@@ -171,6 +176,13 @@ class Voice {
         case OP.NRATE:
           this.rate = arg
           break
+        case OP.CRATE:
+          // PKCRAT (SNDPM.MAC:1012): `SUBA ORATE / NEGA / STA ORATE` on the
+          // PRE-NEGATED rate — new −rate' = −(rate + arg), i.e. the rate GROWS
+          // by the (signed) operand. The death knell's `.CRATE 1` inside its
+          // 48-pass loop is an accelerando: each toll comes a little faster.
+          this.rate += signed8(arg)
+          break
         case OP.NVOL:
           this.vol = arg
           break
@@ -198,6 +210,20 @@ class Voice {
             throw new Error(`pm-player: amplitude envelope ${arg} is not implemented (AETAB has ${AMP_ENV_COUNT}).`)
           }
           this.ampEnv = arg
+          break
+        case OP.VC:
+          // PKCON (SNDPM.MAC:1031): `STA VAC` — the voice-control byte (POKEY
+          // distortion bits + volume nibble mask). The knell's setup subroutine
+          // sets $A0 (pure tones) explicitly.
+          this.vac = arg & 0xff
+          break
+        case OP.SYN:
+          // PKSYN (SNDPM.MAC:1040): `STA VSF` — the synth-mode flag. The flag is
+          // RECORDED but the audible glide (the ROM slides VSA, the old→new note
+          // delta, across each note) is not modelled yet; the knell still tolls
+          // its 48 discrete descending steps. Deferred with a Delivery Finding —
+          // an approximation here would be a divergence hiding behind a comment.
+          this.syn = arg & 0xff
           break
         case OP.LOOP: // PKSL: store the count, remember where the body starts
           this.loopCount = arg & 0xff // VLC is one byte
@@ -252,7 +278,15 @@ class Voice {
 export function decodeVoice(bytes) {
   const v = new Voice(bytes)
   const notes = []
-  const settingsNow = () => ({ tempo: v.rate, freqEnvelope: v.freqEnv, ampEnvelope: v.ampEnv, volume: v.vol })
+  const settingsNow = () => ({
+    tempo: v.rate,
+    freqEnvelope: v.freqEnv,
+    ampEnvelope: v.ampEnv,
+    volume: v.vol,
+    // sw7-8 (review R-4): the recorded .SYN flag, exposed so its deferred-glide
+    // status is provable intent — dropping the OP.SYN handler is a red test.
+    syn: v.syn,
+  })
   let opening = null
 
   let steps = 0

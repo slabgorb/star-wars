@@ -155,6 +155,12 @@ export type SpeechLine =
   | 'youreAllClearKid' // trench timer 24, human ODD wave (Sound_1A, SPKYAU)
   | 'theForceIsStrongInThisOne' // trench timer 22, human EVEN wave (Sound_16, SPKSTR)
   | 'letGoLuke' // trench timer 16, human EVEN wave (SPKLET; restored by sw7-2, U-007)
+  // sw7-8 — the R8 speech wirings (audit U-015..U-017):
+  | 'redFiveImGoingIn' // entering the surface, before SIZ (SPKTHI, WSMAIN:1515)
+  | 'r2Scream' // exhaust port missed AND the run survives (SPKR2N, WSMAIN:1914 — gated on S.GAS)
+  | 'remember' // game over, first farewell word (SPKREM, WSMAIN:2143)
+  | 'theForceWillBeWithYou' // game over — SPKFOA is the TFOA sequence 15.,16. (SNDSPK:100-103)…
+  | 'always' // …so the farewell is REM, FOR, ALW spoken serially (the TMS5220 has one throat)
 
 // A voice line was cued this frame. Speech is DATA like every other event: the
 // core decides WHEN a line plays (deterministic, testable), the shell decides HOW
@@ -197,6 +203,27 @@ export interface MusicEvent {
   track: MusicTrack
 }
 
+// The five one-shot POKEY tunes (sw7-8, audit U-010..U-014). A string-literal
+// union like MusicTrack, and for the same reason. Names follow the callers in
+// the 1983 source, never the entry-point labels (the PMBEN lesson):
+export type TuneName =
+  | 'deathKnell' // PMSF2 — the proton torpedo is FIRED (WSGUNS.MAC:1220 FRPTGN)
+  | 'cantina' // PMCNT — the enter-initials screen opens (WSMAIN.MAC:1164 PHIENT)
+  | 'finale' // PMEND — the Death Star detonates (WSMAIN.MAC:2179 PHIDX1)
+  | 'bensTheme' // PMBEN — lose with no high score (WSMAIN.MAC:2161), NOT the towers theme
+  | 'descent' // PMDES — the space -> surface descent (WSMAIN.MAC:1439)
+
+// A one-shot tune cue (sw7-8). Same core-owns-WHEN / shell-owns-HOW split as
+// speech and music: the shell plays it once on the single shared 'tune'
+// channel — one tune player, exactly like the cabinet's PM driver, so a new
+// tune voice-steals the last. Unlike MusicEvent this never loops: a knell that
+// looped would toll forever. 'cantina' and 'bensTheme' carry no core trigger —
+// the high-score fork lives in the shell (main.ts owns the table, SH2-13).
+export interface TuneEvent {
+  type: 'tune'
+  tune: TuneName
+}
+
 export type GameEvent =
   | FireEvent
   | EnemyFireEvent
@@ -214,4 +241,5 @@ export type GameEvent =
   | ExhaustPortMissedEvent
   | SpeechEvent
   | MusicEvent
+  | TuneEvent
   | NameEnteredEvent

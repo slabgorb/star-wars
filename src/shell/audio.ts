@@ -27,7 +27,8 @@ const DEFAULT_BASE_URL = 'https://arcade-assets.slabgorb.com/star-wars/sfx/'
 
 // Logical sound name -> R2 filename (per-cabinet NUMBERS). Keyed to the gameplay moments
 // the 8-7 `GameEvent` channel reports, so the event->sound wiring is a thin lookup.
-const SOUNDS = {
+// Exported (sw7-8) so the manifest contract is test-pinnable, like MUSIC.
+export const SOUNDS = {
   fire: 'player_fire.wav', // player laser cannon
   enemyFire: 'enemy_fire.wav', // a TIE / turret loosed a fireball
   enemyDeath: 'enemy_explosion.wav', // a TIE or turret was destroyed
@@ -35,6 +36,9 @@ const SOUNDS = {
   levelClear: 'wave_clear.wav', // phase quota met — the run advances
   playerSpawn: 'spawn.wav', // a fresh run begins
   terrainCrash: 'terrain_crash.wav', // scraped the Death Star surface
+  // sw7-8 — the two dedicated effects the audit found aliased (U-021/U-022):
+  deathStarBoom: 'death_star_boom.wav', // AUDDF "DEATH STAR FINAL EXPLOSION" (SNDAUD.MAC:1004)
+  fireballHit: 'fireball_hit.wav', // AUDSS "PLAYER SHOT DOWN AN ALIEN SHOT" (SNDAUD.MAC:1028)
 } as const
 
 export type SoundName = keyof typeof SOUNDS
@@ -44,7 +48,7 @@ export type SoundName = keyof typeof SOUNDS
 // sound cuts in rather than stacking — the cabinet-wide convergence onto the shared VERB
 // (as tempest's 10-10). Keyed by SoundName, so a new manifest sound without a channel is
 // a compile error.
-const CHANNELS: Record<SoundName, string> = {
+export const CHANNELS: Record<SoundName, string> = {
   fire: 'fire',
   enemyFire: 'enemy-fire',
   enemyDeath: 'enemy-death',
@@ -52,6 +56,8 @@ const CHANNELS: Record<SoundName, string> = {
   levelClear: 'level-clear',
   playerSpawn: 'player-spawn',
   terrainCrash: 'terrain-crash',
+  deathStarBoom: 'death-star-boom',
+  fireballHit: 'fireball-hit',
 }
 
 // Looping music (sw3-5), under its own R2 prefix mirroring the sfx/ and speech/
@@ -81,6 +87,37 @@ export const MUSIC_CHANNELS: Record<MusicName, string> = {
   towers: 'music',
   trench: 'music',
   imperialMarch: 'music',
+}
+
+// The five one-shot tunes (sw7-8, U-010..U-014), baked by the same
+// tools/music-bake pipeline as the loops and served from the same music/
+// prefix. Names follow the CALLERS in the 1983 source (never the entry-point
+// labels — the PMBEN lesson): deathKnell = PMSF2 (WSGUNS.MAC:1220 FRPTGN),
+// cantina = PMCNT (WSMAIN.MAC:1164 PHIENT), finale = PMEND (WSMAIN.MAC:2179
+// PHIDX1), bensTheme = PMBEN (WSMAIN.MAC:2161, lose-with-no-high-score),
+// descent = PMDES (WSMAIN.MAC:1439).
+export const TUNES = {
+  deathKnell: 'death_knell.wav',
+  cantina: 'cantina.wav',
+  finale: 'finale.wav',
+  bensTheme: 'bens_theme.wav',
+  descent: 'descent.wav',
+} as const
+
+export type TuneName = keyof typeof TUNES
+
+// ONE shared channel for every tune — the cabinet's PM driver is a single tune
+// player, so a new tune replaces whatever tune was ringing (playing the finale
+// over a still-tolling knell steals it, exactly like the hardware). Distinct
+// from the looping 'music' channel: a one-shot must never kill the phase loop
+// (the loop is our sw3-5 adaptation). Exported so both invariants are pinned
+// by tests/shell/tune-channel.test.ts.
+export const TUNE_CHANNELS: Record<TuneName, string> = {
+  deathKnell: 'tune',
+  cantina: 'tune',
+  finale: 'tune',
+  bensTheme: 'tune',
+  descent: 'tune',
 }
 
 // TMS5220 LPC speech (story 8-7), under its own R2 prefix. AUTHENTIC re-synthesis bakes
@@ -125,7 +162,10 @@ export interface AudioEngine {
   resume(): void
   // Play a loaded SFX sample once. No-op if not loaded, not ready, or unavailable.
   play(name: SoundName): void
-  // Speak a TMS5220 line once, loading it lazily on first use. No-op if unavailable.
+  // Speak a TMS5220 line, loading it lazily on first use. SERIAL (sw7-8): the
+  // cabinet's speech chip has one throat, so a line cued while another is
+  // playing QUEUES and starts when it ends — cue order is spoken order. No-op
+  // if unavailable.
   speak(name: SpeechName): void
   // Start a looping music track on the shared `music` channel (sw3-5). Voice-steals
   // whatever was looping, so one track rings and a phase edge swaps it. No-op until
@@ -133,6 +173,10 @@ export interface AudioEngine {
   startLoop(name: MusicName): void
   // Stop the looping music. Safe no-op when nothing is looping there.
   stopLoop(name: MusicName): void
+  // Play a one-shot tune on the single shared 'tune' channel (sw7-8): a new
+  // tune voice-steals the last, like the cabinet's one PM tune player. Same
+  // silent-degrade contract as every other engine verb.
+  playTune(name: TuneName): void
   // True once at least one SFX sample has decoded. Mainly for tests / readiness UI.
   ready(): boolean
 }
@@ -158,14 +202,18 @@ export function createAudioEngine(baseUrl: string = DEFAULT_BASE_URL): AudioEngi
     channels: CHANNELS,
   })
 
-  // Looping music runs through its OWN shared-engine instance (sw3-5): a separate R2
-  // prefix (music/) and a single `music` channel shared by every track, so startLoop
-  // voice-steals to exactly one loop and a phase edge swaps it. Same silent-degrade
-  // contract as the SFX engine — a missing/undecoded track simply never plays.
-  const music: SharedAudioEngine<MusicName> = createSharedAudioEngine<MusicName>({
+  // Looping music AND the one-shot tunes run through one shared-engine instance
+  // (sw3-5; tunes added by sw7-8): the same R2 prefix (music/), with loops on the
+  // single `music` channel and every tune on the single `tune` channel — so
+  // startLoop voice-steals to exactly one loop, playTune to exactly one tune,
+  // and the two never steal each other. Same silent-degrade contract as the SFX
+  // engine — a missing/undecoded track simply never plays.
+  const music: SharedAudioEngine<MusicName | TuneName> = createSharedAudioEngine<
+    MusicName | TuneName
+  >({
     baseUrl: DEFAULT_MUSIC_BASE_URL,
-    sounds: MUSIC,
-    channels: MUSIC_CHANNELS,
+    sounds: { ...MUSIC, ...TUNES },
+    channels: { ...MUSIC_CHANNELS, ...TUNE_CHANNELS },
   })
 
   // Speech keeps its OWN gesture-unlocked context (AC-3). Larger, rarely-triggered
@@ -175,18 +223,36 @@ export function createAudioEngine(baseUrl: string = DEFAULT_BASE_URL): AudioEngi
   let speechMaster: GainNode | null = null
   const speechBuffers = new Map<SpeechName, AudioBuffer>()
   const speechLoading = new Set<SpeechName>()
+  // The serial queue (sw7-8): the TMS5220 is ONE chip fed one LPC frame at a
+  // time — the cabinet physically cannot overlap phrases, and its own sound
+  // board sequences multi-line moments (SNDSPK.MAC's TFOA table). Cues wait
+  // here in CUE ORDER; a line plays only when the previous one ends.
+  const speechQueue: SpeechName[] = []
+  let speechBusy = false
 
-  // Fire a decoded speech buffer through the speech master gain. Silent no-op / swallow
-  // if the context isn't up or a single source fails.
-  function playSpeech(buffer: AudioBuffer): void {
-    if (!speechCtx || !speechMaster) return
+  // Start the next queued line if the throat is free and its buffer is ready.
+  // Strict order: an un-decoded HEAD blocks the queue (its decode re-pumps);
+  // a FAILED head is removed by the fetch handler, so it can never deadlock.
+  function pumpSpeech(): void {
+    if (speechBusy || !speechCtx || !speechMaster) return
+    const next = speechQueue[0]
+    if (next === undefined) return
+    const buffer = speechBuffers.get(next)
+    if (!buffer) return // still loading — the decode callback pumps again
+    speechQueue.shift()
     try {
       const source = speechCtx.createBufferSource()
       source.buffer = buffer
       source.connect(speechMaster)
+      source.onended = () => {
+        speechBusy = false
+        pumpSpeech() // chain the next queued line, TFOA-style
+      }
+      speechBusy = true
       source.start()
     } catch {
       /* never let a single speech line crash the frame */
+      speechBusy = false
     }
   }
 
@@ -212,12 +278,12 @@ export function createAudioEngine(baseUrl: string = DEFAULT_BASE_URL): AudioEngi
 
   function speak(name: SpeechName): void {
     if (!speechCtx) return // no context — stay silent
-    const cached = speechBuffers.get(name)
-    if (cached) {
-      playSpeech(cached)
+    speechQueue.push(name) // cue order IS spoken order
+    if (speechBuffers.has(name)) {
+      pumpSpeech() // already decoded — play now (or when the throat frees)
       return
     }
-    if (speechLoading.has(name)) return // a fetch is already in flight; drop this cue
+    if (speechLoading.has(name)) return // one in-flight fetch per line; the cue stays queued
     speechLoading.add(name)
     const context = speechCtx
     fetch(SPEECH_BASE_URL + SPEECH[name])
@@ -225,10 +291,16 @@ export function createAudioEngine(baseUrl: string = DEFAULT_BASE_URL): AudioEngi
       .then((data) => context.decodeAudioData(data))
       .then((buffer) => {
         speechBuffers.set(name, buffer)
-        playSpeech(buffer) // play the line that requested it, once decoded
+        pumpSpeech() // the head may have been waiting on this decode
       })
       .catch(() => {
-        speechLoading.delete(name) // fetch/decode failed — allow a later retry, stay silent
+        // Fetch/decode failed — stay silent, allow a later retry, and clear
+        // every queued cue of this line so a dead head can't jam the queue.
+        speechLoading.delete(name)
+        for (let i = speechQueue.length - 1; i >= 0; i--) {
+          if (speechQueue[i] === name) speechQueue.splice(i, 1)
+        }
+        pumpSpeech() // the queue may have a ready line behind the removed one
       })
   }
 
@@ -238,6 +310,7 @@ export function createAudioEngine(baseUrl: string = DEFAULT_BASE_URL): AudioEngi
     speak,
     startLoop: (name: MusicName) => music.startLoop(name),
     stopLoop: (name: MusicName) => music.stopLoop(name),
+    playTune: (name: TuneName) => music.play(name),
     ready: () => sfx.ready(),
   }
 }

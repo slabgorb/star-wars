@@ -80,7 +80,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 549,
+      "line": 550,
       "verbatim": "        score += TURRET_SCORE"
     }
   },
