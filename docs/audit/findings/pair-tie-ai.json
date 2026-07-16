@@ -305,7 +305,8 @@
     },
     "ours": null,
     "recommendation": "fix",
-    "size": "l"
+    "size": "l",
+    "remediated_by": "sw7-12"
   },
   {
     "id": "A-018",
