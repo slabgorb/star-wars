@@ -19,7 +19,14 @@
 // This file makes it a fact, from both ends:
 //
 //   * `surfaceShip` is EXPORTED from the core and the shell's camera calls it, so the copy in
-//     render.ts stops existing. That is the fix; these tests are what keep it fixed.
+//     render.ts stops existing. **The EXPORT is what removes the copy — not these tests.**
+//     Be precise about what is guarded here, because the imprecise version is the sin this
+//     story exists to punish: re-inlining `[0, state.altitude, 0]` into `cameraView` returns a
+//     bit-identical value, so it is invisible to every assertion below and always will be.
+//     "Did you call the function or retype its body?" is a question about SOURCE, and these
+//     are value tests. What they DO pin — and it is the risk that actually matters — is DRIFT:
+//     let the camera and the ship point disagree by one unit and this file goes red at every
+//     height. A re-inlined copy is harmless until it drifts, and the drift is caught.
 //   * The sibling suite's `eyeOf` now recovers the eye from `cameraView` rather than typing
 //     the point a fourth time, so its muzzle assertions bind the gun to the real camera too.
 //
@@ -49,13 +56,11 @@ import {
   MAX_SKIM_ALTITUDE,
   type GameState,
 } from '../../src/core/state'
-import { transform, type Vec3 } from '@arcade/shared/math3d'
 import type { Input } from '../../src/core/input'
-import * as RenderModule from '../../src/shell/render'
+import { eyeOf } from '../support/aim'
 
 const DT = 1 / 60
 const ASPECT = 16 / 9
-const ORIGIN: Vec3 = [0, 0, 0]
 
 const surface = (over: Partial<GameState> = {}): GameState => ({
   ...enterPhase(initialState(1983), 'surface'),
@@ -67,13 +72,6 @@ const surface = (over: Partial<GameState> = {}): GameState => ({
   fireCooldown: 0,
   ...over,
 })
-
-/** The eye recovered from the camera the shell actually builds. See the sibling suite's
- *  `eyeOf` for why this is never hand-written. */
-const eyeOf = (s: GameState): Vec3 => {
-  const originInView = transform(RenderModule.cameraView(s), ORIGIN)
-  return [-originInView[0] + 0, -originInView[1] + 0, -originInView[2] + 0]
-}
 
 const trigger = (over: Partial<Input> = {}): Input => ({
   aimX: 0,
@@ -109,11 +107,15 @@ describe('sw7-16 — the surface ship point is ONE function', () => {
     expect(a).not.toBe(b)
   })
 
-  it.each(HEIGHTS)("IS the shell's camera eye at altitude %s — render.ts keeps no copy", (alt) => {
-    // THE POINT OF THIS FILE. render.ts:284 used to hand-write `[0, state.altitude, 0]`; it
-    // must go through `surfaceShip`. This assertion binds the shell's camera to the core's
-    // ship point ARGUMENT AND ALL — it fails if the camera is lifted anywhere else, if it is
-    // handed a different height, or if the view picks up an offset on the way out.
+  it.each(HEIGHTS)("IS the shell's camera eye at altitude %s — the two cannot drift apart", (alt) => {
+    // THE POINT OF THIS FILE. This assertion binds the shell's camera to the core's ship point
+    // ARGUMENT AND ALL — it fails if the camera is lifted anywhere else, if it is handed a
+    // different height, or if the view picks up an offset on the way out. Mutation-checked: a
+    // one-unit camera drift reddens this file and its sibling.
+    //
+    // It does NOT — and cannot — detect `cameraView` re-inlining `[0, state.altitude, 0]`:
+    // that returns the same value, so both sides of the `toEqual` move together. The export is
+    // what removes the copy; this test is what stops the copy mattering. See the header.
     const s = surface({ altitude: alt })
     expect(eyeOf(s)).toEqual(surfaceShip(s.altitude))
   })

@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1236,
+      "line": 1245,
       "verbatim": "  const decay = Math.pow(7 / 8, dt * TICK_HZ)"
     },
     "verdict": "CONFIRMED",
@@ -90,7 +90,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 805,
+      "line": 814,
       "verbatim": "    sweptCollides(port, sub(b.pos, scale(b.vel ?? ZERO, dt)), b.pos, PORT_HIT_RADIUS),"
     },
     "recommendation": "accept"
@@ -150,7 +150,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 351,
+      "line": 352,
       "verbatim": "    if (collides(s.pos, ship, COCKPIT_HIT_RADIUS)) {"
     },
     "recommendation": "accept",
@@ -169,7 +169,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 343,
+      "line": 344,
       "verbatim": "    if (collides(e.pos, ship, COCKPIT_HIT_RADIUS)) {"
     },
     "recommendation": "accept",

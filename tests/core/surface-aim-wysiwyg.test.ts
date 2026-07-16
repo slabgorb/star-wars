@@ -39,9 +39,10 @@
 // failed, and the file said things about itself that were not true. It was rejected on
 // exactly that — which is the same failure as sw5-6's stale comment, one story later.
 //
-//   * `crosshairOn` is GONE. `tests/support/aim.ts` already exported `aimAt` — the same
-//     projection inverse, character for character. One copy, in the place the trench suites
-//     already import from.
+//   * This file's `crosshairOn` is GONE — it re-implemented `aimAt`, which `tests/support/aim.ts`
+//     already exported. This suite now imports the shared one. (`trench-aim-wysiwyg.test.ts:91`
+//     still keeps its own copy and does not import `aim.ts`; that file is sw5-6's and out of
+//     scope here, so there are still TWO implementations in the repo, not one.)
 //
 //   * `flyingEye` no longer HAND-WRITES `[0, altitude, 0]`; it is now `eyeOf`, recovered
 //     from `render.ts cameraView`. Written out by hand it was a FOURTH copy of the ship
@@ -54,15 +55,20 @@
 //     bug it was written to catch. See (d).
 //
 //   * Section (e)'s space hit-test guard was inert for a subtler reason: it never routed
-//     through `shipPoint` at all, so mutating the ship point left it green. Round 2 makes
-//     `shipPoint` exhaustive over Phase and routes space's hit-tests through it.
+//     through `shipPoint` at all, so mutating the ship point left it green. Round 2 routes
+//     space's hit-tests through `shipPoint` — that routing, and nothing else, is what makes
+//     the guard able to fail. (`shipPoint` is also now an exhaustive switch over Phase, but
+//     that is a compile-time guard against a FUTURE phase, not what arms this test.)
 //
 //   * The yoke comes OFF CENTRE — see (b). Round 1 fired every shot with `aimY: 0`, which is
 //     the one input that hides the question, and that is why nothing caught the docstring.
 //
 // THE STANDING RULE this file now holds itself to: a regression guard is only a guard if it
-// FAILS when you revert the fix. Every guard below has been checked by mutation. Where a
-// test is AC coverage rather than a guard, it says so instead of taking the credit.
+// FAILS when you revert the fix. Every guard below has been checked by mutation, with ONE
+// documented exception that cannot be — see `surface-ship-point.test.ts`, where reverting
+// `render.ts` to an inline `[0, altitude, 0]` is behaviour-PRESERVING and therefore invisible
+// to any value assertion. Where a test is AC coverage rather than a guard, it says so instead
+// of taking the credit.
 //
 // == WHY EVERY SHOT BELOW IS FIRED DEAD AHEAD (|x| = 0) =======================
 //
@@ -89,13 +95,14 @@ import {
   COCKPIT_HIT_RADIUS,
   type GameState,
 } from '../../src/core/state'
-import { aimAt } from '../support/aim'
-import { sub, scale, normalize, transform, IDENTITY, type Vec3 } from '@arcade/shared/math3d'
+import { aimAt, eyeOf } from '../support/aim'
+import { sub, scale, normalize, IDENTITY, type Vec3 } from '@arcade/shared/math3d'
 import type { Input } from '../../src/core/input'
-import * as RenderModule from '../../src/shell/render'
 
 const DT = 1 / 60
 const ASPECT = 16 / 9
+/** The world origin — the floor point the ship USED to be pinned to. Kept as the foil the
+ *  ship point is told apart from, never as a stand-in for the eye. */
 const ORIGIN: Vec3 = [0, 0, 0]
 
 /**
@@ -113,25 +120,6 @@ const surface = (over: Partial<GameState> = {}): GameState => ({
   fireCooldown: 0,
   ...over,
 })
-
-/**
- * The pilot's eye in world space — RECOVERED from the camera the shell actually builds
- * (`render.ts cameraView`), never hand-copied.
- *
- * This is what makes "the muzzle is on the camera eye" mean what it says. Round 1 wrote
- * `[0, s.altitude, 0]` here, which made the helper a fourth hand-matched copy of the ship
- * point: the assertion only compared the muzzle against a constant typed twice in the same
- * file, and would have sat green through any drift in render.ts. Going through `cameraView`
- * ties every muzzle assertion below to the shell's real camera, across the boundary.
- *
- * The surface camera is IDENTITY-oriented, so its view matrix is a pure translation by −eye
- * and the eye falls straight out of the world origin's image: transform(view, [0,0,0]) = −eye.
- * (`+ 0` normalises −0, which `toEqual` reports as a difference from 0.)
- */
-const eyeOf = (s: GameState): Vec3 => {
-  const originInView = transform(RenderModule.cameraView(s), ORIGIN)
-  return [-originInView[0] + 0, -originInView[1] + 0, -originInView[2] + 0]
-}
 
 /**
  * Yoke at rest, trigger down.
@@ -446,6 +434,29 @@ describe('sw7-16 — enemy fire tracks the flying ship', () => {
       'inside the SHIP sphere — the fixed build catches it',
     ).toBeLessThan(COCKPIT_HIT_RADIUS)
 
+    expect(s.events.filter((e) => e.type === 'player-death' && e.cause === 'turret')).toHaveLength(1)
+  })
+
+  it('a NaN yoke cannot make the pilot immortal — the ship point stays a real place', () => {
+    // sw7-16 made NaN LOAD-BEARING, and that is the only reason this test exists. Before the
+    // story, the hit sphere sat on the constant COCKPIT and the fire velocity came from
+    // `toCockpit` — both finite, so a NaN altitude could not reach either. Now both are centred
+    // on the ship, and `stepSurface`'s clamps are all `<`/`>`, which are FALSE for NaN: a NaN
+    // would slip every one of them, make `collides(pos, [0, NaN, 0], r)` false forever, and the
+    // pilot would go quietly invulnerable — with NaN absorbing, so altitude never recovers.
+    // Failing OPEN is strictly worse than the bug this story fixed. Reachable via `input.ts`'s
+    // `0/0` on a zero-height canvas rect (the yoke listener is on `window`, not the canvas).
+    const s0 = surface({
+      altitude: MIN_SKIM_ALTITUDE,
+      enemyShots: [{ pos: [0, PROBE_Y, 0], vel: [0, 0, 0], ttl: 5 }],
+      lives: 3,
+    })
+    const s = stepGame(s0, trigger({ fire: false, aimY: NaN }), DT)
+
+    expect(s.altitude, 'a NaN yoke must not poison the ship point').toBe(SKIM_ALTITUDE)
+    expect(Number.isNaN(s.altitude)).toBe(false)
+    // The pilot is still mortal: the fireball at PROBE_Y is inside the sphere around the reset
+    // ship (|100 − 128| = 28 < 80), so it lands. A NaN-poisoned sphere would have missed it.
     expect(s.events.filter((e) => e.type === 'player-death' && e.cause === 'turret')).toHaveLength(1)
   })
 })

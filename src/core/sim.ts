@@ -332,11 +332,12 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   const liveBolts = projectiles.filter((_, i) => !spentBolt.has(i))
 
   // --- Cockpit damage: any TIE that reaches it, any fireball that lands -----
-  // In space, every cockpit hit is an enemy kill of the player (cause 'enemy').
+  // SPACE ONLY — the surface and trench returned at :199/:200 above, so this block is reachable in
+  // no other phase, and `cause: 'enemy'` below is space's alone (the surface pushes 'turret').
   //
-  // Centred on `shipPoint`, not on a bare COCKPIT literal (sw7-16). Space IS the origin, so this
-  // is behaviour-identical — the point is that every phase asks ONE function where the pilot is,
-  // and a guard that space keeps its own seat can only bite if it routes through that function.
+  // Centred on `shipPoint`, not on a bare COCKPIT literal (sw7-16). Space IS the origin, so this is
+  // behaviour-identical; the reason to route through it anyway is that a guard asserting "space
+  // keeps its own seat" can only BITE if it goes through the function a regression would break.
   const ship = shipPoint(state)
   let damage = 0
   const liveEnemies = standingEnemies.filter((e) => {
@@ -487,6 +488,14 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
 
   // --- Terrain skim: yoke flies up/down; can't pass the floor; scrape crashes
   let altitude = state.altitude + aimY * ALTITUDE_RATE * dt
+  // A NaN yoke (shell bug: `input.ts` divides by a zero-height canvas rect) would slip EVERY clamp
+  // below — `<` and `>` are both false for NaN — and sw7-16 made that load-bearing: once the fire
+  // target and the hit-test are centred on the ship, `collides(pos, [0, NaN, 0], r)` is false
+  // forever and the pilot goes quietly invulnerable, with NaN absorbing so altitude never recovers.
+  // Before this story both read finite constants, so a NaN could not reach them. Reset, don't
+  // charge a shield: this is the shell miscounting, not the pilot scraping. NaN only — ±Infinity
+  // is already handled correctly below (ceiling clamp / crash bump) and must keep that behaviour.
+  if (Number.isNaN(altitude)) altitude = SKIM_ALTITUDE
   if (altitude < 0) altitude = 0
   // The ROM's flight-band ceiling (sw7-5): GD$MXT caps the climb below the
   // tower tops, so towers can't be hopped and the maze can fight back.
@@ -1364,45 +1373,49 @@ export function surfaceShip(altitude: number): Vec3 {
 
 /**
  * THE SHIP — the one point the pilot's eye, his gun, and everything aimed at him all share, in
- * whichever phase he is flying (stories sw5-6 + sw7-16). Each phase seats the pilot somewhere
- * different, and the collision world does NOT follow him:
+ * whichever phase he is flying (stories sw5-6 + sw7-16). Each phase seats him somewhere different,
+ * and the collision world does NOT follow him:
  *
  *   space    the fixed cockpit at the origin — the only phase where eye and origin coincide
  *   surface  [0, altitude, 0] — he flies 40..238 above the floor (MIN/MAX_SKIM_ALTITUDE)
  *   trench   `trenchView` — he flies 512..3840 above it (TRENCH_EYE_MIN/MAX), and steers
  *
- * sw5-6 learned the lesson in the trench: with the gun left at the origin, the crosshair ray and
- * the bolt ray run parallel, separated by the pilot's height, so the player misses what he aims at
- * and hits what he does not. It fixed the trench and left a comment claiming the other phases
- * "already share the origin" — false for the surface from the moment the camera lifted (stories
- * 11-2/11-5), and the live report ("I shoot way lower than the crosshairs indicate") was the bill.
- * sw7-16 pays it. What you aim at is what you hit, in EVERY phase.
+ * Exhaustive over Phase — no `default`, no trailing return — so a fourth phase is a COMPILE error
+ * (TS2366) instead of a silent origin. That silent default IS the bug this story pays off; the
+ * type is what stops it recurring. Same guard `phaseCleared` relies on.
  *
- * NOTE this is the ship at the START of the step — which is the POINT, not a compromise. The shell
- * steps and THEN renders (`main.ts` :146, :287), so the yoke arriving in this step was set by a
- * pilot looking at the frame drawn from THIS state: this is the eye he sighted down, and his bolt
- * leaves from it. `stepSurface` builds its OWN `surfaceShip(altitude)` from the flown height
- * because its jobs resolve at the END of the frame — the maze aims where the ship now is, the
- * hit-test asks where it now is. Both are right; they answer different questions.
- *
- * Off a level yoke the two differ by one frame of climb (ALTITUDE_RATE * dt = 3.33) — and by 88 on
- * a terrain-crash frame, where the bump TELEPORTS the ship 40 -> 128 rather than flying it, so do
- * not derive that bound from ALTITUDE_RATE alone. Neither gap is an aiming error: the bolt leaves
- * the eye that aimed it. Pinned by `surface-aim-wysiwyg.test.ts` (b), which fires with aimY != 0.
+ * NOTE this is the ship at the START of the step — the POINT, not a compromise. The shell steps
+ * and THEN renders (`main.ts` :146, :287), so the yoke arriving here was set by a pilot looking at
+ * the frame drawn from THIS state: this is the eye he sighted down, and his bolt leaves from it.
+ * `stepSurface` builds its OWN `surfaceShip(altitude)` from the flown height because its jobs
+ * resolve at the END of the frame. Both are right; they answer different questions. The two differ
+ * by one frame of climb (ALTITUDE_RATE * dt = 3.33), and by up to 88 on a terrain-crash frame,
+ * where the bump TELEPORTS the ship 40 -> 128 rather than flying it — so do not derive that bound
+ * from ALTITUDE_RATE alone. Pinned by `surface-aim-wysiwyg.test.ts` (b), which fires with aimY != 0.
  */
 function shipPoint(s: GameState): Vec3 {
-  if (s.phase === 'trench') return [...s.trenchView] as Vec3
-  if (s.phase === 'surface') return surfaceShip(s.altitude)
-  return [...COCKPIT] as Vec3
+  switch (s.phase) {
+    case 'trench':
+      return [...s.trenchView] as Vec3
+    case 'surface':
+      return surfaceShip(s.altitude)
+    case 'space':
+      return [...COCKPIT] as Vec3
+  }
 }
 
 /** Unit vector from a world position back toward the cockpit at the origin.
  *
- * ⚠ SPACE ONLY — this is the TIE flight model's homing target (`spawnTie`, `moveEnemy`), where the
- * ship really is the origin. It is NOT the surface's ship: `stepSurface` aims its fire with
- * `surfaceShip(altitude)` instead. Retargeting this helper would break space the way the surface
- * was broken before sw7-16 — guarded by `tests/core/tie-peel-away.test.ts` (story 9-3), the suite
- * that actually drives these paths. */
+ * ⚠ SPACE ONLY — this is the TIE flight model's homing target, where the ship really is the
+ * origin. It is NOT the surface's ship: `stepSurface` aims its fire with `surfaceShip(altitude)`
+ * instead. Retargeting this helper would break space the way the surface was broken before sw7-16
+ * — caught via `moveEnemy` by `tests/core/tie-peel-away.test.ts` (story 9-3).
+ *
+ * That guard covers `moveEnemy` ONLY. The other caller, `spawnTie`, is unguarded by any test in
+ * the repo — deliberately noted rather than papered over: its `dir` is vestigial, because
+ * `moveEnemy` re-derives the heading from `toCockpit(e.pos)` every frame and reads only the
+ * MAGNITUDE of `vel`, so a wrong spawn direction is overwritten on the first move and is
+ * observable for one frame. Do not add a test to chase it; do not trust it to hold a decision. */
 function toCockpit(pos: Vec3): Vec3 {
   return normalize(sub(COCKPIT, pos))
 }

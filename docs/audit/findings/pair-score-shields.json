@@ -81,7 +81,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 588,
+      "line": 597,
       "verbatim": "        score += TURRET_SCORE"
     }
   },
@@ -183,7 +183,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 359,
+      "line": 360,
       "verbatim": "  const lives = Math.max(0, state.lives - damage)"
     }
   },
@@ -271,7 +271,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 344,
+      "line": 345,
       "verbatim": "      damage++"
     },
     "recommendation": "fix",
