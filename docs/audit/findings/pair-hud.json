@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 64,
+      "line": 65,
       "verbatim": "const GLOW = '#00e5ff' // cockpit cyan"
     }
   },
@@ -61,7 +61,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 904,
+      "line": 907,
       "verbatim": "    glowText(ctx, 'EXHAUST PORT AHEAD', w / 2, h * 0.22, BANNER_TEXT_PX, 'center', '#dddddd', 14)"
     }
   },
@@ -78,7 +78,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 922,
+      "line": 925,
       "verbatim": "    glowText(ctx, 'DEATH STAR DESTROYED', w / 2, h * 0.45, BANNER_TEXT_PX, 'center', '#ffffff', 18)"
     }
   },
@@ -95,7 +95,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 930,
+      "line": 933,
       "verbatim": "    glowText(ctx, 'EXHAUST PORT MISSED', w / 2, h * 0.45, BANNER_TEXT_PX, 'center', '#ff5555', 16)"
     }
   },
@@ -112,7 +112,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 1050,
+      "line": 1053,
       "verbatim": "  glowText(ctx, 'GAME OVER', w / 2, h * 0.24, BANNER_TEXT_PX, 'center', TIE_GLOW, 24)"
     }
   },
@@ -129,7 +129,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 1032,
+      "line": 1035,
       "verbatim": "  glowText(ctx, 'STAR WARS', w / 2, h * 0.26, TITLE_TEXT_PX, 'center', GLOW, 28)"
     }
   },
@@ -146,7 +146,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 913,
+      "line": 916,
       "verbatim": "    glowText(ctx, `${FORCE_BONUS.toLocaleString('en-US')} FOR USING THE FORCE`, w / 2, h * 0.16, BANNER_TEXT_PX, 'center', '#dddddd', 12)"
     }
   },
@@ -206,7 +206,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 1060,
+      "line": 1063,
       "verbatim": "    glowText(ctx, 'ENTER YOUR INITIALS', w / 2, h * 0.42, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)"
     },
     "recommendation": "accept",
@@ -283,7 +283,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 434,
+      "line": 439,
       "verbatim": "const MAX_INITIALS = 3"
     }
   },
@@ -398,7 +398,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 961,
+      "line": 964,
       "verbatim": "function drawShieldMeter(ctx: CanvasRenderingContext2D, state: GameState, w: number): void {"
     },
     "recommendation": "accept"
@@ -416,7 +416,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 827,
+      "line": 830,
       "verbatim": "const HUD_SHIELD_COLOR = '#22e600' // PROVISIONAL(findings ## HUD & framing, ## Colors & intensities) — register pinned (healthy tier only), hex matched to a cabinet screenshot"
     },
     "recommendation": "accept",

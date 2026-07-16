@@ -333,9 +333,14 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
 
   // --- Cockpit damage: any TIE that reaches it, any fireball that lands -----
   // In space, every cockpit hit is an enemy kill of the player (cause 'enemy').
+  //
+  // Centred on `shipPoint`, not on a bare COCKPIT literal (sw7-16). Space IS the origin, so this
+  // is behaviour-identical — the point is that every phase asks ONE function where the pilot is,
+  // and a guard that space keeps its own seat can only bite if it routes through that function.
+  const ship = shipPoint(state)
   let damage = 0
   const liveEnemies = standingEnemies.filter((e) => {
-    if (collides(e.pos, COCKPIT, COCKPIT_HIT_RADIUS)) {
+    if (collides(e.pos, ship, COCKPIT_HIT_RADIUS)) {
       damage++
       events.push({ type: 'player-death', cause: 'enemy' })
       return false
@@ -343,7 +348,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     return true
   })
   const liveShots = standingShots.filter((s) => {
-    if (collides(s.pos, COCKPIT, COCKPIT_HIT_RADIUS)) {
+    if (collides(s.pos, ship, COCKPIT_HIT_RADIUS)) {
       damage++
       events.push({ type: 'player-death', cause: 'enemy' })
       return false
@@ -1346,11 +1351,14 @@ function spawnTie(rng: Rng, speed: number, spawnIndex: number, spaceWave: number
 
 /**
  * THE SURFACE SHIP (story sw7-16 / R11a): the pilot skims the Death Star at `altitude`, dead
- * centre laterally. This IS the eye — `render.ts cameraView` builds the surface view matrix from
- * the same point — so it is also the muzzle, the point incoming fire aims at, and the centre of
- * the cockpit hit-test. One point, three jobs; that is the whole fix.
+ * centre laterally. This IS the eye — `render.ts cameraView` builds the surface view matrix by
+ * CALLING this — so it is also the muzzle, the point incoming fire aims at, and the centre of the
+ * cockpit hit-test. One point, four jobs; that is the whole fix.
+ *
+ * Exported because the shell's camera calls it: the gun and the eye cannot drift apart if they are
+ * the same call. Shell -> core is the allowed direction; core never imports shell.
  */
-function surfaceShip(altitude: number): Vec3 {
+export function surfaceShip(altitude: number): Vec3 {
   return [0, altitude, 0]
 }
 
@@ -1370,11 +1378,17 @@ function surfaceShip(altitude: number): Vec3 {
  * 11-2/11-5), and the live report ("I shoot way lower than the crosshairs indicate") was the bill.
  * sw7-16 pays it. What you aim at is what you hit, in EVERY phase.
  *
- * NOTE this is the ship at the START of the step. The surface's `stepSurface` re-flies the ship
- * before it aims the maze's fire at him, so it builds its own `surfaceShip(altitude)` from the
- * fresh height rather than calling this — the trench muzzle reads a step-old `trenchView` the same
- * way. The gap is one frame of climb (<= ALTITUDE_RATE * dt), three orders under the 40..238 error
- * this exists to kill.
+ * NOTE this is the ship at the START of the step — which is the POINT, not a compromise. The shell
+ * steps and THEN renders (`main.ts` :146, :287), so the yoke arriving in this step was set by a
+ * pilot looking at the frame drawn from THIS state: this is the eye he sighted down, and his bolt
+ * leaves from it. `stepSurface` builds its OWN `surfaceShip(altitude)` from the flown height
+ * because its jobs resolve at the END of the frame — the maze aims where the ship now is, the
+ * hit-test asks where it now is. Both are right; they answer different questions.
+ *
+ * Off a level yoke the two differ by one frame of climb (ALTITUDE_RATE * dt = 3.33) — and by 88 on
+ * a terrain-crash frame, where the bump TELEPORTS the ship 40 -> 128 rather than flying it, so do
+ * not derive that bound from ALTITUDE_RATE alone. Neither gap is an aiming error: the bolt leaves
+ * the eye that aimed it. Pinned by `surface-aim-wysiwyg.test.ts` (b), which fires with aimY != 0.
  */
 function shipPoint(s: GameState): Vec3 {
   if (s.phase === 'trench') return [...s.trenchView] as Vec3
@@ -1387,7 +1401,8 @@ function shipPoint(s: GameState): Vec3 {
  * ⚠ SPACE ONLY — this is the TIE flight model's homing target (`spawnTie`, `moveEnemy`), where the
  * ship really is the origin. It is NOT the surface's ship: `stepSurface` aims its fire with
  * `surfaceShip(altitude)` instead. Retargeting this helper would break space the way the surface
- * was broken before sw7-16 (guarded by `tests/core/surface-aim-wysiwyg.test.ts`, section (d)). */
+ * was broken before sw7-16 — guarded by `tests/core/tie-peel-away.test.ts` (story 9-3), the suite
+ * that actually drives these paths. */
 function toCockpit(pos: Vec3): Vec3 {
   return normalize(sub(COCKPIT, pos))
 }
