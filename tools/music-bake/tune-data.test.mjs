@@ -119,18 +119,27 @@ describe('sw7-8 — the TUNES catalogue exists and is exactly the five', () => {
 //          ;.CALL 5   (SF2V5: .LOOP 30 [ .NOTE E5XT ; .CKEY -1 ; .CRATE 1 ] .ENDL)
 //          ;.ENDT
 //
+// ⚠ THE LOOP COUNT IS HEX — `.LOOP 30` is FORTY-EIGHT passes. The macro comment
+// reads like decimal, but the assembled byte is `.BYTE 8E, 30` under ambient
+// .RADIX 16 (= 0x30), and the author DOTS decimal loop counts when he means
+// them: SWMUS.MAC:828 is `;.LOOP 16.` — dotted — in the same file. The RED
+// oracle originally pinned 30 (the comment's decimal misreading); corrected to
+// the ROM byte per the epic's match-bytes rule (deviation logged, sw7-8).
+//
 // E5 = 5*12 + 4 + 1 = 0x41. The loop body plays ONE note then drops the key a
-// semitone and bumps the rate, so the DECODED stream is 30 notes descending
-// chromatically from E5 — the death knell is a falling, accelerating scale.
-// The other voices are the same scale seeded a cluster apart:
-// .CKEY 0 / -1 / -3 / -6 (SWMUS.MAC SF2V1-4).
+// semitone and bumps the rate, so the DECODED stream is 48 notes descending
+// chromatically from E5 (floor 0x41-47 = 0x12, still on NOTTAB) — the death
+// knell is a falling, accelerating scale. The other voices are the same scale
+// seeded a cluster apart: .CKEY 0 / -1 / -3 / -6 (SWMUS.MAC SF2V1-4).
 describe('sw7-8 — ORACLE: the death knell (SF2) — .CALL subroutines flatten to the falling scale', () => {
   const E5 = 0x41
+  const PASSES = 0x30 // `.LOOP 30` in .RADIX 16 — 48, NOT the comment's decimal 30
 
-  it('voice 1 decodes to 30 notes, chromatically descending from E5, all one duration', () => {
+  it('voice 1 decodes to 48 notes, chromatically descending from E5, all one duration', () => {
     const v1 = decodeVoice(segOf('deathKnell').voices[0])
     const notes = v1.notes.map((n) => n.note)
-    expect(notes).toHaveLength(30)
+    expect(notes).toHaveLength(PASSES)
+    expect(notes).not.toHaveLength(30) // the decimal misreading of the loop count
     expect(notes[0]).toBe(E5)
     for (let i = 1; i < notes.length; i++) {
       expect(notes[i], `pass ${i + 1}`).toBe(E5 - i) // .CKEY -1 compounds per pass

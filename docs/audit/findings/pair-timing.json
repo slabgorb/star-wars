@@ -76,7 +76,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 862,
+      "line": 887,
       "verbatim": "const NEXT_PHASE: Record<Phase, Phase | null> = {"
     }
   },

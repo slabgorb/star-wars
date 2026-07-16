@@ -181,10 +181,10 @@ const loop = createLoop(
           audio.play('terrainCrash')
           break
         case 'fireball-destroyed':
-          // Shooting down a fireball reuses the explosion cue (story 8-18): an
-          // existing sample, immediate feedback, no new asset. The dedicated
-          // event lets a bespoke sound swap in later without touching the core.
-          audio.play('enemyDeath')
+          // Shooting a fireball out of the air gets its bespoke cue (sw7-8,
+          // U-022): AUDSS "PLAYER SHOT DOWN AN ALIEN SHOT" (SNDAUD.MAC:1028),
+          // baked as fireball_hit.wav — the swap story 8-18's comment promised.
+          audio.play('fireballHit')
           break
         case 'trench-obstacle-destroyed':
           // A trench turret/square shot down — same reuse-the-explosion-cue
@@ -206,11 +206,11 @@ const loop = createLoop(
           audio.play('levelClear')
           break
         case 'death-star-destroyed':
-          // The winning shot — the Death Star blows (sw2-4). Reuse the explosion
-          // sample (same no-new-asset pattern as fireball/obstacle destroyed); a
-          // bespoke Death-Star boom can swap in later without touching the core.
-          // Rides alongside this frame's level-clear fanfare: boom + fanfare.
-          audio.play('enemyDeath')
+          // The winning shot — the Death Star blows (sw2-4) with its bespoke
+          // boom (sw7-8, U-021): AUDDF "DEATH STAR FINAL EXPLOSION"
+          // (SNDAUD.MAC:1004), all eight sound-board channels, baked as
+          // death_star_boom.wav. Rides under this frame's finale tune.
+          audio.play('deathStarBoom')
           break
         case 'exhaust-port-missed':
           // The port slipped past un-destroyed (sw2-4). Reuse the player-explosion
@@ -231,6 +231,13 @@ const loop = createLoop(
           // means the previous loop stops and this one rings. The core owns WHEN
           // (phase edges only), the shell owns HOW (the @arcade/shared loop).
           audio.startLoop(event.track)
+          break
+        case 'tune':
+          // A one-shot tune the core cued this frame (sw7-8): the death knell,
+          // the finale, or the descent. One generic arm plays every current AND
+          // future tune on the single shared 'tune' channel — a new tune steals
+          // the last, like the cabinet's one PM tune player.
+          audio.playTune(event.tune)
           break
         case 'name-entered':
           // The player confirmed their initials on the entry screen (SH2-13) —
@@ -260,8 +267,17 @@ const loop = createLoop(
     // here because this shell owns the table; the core owns the machine from
     // there and announces the commit as the 'name-entered' event above.
     if (prev.mode === 'playing' && state.mode === 'gameover') {
+      // The ROM's high-score fork (sw7-8, U-011/U-013 — WSMAIN.MAC:2153-2166
+      // PHEEGM): a new high score opens the enter-initials screen, whose init
+      // plays the cantina (PHIENT, :1164); no luck plays Ben's theme
+      // (:2161 "BEN'S THEME WHEN LOSE GAME WITH NO HIGH SCORE"). Exclusive by
+      // construction. Cued here, not in the core, because qualification needs
+      // the table and this shell owns it (SH2-13).
       if (qualifiesForHighScore(highScores, state.score)) {
         state = beginNameEntry(state)
+        audio.playTune('cantina')
+      } else {
+        audio.playTune('bensTheme')
       }
     }
   },

@@ -74,26 +74,39 @@ describe('sw6-1 AC-7 — the bake is headless and reproducible', () => {
     expect(existsSync(here('./bake-music.mjs'))).toBe(true)
   })
 
-  it('emits filenames that AGREE with the shell MUSIC manifest', () => {
+  it('emits filenames that AGREE with the shell MUSIC + TUNES manifests', () => {
     // AC-7: "manifest and filenames must agree in the same PR". The manifest is
     // the thing production actually fetches; a bake that writes space.wav while
     // the game asks for space_theme.wav is a 404 and therefore silence — which
-    // is precisely the bug this epic exists to end.
+    // is precisely the bug this epic exists to end. sw7-8 widened the bake with
+    // the five one-shot TUNES, so OUTPUT_FILES now mirrors BOTH manifests.
     const audio = readFileSync(join(repoRoot, 'src', 'shell', 'audio.ts'), 'utf8')
-    const block = audio.slice(audio.indexOf('export const MUSIC ='))
-    const manifest = {}
-    for (const [, key, file] of block.matchAll(/(\w+):\s*'([\w.]+\.wav)'/g)) {
-      manifest[key] = file
-      if (Object.keys(manifest).length === 4) break
+    const scrape = (marker, count) => {
+      const block = audio.slice(audio.indexOf(marker))
+      const entries = {}
+      for (const [, key, file] of block.matchAll(/(\w+):\s*'([\w.]+\.wav)'/g)) {
+        entries[key] = file
+        if (Object.keys(entries).length === count) break
+      }
+      return entries
     }
+    const music = scrape('export const MUSIC =', 4)
+    const tunes = scrape('export const TUNES =', 5)
 
-    expect(manifest).toEqual({
+    expect(music).toEqual({
       space: 'space_theme.wav',
       towers: 'towers_theme.wav',
       trench: 'trench_theme.wav',
       imperialMarch: 'imperial_march.wav',
     })
-    expect(OUTPUT_FILES).toEqual(manifest)
+    expect(tunes).toEqual({
+      deathKnell: 'death_knell.wav',
+      cantina: 'cantina.wav',
+      finale: 'finale.wav',
+      bensTheme: 'bens_theme.wav',
+      descent: 'descent.wav',
+    })
+    expect(OUTPUT_FILES).toEqual({ ...music, ...tunes })
   })
 
   it.each(TRACKS)('bakes %s to real audio, not silence', (track) => {

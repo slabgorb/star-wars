@@ -63,7 +63,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 922,
+      "line": 947,
       "verbatim": "  surface: 'towers',"
     }
   },
@@ -144,7 +144,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 967,
+      "line": 1013,
       "verbatim": "  { timer: 16, parity: 'even', line: 'lukeTrustMe' }, // BS.WAV even / human odd — SPKTRU (Sound_18)"
     },
     "verdict": "CONFIRMED",
@@ -163,7 +163,7 @@
     },
     "ours": {
       "file": "src/shell/audio.ts",
-      "line": 79,
+      "line": 85,
       "verbatim": "export const MUSIC_CHANNELS: Record<MusicName, string> = {"
     },
     "recommendation": "accept"
@@ -181,7 +181,8 @@
     },
     "ours": null,
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "remediated_by": "sw7-8"
   },
   {
     "id": "U-011",
@@ -196,7 +197,8 @@
     },
     "ours": null,
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "remediated_by": "sw7-8"
   },
   {
     "id": "U-012",
@@ -211,7 +213,8 @@
     },
     "ours": null,
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "remediated_by": "sw7-8"
   },
   {
     "id": "U-013",
@@ -226,7 +229,8 @@
     },
     "ours": null,
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "remediated_by": "sw7-8"
   },
   {
     "id": "U-014",
@@ -241,7 +245,8 @@
     },
     "ours": null,
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "remediated_by": "sw7-8"
   },
   {
     "id": "U-015",
@@ -256,7 +261,8 @@
     },
     "ours": null,
     "recommendation": "fix",
-    "size": "s"
+    "size": "s",
+    "remediated_by": "sw7-8"
   },
   {
     "id": "U-016",
@@ -271,7 +277,8 @@
     },
     "ours": null,
     "recommendation": "fix",
-    "size": "s"
+    "size": "s",
+    "remediated_by": "sw7-8"
   },
   {
     "id": "U-017",
@@ -286,7 +293,8 @@
     },
     "ours": null,
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "remediated_by": "sw7-8"
   },
   {
     "id": "U-018",
@@ -345,7 +353,8 @@
     },
     "ours": null,
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "remediated_by": "sw7-8"
   },
   {
     "id": "U-022",
@@ -360,7 +369,8 @@
     },
     "ours": null,
     "recommendation": "fix",
-    "size": "m"
+    "size": "m",
+    "remediated_by": "sw7-8"
   },
   {
     "id": "U-023",
@@ -375,8 +385,8 @@
     },
     "ours": {
       "file": "src/shell/audio.ts",
-      "line": 47,
-      "verbatim": "const CHANNELS: Record<SoundName, string> = {"
+      "line": 51,
+      "verbatim": "export const CHANNELS: Record<SoundName, string> = {"
     },
     "recommendation": "accept"
   },
@@ -393,7 +403,7 @@
     },
     "ours": {
       "file": "src/shell/audio.ts",
-      "line": 94,
+      "line": 131,
       "verbatim": "export const SPEECH = {"
     }
   },

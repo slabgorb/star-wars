@@ -136,7 +136,7 @@ function expandAlsoun({ audf, audc }) {
 export const SW_BEAT = 0.008192; // FX driver tick — the 8 ms boundary, not the 4 ms IRQ
 
 // Walk one register list → { steps: [[value, time], …], dur }.
-function expandRecords(records) {
+function expandRecords(records, capS = MAX_SFX_S) {
   const steps = [];
   let t = 0;
   for (const [count, duration, value, delta] of records) {
@@ -147,7 +147,7 @@ function expandRecords(records) {
     const stepDur = Math.max(1, duration) * SW_BEAT;
     let v = value;
     for (let i = 0; i < count; i++) {
-      if (t > MAX_SFX_S) return { steps, dur: t };
+      if (t > capS) return { steps, dur: t };
       steps.push([v & 0xff, Number(t.toFixed(5))]);
       v = (v + delta) & 0xff;
       t += stepDur;
@@ -161,15 +161,22 @@ function expandRecords(records) {
 // mirroring the cabinet's 2-POKEY, 8-channel FX board. The volume list's
 // terminator bounds each channel's audible length; freq writes past it are
 // dropped (the channel is already silent).
-function expandSwfx({ channels }) {
+//
+// `maxSeconds` (sw7-8): MAX_SFX_S exists to bound SUSTAINED/LOOPING envelopes
+// into a one-shot WAV. AUDDF (death_star_boom) is a FINITE 2.36 s chain — 288
+// driver ticks of authentic decay — that the 1.6 s cap would silently truncate,
+// which is exactly the kind of quiet data-loss this epic exists to end. A spec
+// whose real chain outruns the default declares its own ceiling instead.
+function expandSwfx({ channels, maxSeconds }) {
+  const capS = maxSeconds ?? MAX_SFX_S;
   const feeds = { 1: [], 2: [] }; // chip → [[reg, value, time], …]
   let maxDur = 0;
   channels.forEach((ch, i) => {
     const chip = i < 4 ? 1 : 2;
     const fReg = (i % 4) * 2;     // AUDFn
     const vReg = fReg + 1;        // AUDCn
-    const vol = expandRecords(ch.vol);
-    const freq = expandRecords(ch.freq);
+    const vol = expandRecords(ch.vol, capS);
+    const freq = expandRecords(ch.freq, capS);
     const chanEnd = vol.dur;
     if (chanEnd > maxDur) maxDur = chanEnd;
     for (const [val, t] of freq.steps) {
@@ -183,7 +190,7 @@ function expandSwfx({ channels }) {
   return {
     pokey1: build(feeds[1]),
     pokey2: build(feeds[2]),
-    durationMs: Math.max(20, Math.round((Math.min(MAX_SFX_S, maxDur) + 0.02) * 1000)),
+    durationMs: Math.max(20, Math.round((Math.min(capS, maxDur) + 0.02) * 1000)),
   };
 }
 

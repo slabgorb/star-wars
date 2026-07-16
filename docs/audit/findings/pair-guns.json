@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1135,
+      "line": 1187,
       "verbatim": "  const decay = Math.pow(7 / 8, dt * TICK_HZ)"
     },
     "verdict": "CONFIRMED",
@@ -90,7 +90,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 761,
+      "line": 765,
       "verbatim": "    sweptCollides(port, sub(b.pos, scale(b.vel ?? ZERO, dt)), b.pos, PORT_HIT_RADIUS),"
     },
     "recommendation": "accept"

@@ -70,7 +70,11 @@ const REACHED = {
 }
 // …and these are the ones it never reaches. AC-2 lets them go unimplemented — but
 // they must THROW, not quietly do nothing.
-const NEVER_REACHED = [OP.CRATE, OP.CHK, OP.RCHK, OP.VC, OP.PKC, OP.SYN, OP.CALL, OP.GOSUB, OP.RETURN]
+// sw7-8 shrank this set: the death knell (SF2) reaches CRATE/VC/SYN, so those
+// three are now IMPLEMENTED (see pm-player's handlers + tune-data.test.mjs's
+// knell oracle). CALL/GOSUB/RETURN still throw — gen-music-data flattens them
+// at generation time, so a stream carrying one is a generator bug.
+const NEVER_REACHED = [OP.CHK, OP.RCHK, OP.PKC, OP.CALL, OP.GOSUB, OP.RETURN]
 
 const F5 = 0x42 // 5*12 + 5 + 1
 const G5 = 0x44

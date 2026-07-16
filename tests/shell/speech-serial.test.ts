@@ -23,8 +23,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createAudioEngine, SPEECH } from '../../src/shell/audio'
 
-const SPEECH_R2 = 'https://arcade-assets.slabgorb.com/star-wars/speech/'
-
 /** A started buffer-source the fake context handed out: which decoded buffer it
  *  carries, and the onended hook the queue must use to chain. */
 interface FakeSource {

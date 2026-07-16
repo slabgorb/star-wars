@@ -33,7 +33,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   createAudioEngine,
-  MUSIC,
   MUSIC_CHANNELS,
   TUNES,
   TUNE_CHANNELS,
