@@ -64,7 +64,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 359,
+      "line": 369,
       "verbatim": "export const TURRET_SCORE = 200"
     }
   },
@@ -132,7 +132,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 440,
+      "line": 450,
       "verbatim": "export const TRENCH_BONUS = 25000"
     }
   },
@@ -149,7 +149,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 564,
+      "line": 574,
       "verbatim": "export const SURFACE_CLEAR_BONUS = 50000"
     }
   },
@@ -200,7 +200,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 523,
+      "line": 533,
       "verbatim": "export const FORCE_BONUS = 5000"
     },
     "recommendation": "fix",

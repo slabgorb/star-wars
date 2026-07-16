@@ -4,7 +4,7 @@
     "class": "CONFIRMED",
     "title": "TIE_FIGHTER vertices AND edges are the ROM's `.WP TIE` / `.WL TIE`",
     "claim": "52 vertices at `.S=13.` (`.P -10,-16,18` -> [-130,-208,234] ... `.P -8,2,0` -> [-104,26,0]) and 90 undirected edges. Decoding `.WL TIE`'s AVG pen runs (.BD = blank-move then draw; .LD = continue the beam) yields exactly the port's edge set, including the seven inter-sub-body seam edges the polyline threads (source 1-7, 7-25, 25-37, 37-45, 45-31, 31-19, 19-13 -> model [0,6],[6,24],[24,36],[36,44],[44,30],[30,18],[18,12]).",
-    "reasoning": "The `.P` macro is `.WORD .1'.*.S,...` \u2014 the trailing-dot suffix makes each operand DECIMAL times the object scale `.S=13.`, so vertices port unscaled and byte-for-byte. OBJDRW walks the `.WL` byte list as a flat polyline (point*4+code; code 0 = bright line, code 1 = blank move), matching the port's independent decoder in tests/core/tie-family-rom.test.ts. I re-verified that test's hand-transcription against WSOBJ.MAC:1352-1367 line-for-line and the whole suite is green (86/86). The lower cockpit cap is the ROM's five-edge pentagon (24-28) and the equator carries seven belt struts (the ROM omits 39-47) \u2014 both are the ROM's, not port artifacts.",
+    "reasoning": "The `.P` macro is `.WORD .1'.*.S,...` — the trailing-dot suffix makes each operand DECIMAL times the object scale `.S=13.`, so vertices port unscaled and byte-for-byte. OBJDRW walks the `.WL` byte list as a flat polyline (point*4+code; code 0 = bright line, code 1 = blank move), matching the port's independent decoder in tests/core/tie-family-rom.test.ts. I re-verified that test's hand-transcription against WSOBJ.MAC:1352-1367 line-for-line and the whole suite is green (86/86). The lower cockpit cap is the ROM's five-edge pentagon (24-28) and the equator carries seven belt struts (the ROM omits 39-47) — both are the ROM's, not port artifacts.",
     "source": {
       "file": "WSOBJ.MAC",
       "line": 1351,
@@ -20,7 +20,7 @@
     "id": "M-002",
     "class": "CONFIRMED",
     "title": "The three exploded-TIE fragments (TI1/TI2/TI3) are the ROM's tables and draw lists",
-    "claim": "TIE_WING_FRAG_1/2/3 carry the `.WP TI1` (18 pts), `.WP TI2` (18 pts, the same wing rotated (x,y,z)->(x,z,-y)) and TI3-cabin (28 pts, byte-identical to TIE_FIGHTER's aft slice) point tables at `.S=13.`, and their edges are `.WL TI1`/`.WL2 TI2` (one shared list) and `.WL TI3`. The wings' 6-12 fin<->strut stitch and TI3's 0-12/12-20/6-20 `.LD` beam-continuations \u2014 dropped by the old heuristic \u2014 are all present.",
+    "claim": "TIE_WING_FRAG_1/2/3 carry the `.WP TI1` (18 pts), `.WP TI2` (18 pts, the same wing rotated (x,y,z)->(x,z,-y)) and TI3-cabin (28 pts, byte-identical to TIE_FIGHTER's aft slice) point tables at `.S=13.`, and their edges are `.WL TI1`/`.WL2 TI2` (one shared list) and `.WL TI3`. The wings' 6-12 fin<->strut stitch and TI3's 0-12/12-20/6-20 `.LD` beam-continuations — dropped by the old heuristic — are all present.",
     "reasoning": "TI2 vertices verified against WSOBJ.MAC:240-258 (`.P -10,18,2` -> [-130,234,26] ... `.P -3,0,-10` -> [-39,0,-130]). TI1/TI2 share draw list `.WL TI1`/`.WL2 TI2` (WSOBJ.MAC:1371-1372) so both decode identically; TI3's uncommented `.BD`/`.LD` lines (1389-1422) decode to the cabin edges. tests/core/tie-family-rom.test.ts pins all three set-equal to a hand oracle I re-checked against the source; suite green.",
     "source": {
       "file": "WSOBJ.MAC",
@@ -37,8 +37,8 @@
     "id": "M-003",
     "class": "CONFIRMED",
     "title": "DARTH_TIE vertices AND edges are the ROM's `.WP RTH` / `.WL RTH`",
-    "claim": "56 vertices at `.S=10.` (`.P -18,-18,13` -> [-180,-180,130] ...) and exactly 72 undirected edges \u2014 the six pen-up sub-bodies of `.WL RTH` (two wing octagons, two strut squares, the body belts, and the +x front-window octagon). The ROM's one degenerate self-edge (`.BD 31,23,22,21,21,24,23` -> [20,20]) is correctly NOT copied.",
-    "reasoning": "I re-checked tests/core/darth-tie-rom.test.ts's `.WL RTH` transcription against WSOBJ.MAC:1429-1482 (uncommented lines only) \u2014 faithful \u2014 and its decoder matches OBJDRW's polyline semantics. The suite is green: set-equal to the 72-edge oracle, 0/0 drift, self-edge dropped. This replaced story 8-10's heuristic that invented 44 edges and missed 12.",
+    "claim": "56 vertices at `.S=10.` (`.P -18,-18,13` -> [-180,-180,130] ...) and exactly 72 undirected edges — the six pen-up sub-bodies of `.WL RTH` (two wing octagons, two strut squares, the body belts, and the +x front-window octagon). The ROM's one degenerate self-edge (`.BD 31,23,22,21,21,24,23` -> [20,20]) is correctly NOT copied.",
+    "reasoning": "I re-checked tests/core/darth-tie-rom.test.ts's `.WL RTH` transcription against WSOBJ.MAC:1429-1482 (uncommented lines only) — faithful — and its decoder matches OBJDRW's polyline semantics. The suite is green: set-equal to the 72-edge oracle, 0/0 drift, self-edge dropped. This replaced story 8-10's heuristic that invented 44 edges and missed 12.",
     "source": {
       "file": "WSOBJ.MAC",
       "line": 1427,
@@ -88,7 +88,7 @@
     "id": "M-006",
     "class": "CONFIRMED",
     "title": "SURFACE_BUNKER is `.WGD BNK` (base + near-bottom rings only), stroked VGCRED",
-    "claim": "8 edges from `.WGD BNK`'s BDRAWTO 1,2,14,13,1,3,15,13 / BDRAWTO 14,15 (1-based minus one): [0,1],[1,13],[13,12],[12,0],[0,2],[2,14],[14,12],[13,14]. It touches only the base (r=8) and near-bottom (h=6,r=6) rings \u2014 the 'SHORTY' truncated pyramid \u2014 never the column.",
+    "claim": "8 edges from `.WGD BNK`'s BDRAWTO 1,2,14,13,1,3,15,13 / BDRAWTO 14,15 (1-based minus one): [0,1],[1,13],[13,12],[12,0],[0,2],[2,14],[14,12],[13,14]. It touches only the base (r=8) and near-bottom (h=6,r=6) rings — the 'SHORTY' truncated pyramid — never the column.",
     "reasoning": "Hand-traced `.WGD BNK` (WSOBJ.MAC:1719-1721) reproduces the port's 8 edges. Undamaged bunker colour is VGCRED (WSGRND.MAC:866 top/bunker colour) matching render.ts TURRET_GLOW red. tests/core/ground-objects-rom.test.ts green.",
     "source": {
       "file": "WSOBJ.MAC",
@@ -122,8 +122,8 @@
     "id": "M-008",
     "class": "CONFIRMED",
     "title": "The enemy-fireball sparkle is the ROM's GNB0-3 / GNT0-3 gunshot pictures, exact",
-    "claim": "render.ts FIREBALL_FRAMES are byte-for-byte the four `PSLABL GNB0..GNB3` spike deltas (each `AON 0,0` return-to-centre then `AON dx,dy` spike). GNB0 = (2,16),(15,8),(16,-6),(6,-10),(-6,-16),(-12,-8),(-16,2),(-6,8) \u2014 identical to the port. FIREBALL_FUSE_FRAMES are the four `GNT0..GNT3` fuse-ball spokes, also exact.",
-    "reasoning": "The `AON` macro (WSVROM.MAC:117, `VCTR '.1'.*M./D.-CX,...`, comment 'ABSOLUTE DECIMAL COORDS') applies a decimal-suffix, so the operands are DECIMAL \u2014 the port reading '16' as sixteen is correct (a hex reading would non-uniformly rescale two-digit deltas and warp the shape). These pictures sit in WSVROM's inherited radix-16 region (before the :724 flip), but the macro's own decimal-ization governs. The ASPECT y-stretch (MASP/DASP=3/2, 'GIVES ROUND GUNSHOTS') is a CRT aspect correction the square-pixel canvas correctly omits; render re-scales to the projected body radius, so absolute magnitude is immaterial. Colour is VGCRED (WSVROM.MAC:487), matching FIREBALL_GLOW red.",
+    "claim": "render.ts FIREBALL_FRAMES are byte-for-byte the four `PSLABL GNB0..GNB3` spike deltas (each `AON 0,0` return-to-centre then `AON dx,dy` spike). GNB0 = (2,16),(15,8),(16,-6),(6,-10),(-6,-16),(-12,-8),(-16,2),(-6,8) — identical to the port. FIREBALL_FUSE_FRAMES are the four `GNT0..GNT3` fuse-ball spokes, also exact.",
+    "reasoning": "The `AON` macro (WSVROM.MAC:117, `VCTR '.1'.*M./D.-CX,...`, comment 'ABSOLUTE DECIMAL COORDS') applies a decimal-suffix, so the operands are DECIMAL — the port reading '16' as sixteen is correct (a hex reading would non-uniformly rescale two-digit deltas and warp the shape). These pictures sit in WSVROM's inherited radix-16 region (before the :724 flip), but the macro's own decimal-ization governs. The ASPECT y-stretch (MASP/DASP=3/2, 'GIVES ROUND GUNSHOTS') is a CRT aspect correction the square-pixel canvas correctly omits; render re-scales to the projected body radius, so absolute magnitude is immaterial. Colour is VGCRED (WSVROM.MAC:487), matching FIREBALL_GLOW red.",
     "source": {
       "file": "WSVROM.MAC",
       "line": 481,
@@ -131,15 +131,15 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 604,
+      "line": 644,
       "verbatim": "const FIREBALL_FRAMES: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = ["
     }
   },
   {
     "id": "M-009",
     "class": "CONFIRMED",
-    "title": "The X-Wing and Y-Wing objects are correctly absent \u2014 they never assembled",
-    "claim": "WSOBJ.MAC defines `.WP XW` / `.WP YW` point tables and `.WL XW` / `.WL YW` draw lists, but every one is wrapped in `.IF NE,0 ... .ENDC` (WSOBJ.MAC:366, 448, 1488, 1533) \u2014 a permanently-false guard, so no X-Wing or Y-Wing bytes exist in the ROM. The port's MODELS registry lists neither.",
+    "title": "The X-Wing and Y-Wing objects are correctly absent — they never assembled",
+    "claim": "WSOBJ.MAC defines `.WP XW` / `.WP YW` point tables and `.WL XW` / `.WL YW` draw lists, but every one is wrapped in `.IF NE,0 ... .ENDC` (WSOBJ.MAC:366, 448, 1488, 1533) — a permanently-false guard, so no X-Wing or Y-Wing bytes exist in the ROM. The port's MODELS registry lists neither.",
     "reasoning": "A faithful clone must NOT ship rebel ships the cabinet never drew. `.IF NE,0` assembles its body only if 0!=0, which is never; both the vertex tables and the draw routines are inside such guards. models.ts's registry contains only the assembled objects. Trap avoided.",
     "source": {
       "file": "WSOBJ.MAC",
@@ -155,9 +155,9 @@
   {
     "id": "M-010",
     "class": "DIVERGENCE",
-    "title": "DEATH_STAR is a procedural sphere; the ROM draws an authentic 2D vector picture \u2014 and our comment claims none exists",
-    "claim": "WSVROM has a full authentic Death Star: '.SBTTL DEATH STAR PICS ( DETAILED AND MINIATURE )' \u2014 BSHEM/BSCIR green hemisphere+circle (radius 50, `.S`=32 detailed / 1 miniature, VGCGRN), BSTRN the white equatorial-trench chord (VGCWHT, `AOFF 49,10 / AON -49,-9`), BSDSH+BSNSD the red superlaser dish (VGCRED, an offset ~17-radius circle), and BSFRM green 'farmland' surface hatching. Ours is a procedurally-generated 3D UV sphere (R=520, 8 stacks x 12 slices) whose doc comment asserts 'no authentic vertex table exists for it'.",
-    "reasoning": "That provenance claim is refuted by the primary source: the pictures are VG-RAM-callable (`VJ BHEM`, `VJ BMIN`) and drawn in-game as flat billboards SCALED by the `M.` factor as the player closes, not as a rotating 3D body. The authentic look is a green disc + white trench line + red dish + green farmland \u2014 architecturally different from a lat/long sphere. This is the target of the entire game rendered on a wrong draw path. Fix is a draw-architecture change (a scaling 2D picture) plus porting the BSHEM/BSCIR/BSTRN/BSDSH/BSNSD/BSFRM point runs \u2014 hence size l. (BOOK_WAS_WRONG facet: the disassembly's silence, echoed in our comment, is contradicted by WSVROM.)",
+    "title": "DEATH_STAR is a procedural sphere; the ROM draws an authentic 2D vector picture — and our comment claims none exists",
+    "claim": "WSVROM has a full authentic Death Star: '.SBTTL DEATH STAR PICS ( DETAILED AND MINIATURE )' — BSHEM/BSCIR green hemisphere+circle (radius 50, `.S`=32 detailed / 1 miniature, VGCGRN), BSTRN the white equatorial-trench chord (VGCWHT, `AOFF 49,10 / AON -49,-9`), BSDSH+BSNSD the red superlaser dish (VGCRED, an offset ~17-radius circle), and BSFRM green 'farmland' surface hatching. Ours is a procedurally-generated 3D UV sphere (R=520, 8 stacks x 12 slices) whose doc comment asserts 'no authentic vertex table exists for it'.",
+    "reasoning": "That provenance claim is refuted by the primary source: the pictures are VG-RAM-callable (`VJ BHEM`, `VJ BMIN`) and drawn in-game as flat billboards SCALED by the `M.` factor as the player closes, not as a rotating 3D body. The authentic look is a green disc + white trench line + red dish + green farmland — architecturally different from a lat/long sphere. This is the target of the entire game rendered on a wrong draw path. Fix is a draw-architecture change (a scaling 2D picture) plus porting the BSHEM/BSCIR/BSTRN/BSDSH/BSNSD/BSFRM point runs — hence size l. (BOOK_WAS_WRONG facet: the disassembly's silence, echoed in our comment, is contradicted by WSVROM.)",
     "source": {
       "file": "WSVROM.MAC",
       "line": 2449,
@@ -178,7 +178,7 @@
     "class": "DIVERGENCE",
     "title": "TRENCH_TURRET is hand-authored; the authentic wall-gun table `.WP WGA` / `.WGD WGA` exists",
     "claim": "TRENCH_TURRET is a provisional 10-vertex box+barrel ([-30,0,-30]..[0,72,0]) whose comment says 'No authentic vertex table is directly portable'. WSOBJ.MAC ships `.WP WGA` (WALL GUN TYPE A, `.S=8`, 14 pts: a 4-corner wall base at +/-256/+/-192, a 6-pt gun body, a 4-pt nozzle) plus `.WGD WGA`/`.WGD2 WGB` drawn VGCRED. WGB shares the table (`.WPZ2 WGB`).",
-    "reasoning": "The 'no portable table' claim is false \u2014 the disassembly lacked it but the primary MACRO-11 source has the full point table and draw routine. Our provisional geometry and scale bear no relation to WGA's. This is a data re-port (transcribe the 14 `.P` rows and decode `.WGD WGA`'s DRAWTO/BDRAWTO runs), so size m.",
+    "reasoning": "The 'no portable table' claim is false — the disassembly lacked it but the primary MACRO-11 source has the full point table and draw routine. Our provisional geometry and scale bear no relation to WGA's. This is a data re-port (transcribe the 14 `.P` rows and decode `.WGD WGA`'s DRAWTO/BDRAWTO runs), so size m.",
     "source": {
       "file": "WSOBJ.MAC",
       "line": 576,
@@ -217,8 +217,8 @@
     "id": "M-013",
     "class": "DIVERGENCE",
     "title": "TRENCH is the ROM WALL PANEL `.WP WPN` plus 4 fabricated rails; TRENCH_SQUARE is a wrong stand-in for the same object",
-    "claim": "TRENCH's 8 vertices are byte-identical to `.WP WPN` (WALL PANEL, `.S=8`: outer rect +/-256/+/-192, inner rect +/-128/+/-64), but `.WGD WPN` strokes ONLY the two rectangles (DRAWTO 1,2,3,0 / BDRAWTO 4,5,6,7,4) in VGCGRN \u2014 the port ADDS four 'catwalk rail' edges [0,4],[1,5],[2,6],[3,7] the ROM never draws. Separately, TRENCH_SQUARE (a hand-authored flat 80x80 square) is a second, geometrically-wrong attempt at the same WPN wall panel.",
-    "reasoning": "There is exactly one such object in WSOBJ \u2014 WPN, the green wall panel \u2014 and both TRENCH ('Obj_Trench_Squares') and TRENCH_SQUARE derive from it. TRENCH's vertices are correct (CONFIRMED against `.WP WPN`); its 4 rails are fabrication (story 8-5 embellishment) that diverges from `.WGD WPN`. TRENCH_SQUARE ignores WPN's concentric-rectangle geometry entirely. Dropping the 4 rails to match `.WGD WPN` is size s; reconciling TRENCH_SQUARE onto WPN is part of the same re-port.",
+    "claim": "TRENCH's 8 vertices are byte-identical to `.WP WPN` (WALL PANEL, `.S=8`: outer rect +/-256/+/-192, inner rect +/-128/+/-64), but `.WGD WPN` strokes ONLY the two rectangles (DRAWTO 1,2,3,0 / BDRAWTO 4,5,6,7,4) in VGCGRN — the port ADDS four 'catwalk rail' edges [0,4],[1,5],[2,6],[3,7] the ROM never draws. Separately, TRENCH_SQUARE (a hand-authored flat 80x80 square) is a second, geometrically-wrong attempt at the same WPN wall panel.",
+    "reasoning": "There is exactly one such object in WSOBJ — WPN, the green wall panel — and both TRENCH ('Obj_Trench_Squares') and TRENCH_SQUARE derive from it. TRENCH's vertices are correct (CONFIRMED against `.WP WPN`); its 4 rails are fabrication (story 8-5 embellishment) that diverges from `.WGD WPN`. TRENCH_SQUARE ignores WPN's concentric-rectangle geometry entirely. Dropping the 4 rails to match `.WGD WPN` is size s; reconciling TRENCH_SQUARE onto WPN is part of the same re-port.",
     "source": {
       "file": "WSOBJ.MAC",
       "line": 560,
@@ -237,7 +237,7 @@
     "id": "M-014",
     "class": "DIVERGENCE",
     "title": "EXHAUST_PORT is stroked one amber colour; the ROM `.WGD PORT` uses three pens (green / turquoise / red porthole)",
-    "claim": "`.WGD PORT` switches pen three times: `MOVD #VGCGRN...` (outer base), `MOVD #VGCTRQ...` (inner berm), `MOVD #VGCRED...!0FF ;PORTHOLE` (the +/-96 inner square). render.ts draws the whole plate a single PORT_GLOW amber (#ff9f0a) \u2014 a hue that is none of the ROM's three.",
+    "claim": "`.WGD PORT` switches pen three times: `MOVD #VGCGRN...` (outer base), `MOVD #VGCTRQ...` (inner berm), `MOVD #VGCRED...!0FF ;PORTHOLE` (the +/-96 inner square). render.ts draws the whole plate a single PORT_GLOW amber (#ff9f0a) — a hue that is none of the ROM's three.",
     "reasoning": "Canvas strokes one colour per drawWireframe call, so a faithful three-pen render needs three passes (as SURFACE_TOWER/TOWER_CAP already do). The porthole in particular reads RED in the cabinet, not amber. models.ts flags this as a deliberate single-model simplification ('no AC asks for the colours'); recording it as an accepted divergence, low priority.",
     "source": {
       "file": "WSOBJ.MAC",
@@ -246,7 +246,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 200,
+      "line": 225,
       "verbatim": "const PORT_GLOW = GLOW_FOR['Exhaust Port'] // exhaust-port target amber (shared)"
     },
     "recommendation": "wont_fix",
@@ -256,8 +256,8 @@
     "id": "M-015",
     "class": "NO_COUNTERPART",
     "title": "The entire WSSTAR starfield subsystem is absent from the clone",
-    "claim": "WSSTAR generates up to M$STNM=50 stars, bucketed into ST$EQQ=16 sectors ('DIVVY SCREEN INTO 4 BY 4'), seeded by RND8, moving relative to the player, culled and regenerated when they leave the view frustum (depth window 0x100..0xFFF). Two generators: VWSTAR (space, VGCWHT white) and VWSTRG (surface, VGCGRN green, 'GROUND HORIZON DROPPED', forced far out on the ground plane). The clone renders no starfield at all \u2014 no core state, no shell draw path.",
-    "reasoning": "A moving 3D starfield is a core visual of the space and surface phases; its absence is a whole missing subsystem, not a wrong value. Porting it means a deterministic per-star generator in the pure core (seeded RNG, the 50-star pool, sector bucketing, the depth/FOV cull) plus a shell draw pass \u2014 size l.",
+    "claim": "WSSTAR generates up to M$STNM=50 stars, bucketed into ST$EQQ=16 sectors ('DIVVY SCREEN INTO 4 BY 4'), seeded by RND8, moving relative to the player, culled and regenerated when they leave the view frustum (depth window 0x100..0xFFF). Two generators: VWSTAR (space, VGCWHT white) and VWSTRG (surface, VGCGRN green, 'GROUND HORIZON DROPPED', forced far out on the ground plane). The clone renders no starfield at all — no core state, no shell draw path.",
+    "reasoning": "A moving 3D starfield is a core visual of the space and surface phases; its absence is a whole missing subsystem, not a wrong value. Porting it means a deterministic per-star generator in the pure core (seeded RNG, the 50-star pool, sector bucketing, the depth/FOV cull) plus a shell draw pass — size l.",
     "source": {
       "file": "WSSTAR.MAC",
       "line": 28,
@@ -271,7 +271,7 @@
     "id": "M-016",
     "class": "NO_COUNTERPART",
     "title": "WSOBJ explosion-piece objects (TW1-3, BK1-3, WG1-3) and WSVROM GNX0-3 have no ported model",
-    "claim": "WSOBJ.MAC ships authentic explosion-shard objects \u2014 `.WP TW1/TW2/TW3` (tower-top pieces, `.S=3*4`), `.WP BK1/BK2/BK3` (bunker pieces), `.WP WG1/WG2/WG3` (wall-gun pieces, `.S=1`) \u2014 each with its own `.WL` draw list; WSVROM adds `LABL GNX0..GNX3` (gun-shot explosion sparkles). The clone has no corresponding models; its explosions are screen-space particle/ring effects.",
+    "claim": "WSOBJ.MAC ships authentic explosion-shard objects — `.WP TW1/TW2/TW3` (tower-top pieces, `.S=3*4`), `.WP BK1/BK2/BK3` (bunker pieces), `.WP WG1/WG2/WG3` (wall-gun pieces, `.S=1`) — each with its own `.WL` draw list; WSVROM adds `LABL GNX0..GNX3` (gun-shot explosion sparkles). The clone has no corresponding models; its explosions are screen-space particle/ring effects.",
     "reasoning": "These are authentic per-object debris shards the cabinet flings when a tower/bunker/turret is destroyed. They are absent from models.ts. Whether to adopt them is an explosion-authenticity decision that belongs to the WSXPLD (pair-explosions) auditor; recorded here because the geometry TABLES live in my WSOBJ/WSVROM scope. The current FX approach is a defensible substitute, so wont_fix pending that team's call.",
     "source": {
       "file": "WSOBJ.MAC",

@@ -12,8 +12,8 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 394,
-      "verbatim": "      drawWireframe(ctx, TIE_WING_FRAG_1, at(-s, 0, 0), proj, w, h, TIE_GLOW)"
+      "line": 428,
+      "verbatim": "        drawWireframe(ctx, TIE_WING_FRAG_1, at(-ws, 0, 0), proj, w, h, wc)"
     },
     "verdict": "CONFIRMED",
     "refutation_corrections": "STRIKE the false parenthetical: 'The third piece differs in identity (ROM: center globe/cockpit ball; ours: a third wing fragment on +z).' It does NOT differ. Verified models.ts:234-239: TIE_WING_FRAG_3 has name 'TIE Fragment Cabin', vertices `TIE_FIGHTER.vertices.slice(-28)` (the aft cabin/globe), i.e. the ROM's TP$TI3 CENTER GLOBE. The symbol name 'WING_FRAG_3' is a misnomer; the geometry is the globe, so the third-piece identity actually MATCHES the ROM (consistent with pair-models M-002, not in conflict with it). Only its render placement (+z drift, render.ts:396) is a render-only tell. The false 'differs in identity' clause must not ship as proof-of-divergence."
@@ -36,7 +36,8 @@
     },
     "recommendation": "fix",
     "size": "s",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-7"
   },
   {
     "id": "X-003",
@@ -59,7 +60,8 @@
     "verdict": "CONFIRMED",
     "refutation_corrections": {
       "flash_branch_never_taken_for_TIE_pieces": "VWTIN takes the VJFLS 'REALLY FLASH' branch only when XP$TMR > #1F (hex 1F = 31 decimal; CMPB #1F / IFHI at :764-766). But every TIE explosion piece is born with a timer BELOW that threshold: both wings load LDA #18 = 0x18 = 24 (BGAXP, WSXPLD.MAC:165 and :196) and the centre globe loads LDA #10 = 0x10 = 16 (:224). 24 and 16 are both <= 31 and the timer only ever DEC-rements (DOXPLD), so it never rises above 0x1F. Therefore TIE pieces NEVER flash — they index TVWCLE from birth and only colour-cycle down. The 'flash white then color-cycle' framing is wrong for the TIE case this finding is scoped to. The VJFLS flash path is reachable only by ground-object (tower/bunker) explosions, whose timer is #20 = 0x20 = 32 > 31 (per X-005) — a different, out-of-scope explosion type. Net: the divergence is purely the MISSING age-keyed colour/intensity ramp (real, holds); the claimed initial white flash is not part of TIE-piece behaviour. class/recommendation (DIVERGENCE / fix size m) stand once the flash clause is removed."
-    }
+    },
+    "remediated_by": "sw7-7"
   },
   {
     "id": "X-004",
@@ -74,8 +76,8 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 391,
-      "verbatim": "      const s = f * TIE_DEATH_SPREAD"
+      "line": 426,
+      "verbatim": "        const ws = wf * TIE_DEATH_SPREAD"
     },
     "recommendation": "accept"
   },
@@ -107,7 +109,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 566,
+      "line": 606,
       "verbatim": "  ctx.strokeStyle = '#ffdd66'"
     },
     "recommendation": "fix",
@@ -142,7 +144,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 846,
+      "line": 886,
       "verbatim": "const DEATH_STAR_BOOM_SECONDS = 2.5"
     },
     "recommendation": "accept",

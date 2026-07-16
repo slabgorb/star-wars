@@ -258,11 +258,21 @@ export const MAX_FIREBALL_SLOTS = 6
 export const ENEMY_SHOT_HIT_RADIUS = 150
 /** Hit sphere around a TIE for player bolts (covers the model extent). */
 export const TIE_HIT_RADIUS = 250
-/** How long a destroyed TIE's exploded-fragment cue plays before it is dropped
- *  (story sw3-8). A brief flash — the cabinet's death is quick. Eyeball tunable. */
-export const TIE_DEATH_SECONDS = 0.7
-/** How far (world units) the three wing fragments drift apart over TIE_DEATH_SECONDS
- *  as the TIE blows apart. A render tunable — the split is an eyeball concern. */
+/** A destroyed TIE breaks into three ROM pieces, each with its OWN life timer in
+ *  XP$TMR, decremented once per 20.508 Hz game frame by DOXPLD (WSXPLD.MAC:485-490).
+ *  The two WINGS load `LDA #18` (BGAXP, WSXPLD.MAC:165, :196) = 0x18 = 24 frames =
+ *  24 / 20.508 ≈ 1.170 s. RADIX 16 (`.INCLUDE WSCOMN`) — the immediate is HEX 24, not
+ *  decimal 18. Frame-true, like DARTH_GLOW_SECONDS = 0x1f / TICK_HZ. (sw7-7 X-002) */
+export const TIE_WING_LIFE_SECONDS = 0x18 / TICK_HZ
+/** The centre GLOBE piece loads `LDA #10` (BGAXP, WSXPLD.MAC:224) = 0x10 = 16 frames
+ *  = 16 / 20.508 ≈ 0.780 s — so the globe pops BEFORE the wings, the "cooling apart"
+ *  tell a single flat lifetime erased. (sw7-7 X-002) */
+export const TIE_GLOBE_LIFE_SECONDS = 0x10 / TICK_HZ
+/** How long a destroyed TIE's whole exploded-fragment cue plays before the sim drops
+ *  it (story sw3-8) — the LONGEST piece, i.e. the wings. Now ROM-true (sw7-7). */
+export const TIE_DEATH_SECONDS = TIE_WING_LIFE_SECONDS
+/** How far (world units) the three wing fragments drift apart as the TIE blows
+ *  apart. A render tunable — the split distance is an eyeball concern. */
 export const TIE_DEATH_SPREAD = 520
 /** Hit sphere around the cockpit for enemy contact and fire. */
 export const COCKPIT_HIT_RADIUS = 80
