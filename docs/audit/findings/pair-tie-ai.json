@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 201,
+      "line": 210,
       "verbatim": "export const TIE_SPAWN_DISTANCE = 0x7c00 // 31744 — WSCPU STARTING LOCATIONS depth word"
     }
   },
@@ -29,7 +29,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1272,
+      "line": 1302,
       "verbatim": "const ROM_LATERAL_UNIT = 0x400 // 1024 — the ×$400 STARTING-LOCATION lateral step"
     }
   },
@@ -46,7 +46,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1283,
+      "line": 1313,
       "verbatim": "  [-2 * ROM_LATERAL_UNIT, 0], // 1D1"
     }
   },
@@ -63,7 +63,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 169,
+      "line": 178,
       "verbatim": "export const WAVE_SIZE = 3"
     }
   },
@@ -80,7 +80,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 270,
+      "line": 292,
       "verbatim": "        killedTie.add(ei)"
     }
   },
@@ -97,7 +97,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 309,
+      "line": 324,
       "verbatim": "export const TIE_NEAR_BOUND = 0x800 // 2048 — WSCPU \"not too close\" fire/peel floor"
     }
   },
@@ -131,8 +131,8 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1299,
-      "verbatim": "  return { pos, vel: scale(dir, speed), kind: 'tie', orient: lookRotation(dir), bank }"
+      "line": 1334,
+      "verbatim": "  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), bank }"
     }
   },
   {
@@ -170,7 +170,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 312,
+      "line": 337,
       "verbatim": "  const liveEnemies = standingEnemies.filter((e) => {"
     },
     "recommendation": "fix",
@@ -191,7 +191,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1230,
+      "line": 1260,
       "verbatim": "  const peeling = e.peeling ?? (dist <= TIE_NEAR_BOUND && lateralOffset >= COCKPIT_HIT_RADIUS)"
     },
     "recommendation": "accept",
@@ -210,7 +210,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 240,
+      "line": 247,
       "verbatim": "    if (inPassWindow && cooldown <= 0 && enemyShots.length < params.maxConcurrentShots) {"
     },
     "recommendation": "accept",
@@ -248,7 +248,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 210,
+      "line": 219,
       "verbatim": "export const ENEMY_SPEED = 10000"
     },
     "recommendation": "accept",
@@ -267,7 +267,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1295,
+      "line": 1325,
       "verbatim": "  const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]"
     },
     "recommendation": "accept",
@@ -279,6 +279,7 @@
   },
   {
     "id": "A-016",
+    "remediated_by": "sw7-13",
     "class": "NO_COUNTERPART",
     "title": "Darth Vader's TIE (RTH): 4 lives, immortal in space, retreats — absent from our sim",
     "claim": "The ROM has a distinct Darth ship (RTH shape, `.WS RTH,4` = 4 lives, WSCPU.MAC:1166) that CANNOT be killed in the space wave: on a non-fatal hit CPHTSA resets its hit counter — `LDA #05 / STA A$HTA(X) ;KEEP DARTH ALIVE` (WSCPU.MAC:367–368) — scores it via SCRDARTH, forces a glow/roll, and throws the ship for a loop; it then flees at wave end. Our sim has no Darth enemy at all: Enemy.kind is 'tie' only (state.ts:45), VADER_SCORE (2000) is defined but nothing awards it (state.ts:148–153), and there is no survive/retreat rule.",
@@ -335,7 +336,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 527,
+      "line": 542,
       "verbatim": "export const SPACE_WAVE_QUOTA = 6"
     },
     "recommendation": "accept",

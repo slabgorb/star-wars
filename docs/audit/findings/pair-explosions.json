@@ -31,7 +31,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 248,
+      "line": 263,
       "verbatim": "export const TIE_DEATH_SECONDS = 0.7"
     },
     "recommendation": "fix",
@@ -165,7 +165,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 281,
+      "line": 306,
       "verbatim": "  const dyingTies: DyingTie[] = ["
     },
     "recommendation": "accept"

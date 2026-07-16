@@ -131,7 +131,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 427,
+      "line": 442,
       "verbatim": "export const TRENCH_SCROLL_SPEED = 500"
     },
     "recommendation": "fix",
@@ -151,7 +151,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1128,
+      "line": 1153,
       "verbatim": "  return { pos: [0, 0, -EXHAUST_PORT_DISTANCE] }"
     },
     "recommendation": "fix",
@@ -215,7 +215,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 695,
+      "line": 720,
       "verbatim": "      if (collides(pos, trenchView, CATWALK_HIT_RADIUS)) {"
     },
     "recommendation": "fix",
@@ -236,7 +236,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 461,
+      "line": 476,
       "verbatim": "export const PORT_APPROACH_WINDOW = 800"
     }
   },
@@ -253,7 +253,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1128,
+      "line": 1153,
       "verbatim": "  return { pos: [0, 0, -EXHAUST_PORT_DISTANCE] }"
     }
   },
@@ -270,7 +270,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 452,
+      "line": 467,
       "verbatim": "export const PORT_HIT_RADIUS = 108"
     },
     "recommendation": "accept"
@@ -288,7 +288,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 790,
+      "line": 815,
       "verbatim": "  const detonates = armed && inApproachWindow"
     }
   },
@@ -320,7 +320,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 839,
+      "line": 864,
       "verbatim": "  if (collides(port, COCKPIT, COCKPIT_HIT_RADIUS)) {"
     },
     "recommendation": "accept",

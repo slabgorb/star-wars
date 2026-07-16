@@ -12,12 +12,13 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 147,
+      "line": 156,
       "verbatim": "export const TIE_SCORE = 1000"
     }
   },
   {
     "id": "S-002",
+    "remediated_by": "sw7-13",
     "class": "CONFIRMED",
     "title": "Darth Vader's TIE = 2,000 points (value matches; not yet awarded)",
     "claim": "ROM scores Darth at 2,000 PER HIT (TSCA2D = .BYTE 00,20,00 -> 002000). Ours VADER_SCORE = 2000. Value matches. NOTE: the sim has no Vader enemy, so this constant is defined but never awarded — all enemies use TIE_SCORE=1000.",
@@ -46,7 +47,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 158,
+      "line": 167,
       "verbatim": "export const FIREBALL_SCORE = 33"
     }
   },
@@ -63,7 +64,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 344,
+      "line": 359,
       "verbatim": "export const TURRET_SCORE = 200"
     }
   },
@@ -80,7 +81,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 550,
+      "line": 575,
       "verbatim": "        score += TURRET_SCORE"
     }
   },
@@ -131,7 +132,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 425,
+      "line": 440,
       "verbatim": "export const TRENCH_BONUS = 25000"
     }
   },
@@ -148,7 +149,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 549,
+      "line": 564,
       "verbatim": "export const SURFACE_CLEAR_BONUS = 50000"
     }
   },
@@ -165,7 +166,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 128,
+      "line": 137,
       "verbatim": "export const STARTING_LIVES = 6"
     }
   },
@@ -182,7 +183,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 329,
+      "line": 354,
       "verbatim": "  const lives = Math.max(0, state.lives - damage)"
     }
   },
@@ -199,7 +200,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 508,
+      "line": 523,
       "verbatim": "export const FORCE_BONUS = 5000"
     },
     "recommendation": "fix",
@@ -249,7 +250,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 135,
+      "line": 144,
       "verbatim": "export const EXTRA_LIFE_THRESHOLDS: readonly number[] = [400_000, 800_000]"
     },
     "recommendation": "fix",
@@ -270,7 +271,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 314,
+      "line": 339,
       "verbatim": "      damage++"
     },
     "recommendation": "fix",
