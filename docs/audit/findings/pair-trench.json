@@ -131,7 +131,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 442,
+      "line": 452,
       "verbatim": "export const TRENCH_SCROLL_SPEED = 500"
     },
     "recommendation": "fix",
@@ -236,7 +236,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 476,
+      "line": 486,
       "verbatim": "export const PORT_APPROACH_WINDOW = 800"
     }
   },
@@ -270,7 +270,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 467,
+      "line": 477,
       "verbatim": "export const PORT_HIT_RADIUS = 108"
     },
     "recommendation": "accept"

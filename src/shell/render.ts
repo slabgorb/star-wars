@@ -16,8 +16,10 @@ import {
   STARTING_LIVES,
   PORT_AHEAD_RANGE,
   FORCE_BONUS,
-  TIE_DEATH_SECONDS,
+  TIE_WING_LIFE_SECONDS,
+  TIE_GLOBE_LIFE_SECONDS,
   TIE_DEATH_SPREAD,
+  TICK_HZ,
   type GameState,
 } from '../core/state'
 import type { HighScoreTable } from '@arcade/shared/highscore'
@@ -61,6 +63,29 @@ import { glowPolyline } from './glow'
 
 const GLOW = '#00e5ff' // cockpit cyan
 const TIE_GLOW = GLOW_FOR['TIE Fighter'] // enemy green (shared)
+/** The TVWCLE colour table's index domain: VWTIN compares the timer against #1F
+ *  before indexing, so the ramp spans timers 0x00..0x1F (WSXPLD.MAC:763-768). */
+const TVWCLE_DOMAIN = 0x1f
+/** Age-keyed glow for an exploded TIE piece (sw7-7 X-003). VWTIN colours each piece
+ *  from its OWN countdown timer against ONE shared table — `LDB XP$TMR(X) / CMPB #1F /
+ *  IFHI -> VJFLS ELSE LDU #TVWCLE / LSLB / LDD B(U)`, i.e. colour = TVWCLE[2*timer]
+ *  (WSXPLD.MAC:761-770) — cooling as DOXPLD DECs it ("SHOW US BEATING IT").
+ *  Keyed to the ABSOLUTE remaining frames, NOT to each piece's own life fraction:
+ *  both pieces walk the SAME ramp and the wing merely starts higher up it (born at
+ *  0x18 = 24) than the globe (0x10 = 16), so at equal wall-clock age they show
+ *  DIFFERENT hues, and a wing decayed to 16 shows the globe's birth colour. A
+ *  per-life fraction would erase exactly that per-piece tell.
+ *  The exact TVWCLE hues are AVG VGCOLR bitfields the finding leaves undecoded, so we
+ *  cool within the enemy-green family. NEVER white — the VJFLS "REALLY FLASH" branch
+ *  needs timer > 0x1F, unreachable for pieces born at 24/16 that only ever DEC; that
+ *  path is a ground-object one (timer 0x20), finding X-005 / sw7-14. */
+function tiePieceGlow(timerFrames: number): string {
+  const t = Math.min(1, Math.max(0, timerFrames / TVWCLE_DOMAIN)) // 1 = fresh, 0 = spent
+  const r = Math.round(120 * t) // warm tint fades: 120 -> 0
+  const g = Math.round(80 + 150 * t) // green dims: 230 -> 80
+  const b = Math.round(70 * t) // 70 -> 0
+  return `rgb(${r}, ${g}, ${b})`
+}
 const TURRET_GLOW = GLOW_FOR['Surface Tower'] // vector red (shared) — trench turrets + bunkers
 // The GDVIEW surface palette (sw3-11, WSGRND.MAC): the tower column strokes
 // VGCYLW yellow, its cap/hat "SPECIAL WHITE" (VGCWHT), and lone undamaged
@@ -382,18 +407,33 @@ export function render(
     // => multiply(orient, TIE_ORIENT)), placed in the world by its model matrix.
     for (const e of state.enemies)
       drawWireframe(ctx, TIE_FIGHTER, multiply(view, modelMatrix(e.pos, multiply(e.orient, TIE_ORIENT))), proj, w, h, TIE_GLOW)
-    // A destroyed TIE breaks into its three exploded wing fragments (story sw3-8),
-    // flying apart over TIE_DEATH_SECONDS before the sim drops the cue. The split
-    // direction/scale are a render-only tell (eyeball tunables), oriented like the
-    // fighter (TIE_ORIENT) so the pieces read as the ship coming apart.
+    // A destroyed TIE breaks into three ROM pieces (story sw3-8), each with its OWN
+    // life (sw7-7 X-002): the two wings persist to TIE_WING_LIFE_SECONDS (0x18 = 24f ≈
+    // 1.170 s) while the centre globe pops FIRST at TIE_GLOBE_LIFE_SECONDS (0x10 = 16f ≈
+    // 0.780 s). Each piece colours itself from its OWN remaining ROM timer via the
+    // shared TVWCLE ramp (sw7-7 X-003) — never the white VJFLS flash, which is a
+    // ground-object path. The split direction is a render tell (TIE_ORIENT), and the
+    // fly-apart spread stays age-driven (no per-piece velocity state — finding X-004,
+    // an accepted structural gap).
     for (const d of state.dyingTies) {
-      const f = TIE_DEATH_SECONDS > 0 ? Math.min(1, d.age / TIE_DEATH_SECONDS) : 1
-      const s = f * TIE_DEATH_SPREAD
       const at = (dx: number, dy: number, dz: number): Mat4 =>
         multiply(view, modelMatrix([d.pos[0] + dx, d.pos[1] + dy, d.pos[2] + dz], TIE_ORIENT))
-      drawWireframe(ctx, TIE_WING_FRAG_1, at(-s, 0, 0), proj, w, h, TIE_GLOW)
-      drawWireframe(ctx, TIE_WING_FRAG_2, at(s, 0, 0), proj, w, h, TIE_GLOW)
-      drawWireframe(ctx, TIE_WING_FRAG_3, at(0, 0, s), proj, w, h, TIE_GLOW)
+      // FRAG_1/FRAG_2 are the left/right wings (XP$TMR born 0x18); FRAG_3 is the centre
+      // globe ('TIE Fragment Cabin' — the name is a misnomer, the geometry is the ROM's
+      // TP$TI3 globe), born 0x10 and therefore first to pop.
+      if (d.age <= TIE_WING_LIFE_SECONDS) {
+        const wf = Math.min(1, d.age / TIE_WING_LIFE_SECONDS)
+        const ws = wf * TIE_DEATH_SPREAD
+        const wc = tiePieceGlow((TIE_WING_LIFE_SECONDS - d.age) * TICK_HZ)
+        drawWireframe(ctx, TIE_WING_FRAG_1, at(-ws, 0, 0), proj, w, h, wc)
+        drawWireframe(ctx, TIE_WING_FRAG_2, at(ws, 0, 0), proj, w, h, wc)
+      }
+      if (d.age <= TIE_GLOBE_LIFE_SECONDS) {
+        const gf = Math.min(1, d.age / TIE_GLOBE_LIFE_SECONDS)
+        const gs = gf * TIE_DEATH_SPREAD
+        const gc = tiePieceGlow((TIE_GLOBE_LIFE_SECONDS - d.age) * TICK_HZ)
+        drawWireframe(ctx, TIE_WING_FRAG_3, at(0, 0, gs), proj, w, h, gc)
+      }
     }
   }
   // The player laser is a brief "pew" flash from the cannon tips at the moment of
