@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1135,
+      "line": 1221,
       "verbatim": "  const decay = Math.pow(7 / 8, dt * TICK_HZ)"
     },
     "verdict": "CONFIRMED",
@@ -33,7 +33,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 235,
+      "line": 250,
       "verbatim": "export const MAX_FIREBALL_SLOTS = 6"
     }
   },
@@ -71,7 +71,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 175,
+      "line": 178,
       "verbatim": "      vel: scale(aimDirection(aimX, aimY, input.aspect), PROJECTILE_SPEED),"
     },
     "recommendation": "wont_fix",
@@ -90,7 +90,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 761,
+      "line": 790,
       "verbatim": "    sweptCollides(port, sub(b.pos, scale(b.vel ?? ZERO, dt)), b.pos, PORT_HIT_RADIUS),"
     },
     "recommendation": "accept"
@@ -150,7 +150,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 321,
+      "line": 346,
       "verbatim": "    if (collides(s.pos, COCKPIT, COCKPIT_HIT_RADIUS)) {"
     },
     "recommendation": "accept",
@@ -169,7 +169,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 313,
+      "line": 338,
       "verbatim": "    if (collides(e.pos, COCKPIT, COCKPIT_HIT_RADIUS)) {"
     },
     "recommendation": "accept",
@@ -189,7 +189,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 244,
+      "line": 251,
       "verbatim": "        pos: [...e.pos] as Vec3,"
     }
   },
@@ -206,7 +206,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 165,
+      "line": 174,
       "verbatim": "export const FIRE_INTERVAL = 0.25"
     },
     "recommendation": "accept",

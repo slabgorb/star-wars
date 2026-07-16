@@ -253,6 +253,86 @@ export const SFX = [
     },
     gain: 0.85,
   },
+  {
+    // sw7-8 (U-021) — the Death Star's own boom: ALL EIGHT channels rumble a
+    // near-unison cluster (AUDF 70..78 with 74 SKIPPED — the ROM's gap; adjacent
+    // divisors beat against each other) held 2 x 144 ticks, under one shared
+    // volume chain: a $4F blast, a dip to silence, then a long 15-step decay.
+    //
+    // Transcribed from the ORIGINAL sound-board source, not the disassembly:
+    // SNDAUD.MAC:1004 `AUDDF:: ;DEATH STAR FINAL EXPLOSION` -> DF tables
+    // :315-347. Dotted literals are decimal (`144.`, `70.`); bare are hex. The
+    // eight volume labels DF1C..DF8C fall through to ONE chain (:323-347), so
+    // every channel carries the same envelope. The ROM's freq lists carry no
+    // end record (the volume chain ends the effect ~30 ticks before the freq
+    // list runs dry) — the explicit [0,0,0,0] below is our format's terminator,
+    // unreachable in playback.
+    name: 'death_star_boom',
+    rom: {
+      // 0x27 by counting SNDPBX's PBX table — see fireball_hit's calibration note.
+      command: 0x27,
+      dispatch: 'SNDPBX.MAC:116 (AUD DF)',
+      label: 'AUDDF "DEATH STAR FINAL EXPLOSION" (SNDAUD.MAC:1004)',
+      confidence: 'confirmed — original-source label',
+    },
+    swfx: {
+      // The full DF8C decay runs 288 driver ticks = 2.36 s — past the default
+      // 1.6 s sustained-envelope cap, which would silently cut the tail. This
+      // chain is FINITE ROM data, so it declares its own ceiling.
+      maxSeconds: 2.5,
+      channels: [
+        { src: { freq: 'DF1F', vol: 'DF1C -> DF8C chain' }, freq: [[2, 144, 70, 0], [0, 0, 0, 0]], vol: null },
+        { src: { freq: 'DF2F', vol: 'DF2C -> DF8C chain' }, freq: [[2, 144, 71, 0], [0, 0, 0, 0]], vol: null },
+        { src: { freq: 'DF3F', vol: 'DF3C -> DF8C chain' }, freq: [[2, 144, 72, 0], [0, 0, 0, 0]], vol: null },
+        { src: { freq: 'DF4F', vol: 'DF4C -> DF8C chain' }, freq: [[2, 144, 73, 0], [0, 0, 0, 0]], vol: null },
+        { src: { freq: 'DF5F', vol: 'DF5C -> DF8C chain' }, freq: [[2, 144, 75, 0], [0, 0, 0, 0]], vol: null },
+        { src: { freq: 'DF6F', vol: 'DF6C -> DF8C chain' }, freq: [[2, 144, 76, 0], [0, 0, 0, 0]], vol: null },
+        { src: { freq: 'DF7F', vol: 'DF7C -> DF8C chain' }, freq: [[2, 144, 77, 0], [0, 0, 0, 0]], vol: null },
+        { src: { freq: 'DF8F', vol: 'DF8C' }, freq: [[2, 144, 78, 0], [0, 0, 0, 0]], vol: null },
+      ].map((ch) => ({
+        ...ch,
+        // the shared DF8C chain, verbatim (dotted = decimal, bare = hex):
+        vol: [
+          [1, 10, 0x4f, 0], [1, 8, 0x40, 0], [1, 4, 0x4f, 0], [1, 6, 0x4e, 0],
+          [1, 8, 0x4d, 0], [1, 10, 0x4c, 0], [1, 12, 0x4b, 0], [1, 14, 0x4a, 0],
+          [1, 16, 0x49, 0], [1, 18, 0x48, 0], [1, 20, 0x47, 0], [1, 22, 0x46, 0],
+          [1, 24, 0x45, 0], [1, 26, 0x44, 0], [1, 28, 0x43, 0], [1, 30, 0x42, 0],
+          [1, 32, 0x41, 0], [0, 0, 0, 0],
+        ],
+      })),
+    },
+    gain: 0.9,
+  },
+  {
+    // sw7-8 (U-022) — shooting an alien shot out of the air: a single-channel
+    // high zap (AUDF 8) under a short RISING crackle (vol 1 -> 15 through two
+    // delta ramps), nothing like the descending TIE explosion it replaces.
+    //
+    // SNDAUD.MAC:1028 `AUDSS:: ;PLAYER SHOT DOWN AN ALIEN SHOT` -> SS tables
+    // :364-369 (`;SHOOTING ENEMY SHOTS`). `14.` is dotted DECIMAL; the AUDC
+    // bytes ($41/$42/$4A/$4F) are hex. Same appended freq terminator note as
+    // death_star_boom above.
+    name: 'fireball_hit',
+    rom: {
+      // 0x34 by counting SNDPBX's PBX table (entry 0 = RESET, commented entries
+      // skipped) — calibrated against six known ordinals (SPK STR=$16, TRU=$18,
+      // YAU=$1A, PM DAR=$1D, 4TH=$20, RRP=$22, TH5=$24 all land).
+      command: 0x34,
+      dispatch: 'SNDPBX.MAC:131 (AUD SS)',
+      label: 'AUDSS "PLAYER SHOT DOWN AN ALIEN SHOT" (SNDAUD.MAC:1028)',
+      confidence: 'confirmed — original-source label',
+    },
+    swfx: {
+      channels: [
+        {
+          src: { freq: 'SS8F', vol: 'SS8C' },
+          freq: [[1, 14, 8, 0], [0, 0, 0, 0]],
+          vol: [[1, 2, 0x41, 0], [7, 1, 0x42, 1], [3, 1, 0x4a, 2], [1, 2, 0x4f, 0], [0, 0, 0, 0]],
+        },
+      ],
+    },
+    gain: 0.8,
+  },
 ];
 
 export default SFX;

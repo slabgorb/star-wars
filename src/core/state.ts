@@ -42,8 +42,10 @@ export interface Enemy {
   pos: Vec3
   /** World-space velocity (units/second), pointed at the cockpit. */
   vel: Vec3
-  /** Enemy type — a string union (no enum) so it stays cheap and serialisable. */
-  kind: 'tie'
+  /** Enemy type — a string union (no enum) so it stays cheap and serialisable.
+   * `'darth'` is Darth Vader's TIE (ROM shape RTH): a distinct enemy that is
+   * immortal to player fire and scores VADER_SCORE per hit (sw7-13, A-016/S-002). */
+  kind: 'tie' | 'darth'
   /** Per-enemy facing (sim state; render only applies it). Story 8-13 made it a
    * look-toward-the-cockpit rotation; story 9-2 evolves it to BANK along the
    * flight path — the look-along-heading frame rolled into the swoop. Maps the
@@ -67,6 +69,13 @@ export interface Enemy {
    * freshly spawned TIEs and test fixtures omit it (it inherits the squad clock until
    * the fighter's first shot). */
   fireCooldown?: number
+  /** Post-hit cooldown in seconds — the ROM A$GLW "glowing from a hit" flag
+   * (WSCPU.MAC:346-348,371). Set when Darth takes a scoring hit and decays each
+   * frame; while it is > 0 CPHTSA leaves him alone, so a burst of fire scores 2,000
+   * ONCE, not once per bolt (no double jeopardy). Only Darth carries it — plain TIEs
+   * omit it (treated as 0). A sim scoring gate, NOT a render field; the visual
+   * roll/glow is the deferred A-018. (sw7-13) */
+  glow?: number
 }
 
 /** A TIE caught mid-death: it has been shot and is drawn as its exploded wing
@@ -229,6 +238,12 @@ export const ENEMY_SHOT_SPEED = 300
  *  space fireball (story sw4-2) reaches the cockpit well inside this, so the TTL is a
  *  cleanup cap, not the balance lever. */
 export const ENEMY_SHOT_TTL = 64 / TICK_HZ
+/** How long Darth "glows from a hit" and cannot be re-scored — the ROM loads
+ *  `LDA #01F` into A$GLW/A$ROL ("TWO OR SO SECONDS", WSCPU.MAC:371) = 31 game
+ *  frames, i.e. 31 / 20.508 Hz ≈ 1.51 s. During this the damage path is skipped
+ *  (`LDA A$GLW / IFNE / RTS`, WSCPU.MAC:346-348), so hitting Darth awards 2,000
+ *  once per glow window rather than once per bolt of a burst. (sw7-13, S-002) */
+export const DARTH_GLOW_SECONDS = 0x1f / TICK_HZ
 /** Seconds between enemy fireballs (whole formation). */
 export const ENEMY_FIRE_INTERVAL = 1
 /** Maximum enemy fireballs on screen at once — authentic "6 fireball slots". */
@@ -243,11 +258,21 @@ export const MAX_FIREBALL_SLOTS = 6
 export const ENEMY_SHOT_HIT_RADIUS = 150
 /** Hit sphere around a TIE for player bolts (covers the model extent). */
 export const TIE_HIT_RADIUS = 250
-/** How long a destroyed TIE's exploded-fragment cue plays before it is dropped
- *  (story sw3-8). A brief flash — the cabinet's death is quick. Eyeball tunable. */
-export const TIE_DEATH_SECONDS = 0.7
-/** How far (world units) the three wing fragments drift apart over TIE_DEATH_SECONDS
- *  as the TIE blows apart. A render tunable — the split is an eyeball concern. */
+/** A destroyed TIE breaks into three ROM pieces, each with its OWN life timer in
+ *  XP$TMR, decremented once per 20.508 Hz game frame by DOXPLD (WSXPLD.MAC:485-490).
+ *  The two WINGS load `LDA #18` (BGAXP, WSXPLD.MAC:165, :196) = 0x18 = 24 frames =
+ *  24 / 20.508 ≈ 1.170 s. RADIX 16 (`.INCLUDE WSCOMN`) — the immediate is HEX 24, not
+ *  decimal 18. Frame-true, like DARTH_GLOW_SECONDS = 0x1f / TICK_HZ. (sw7-7 X-002) */
+export const TIE_WING_LIFE_SECONDS = 0x18 / TICK_HZ
+/** The centre GLOBE piece loads `LDA #10` (BGAXP, WSXPLD.MAC:224) = 0x10 = 16 frames
+ *  = 16 / 20.508 ≈ 0.780 s — so the globe pops BEFORE the wings, the "cooling apart"
+ *  tell a single flat lifetime erased. (sw7-7 X-002) */
+export const TIE_GLOBE_LIFE_SECONDS = 0x10 / TICK_HZ
+/** How long a destroyed TIE's whole exploded-fragment cue plays before the sim drops
+ *  it (story sw3-8) — the LONGEST piece, i.e. the wings. Now ROM-true (sw7-7). */
+export const TIE_DEATH_SECONDS = TIE_WING_LIFE_SECONDS
+/** How far (world units) the three wing fragments drift apart as the TIE blows
+ *  apart. A render tunable — the split distance is an eyeball concern. */
 export const TIE_DEATH_SPREAD = 520
 /** Hit sphere around the cockpit for enemy contact and fire. */
 export const COCKPIT_HIT_RADIUS = 80

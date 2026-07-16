@@ -29,6 +29,8 @@ import {
   WAVE_SIZE,
   MAX_FIREBALL_SLOTS,
   TIE_SCORE,
+  VADER_SCORE,
+  DARTH_GLOW_SECONDS,
   FIREBALL_SCORE,
   TIE_HIT_RADIUS,
   TIE_DEATH_SECONDS,
@@ -95,6 +97,7 @@ import {
   TRENCH_EYE_MAX,
   TRENCH_EYE_SEAT,
 } from './trench-channel'
+import { waveSpawnPlan } from './tie-waves'
 
 const COCKPIT: Vec3 = [0, 0, 0]
 const ZERO: Vec3 = [0, 0, 0]
@@ -208,13 +211,17 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // fresh fighter can take its place (story 9-3, AC#1).
   const movedEnemies = state.enemies
     .map((e) => moveEnemy(e, dt))
+    // Decay Darth's post-hit glow (the A$GLW window); plain TIEs never carry it.
+    .map((e) => (e.glow ? { ...e, glow: Math.max(0, e.glow - dt) } : e))
     .filter((e) => !(e.peeling && length(e.pos) > TIE_EXIT_RANGE))
   let spawnTimer = state.spawnTimer - dt
   let spawnCount = state.spawnCount
   if (spawnTimer <= 0 && movedEnemies.length < WAVE_SIZE) {
     // Walk the authentic TBG lateral table in order (sw4-1) — the spawn counter is
     // the deterministic per-slot index, advanced only when a fighter actually spawns.
-    movedEnemies.push(spawnTie(rng, params.enemySpeed, spawnCount))
+    // The counter also indexes the wave's TSPWAV plan (sw7-12) so the RTH slot spawns
+    // Darth; the plan is per-wave, walked 0-based from SP.WAV = state.wave − 1.
+    movedEnemies.push(spawnTie(rng, params.enemySpeed, spawnCount, state.wave - 1))
     spawnCount += 1
     spawnTimer = params.spawnInterval
   }
@@ -263,12 +270,26 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   const killedTie = new Set<number>()
   const spentBolt = new Set<number>()
   const spawnedDying: DyingTie[] = []
+  // Darth indices that took a SCORING hit this frame — they survive (KEEP DARTH
+  // ALIVE) but re-arm their glow window below so they cannot be re-scored yet.
+  const darthScored = new Set<number>()
   for (let ei = 0; ei < enemies.length; ei++) {
     for (let pi = 0; pi < projectiles.length; pi++) {
       if (spentBolt.has(pi)) continue
       if (collides(enemies[ei].pos, projectiles[pi].pos, TIE_HIT_RADIUS)) {
-        killedTie.add(ei)
         spentBolt.add(pi)
+        if (enemies[ei].kind === 'darth') {
+          // Darth is immortal in space: CPHTSA resets his hit counter to keep him
+          // alive (WSCPU.MAC:367-368), so a laser hit never destroys him. He scores
+          // 2,000 (SCRDARTH) once per hit, gated by the post-hit glow so a burst
+          // does not re-score while he is "glowing from a hit" (WSCPU.MAC:346-348).
+          if ((enemies[ei].glow ?? 0) <= 0 && !darthScored.has(ei)) {
+            score += VADER_SCORE
+            darthScored.add(ei)
+          }
+          break
+        }
+        killedTie.add(ei)
         score += TIE_SCORE
         events.push({ type: 'enemy-death', enemyType: 'tie', pos: [...enemies[ei].pos] as Vec3 })
         spawnedDying.push({ pos: [...enemies[ei].pos] as Vec3, age: 0 })
@@ -276,7 +297,11 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       }
     }
   }
-  const standingEnemies = enemies.filter((_, i) => !killedTie.has(i))
+  const standingEnemies = enemies
+    // Re-arm the glow window on every Darth that scored — a killed mook is dropped
+    // by the filter, but a hit Darth survives and starts his no-double-jeopardy timer.
+    .map((e, i) => (darthScored.has(i) ? { ...e, glow: DARTH_GLOW_SECONDS } : e))
+    .filter((_, i) => !killedTie.has(i))
   // Age existing death cues and drop the finished ones, then add this frame's kills.
   const dyingTies: DyingTie[] = [
     ...state.dyingTies
@@ -327,6 +352,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   })
 
   const lives = Math.max(0, state.lives - damage)
+  pushFarewell(events, lives) // fatal hit → the end-of-game farewell (sw7-8, U-017)
 
   return finalizeScore(
     state,
@@ -567,6 +593,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
   })
 
   const lives = Math.max(0, state.lives - damage)
+  pushFarewell(events, lives) // fatal hit → the end-of-game farewell (sw7-8, U-017)
 
   return {
     ...state,
@@ -720,6 +747,8 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
         }
       : {}),
   }
+  // A fatal catwalk crash is a death like any other (sw7-8, U-017).
+  if (crashedCatwalk) pushFarewell(events, base.lives - 1)
 
   // No active port → safe hold (no score, no damage; the empty channel still scrolls).
   if (state.exhaustPort === null) return afterObstacles
@@ -767,6 +796,16 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     !afterObstacles.portTorpedoArmed && armingBolt >= 0
       ? afterObstacles.projectiles.filter((_, i) => i !== armingBolt)
       : afterObstacles.projectiles
+  // The death knell (sw7-8, U-010) rings when the torpedo is FIRED, not when it
+  // lands: WSGUNS.MAC:1220 puts `JSR PMSF2 ;SOUND THE DEATH KNELL` in FRPTGN —
+  // the routine that CREATES the torpedo (PT.LIV=1). Our launch moment is this
+  // arming edge (the bolt becomes the torpedo). One-shot by construction: the
+  // latch is set after this frame, and a fresh port re-primes it (the miss path
+  // below). Pushed BEFORE the detonation resolution so the degenerate
+  // armed-inside-the-window frame carries knell-then-finale, the ROM's order.
+  if (!afterObstacles.portTorpedoArmed && armingBolt >= 0) {
+    events.push({ type: 'tune', tune: 'deathKnell' })
+  }
 
   // --- RESOLVE: a DIRECT HIT, once the port reaches the window ----------------
   //
@@ -795,6 +834,11 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     // spot, emitted BEFORE the level-clear warp below so the shell stages the boom
     // before the jump to the next wave. `[...port]` keeps the step pure.
     events.push({ type: 'death-star-destroyed', pos: [...port] as Vec3 })
+    // The finale (sw7-8, U-012): the ROM starts the end-of-Death-Star music the
+    // moment the explosion phase inits — PHIDX1's `JSR PMEND` (WSMAIN.MAC:2179).
+    // Our detonation frame IS that init. On the shared tune channel it steals
+    // the knell if both land on one frame, exactly as the one tune player would.
+    events.push({ type: 'tune', tune: 'finale' })
     // The whole run clears and loops to the next wave's space phase — emit the
     // warp / wave-clear cue (8-7), as `clearRun` re-opens 'space'. `clearRun` →
     // `enterPhase` spreads `...s`, so this event rides along.
@@ -825,6 +869,12 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     // Flying into the trench structure is a crash, not hostile fire — reuse the
     // terrain-crash cue (8-7) rather than widen player-death's cause union.
     events.push({ type: 'terrain-crash' })
+    // R2 swears ONLY when you live to retry (sw7-8, U-015): the ROM checks
+    // `LDA S.GAS / LBLE PHIB0D` BEFORE `JSR SPKR2N ;R2 SWEARS AT PLAYER FOR
+    // MISSING EXHAUST PORT` (WSMAIN.MAC:1905-1914). A fatal bash skips the
+    // swear and speaks the end-of-game farewell instead.
+    if (lives > 0) events.push({ type: 'speech', line: 'r2Scream' })
+    else pushFarewell(events, lives)
     return {
       ...afterObstacles,
       lives,
@@ -941,12 +991,37 @@ function musicTrackFor(phase: Phase, wave: number): MusicTrack {
   return PHASE_MUSIC[phase]
 }
 
-/** The voice line cued when a run ENTERS a phase (sw2-5). Only the surface and
- * trench edges carry a line; a new wave's space phase (reached via clearRun, not
- * progress) has none. A `Partial` map so an unwired phase simply cues nothing. */
-const ENTER_PHASE_SPEECH: Partial<Record<Phase, SpeechLine>> = {
-  surface: 'lookAtTheSizeOfThatThing', // "Look at the size of that thing"
-  trench: 'useTheForceLuke', // "Use the Force, Luke"
+/** The voice lines cued when a run ENTERS a phase (sw2-5; widened to a SEQUENCE
+ * by sw7-8/U-016). Only the surface and trench edges carry lines; a new wave's
+ * space phase (reached via clearRun, not progress) has none. Event ORDER is
+ * spoken order — the shell's TMS5220 queue plays them back-to-back (one chip,
+ * one throat), which is how the cabinet sequenced multi-line moments
+ * (SNDSPK.MAC's TFOA table). A `Partial` map so an unwired phase cues nothing. */
+const ENTER_PHASE_SPEECH: Partial<Record<Phase, readonly SpeechLine[]>> = {
+  // "This is Red Five, I'm going in" (SPKTHI, WSMAIN.MAC:1515) leads; "Look at
+  // the size of that thing" follows (SPKSIZ, :1550). The ROM keys the pair to a
+  // wave-select our sim doesn't have — the sequenced-both contract is U-016's
+  // remediation (deviation logged in the session file).
+  surface: ['redFiveImGoingIn', 'lookAtTheSizeOfThatThing'],
+  trench: ['useTheForceLuke'], // "Use the Force, Luke"
+}
+
+/** The end-of-game farewell (sw7-8, U-017): PHIEGM speaks SPKREM then SPKFOA on
+ * EVERY loss (WSMAIN.MAC:2143-2144), BEFORE the high-score fork — and SPKFOA is
+ * not a 24th phrase but the TFOA sequence table `.BYTE 15.,16.,0FF`
+ * (SNDSPK.MAC:100-103): exactly our baked FOR + ALW lines. So the death frame
+ * cues three lines in utterance order; the shell's serial queue does the rest.
+ * Every death site calls this with its post-hit lives — the trio belongs to the
+ * DEATH, not to any one cause. IDEMPOTENT per frame (review R-1): two fatal
+ * causes can land on one frame (a catwalk and the port scroll in lockstep and
+ * can cross the cockpit plane together), but the player died once and PHIEGM
+ * speaks the farewell once per game over — never once per cause. */
+function pushFarewell(events: GameEvent[], lives: number): void {
+  if (lives > 0) return
+  if (events.some((e) => e.type === 'speech' && e.line === 'remember')) return
+  events.push({ type: 'speech', line: 'remember' })
+  events.push({ type: 'speech', line: 'theForceWillBeWithYou' })
+  events.push({ type: 'speech', line: 'always' })
 }
 
 /** The trench voice lines cued off the timer (`trenchTimer` = ROM `word_4B0E`),
@@ -981,11 +1056,17 @@ function progress(s: GameState): GameState {
   const next = NEXT_PHASE[s.phase]
   if (next === null) return s
   // The phase cleared — carry the frame's events forward, announce the warp, and
-  // cue the entering phase's voice line if it has one (sw2-5).
+  // cue the entering phase's voice lines if it has any (sw2-5; sequence per sw7-8).
   const advanced = enterPhase(s, next)
   const events: GameEvent[] = [...s.events, { type: 'level-clear', next }]
-  const line = ENTER_PHASE_SPEECH[next]
-  if (line) events.push({ type: 'speech', line })
+  for (const line of ENTER_PHASE_SPEECH[next] ?? []) events.push({ type: 'speech', line })
+  // The descent tune (sw7-8, U-014): PMDES fires at space PH.TIM 400, twenty
+  // frames before the descend flip (WSMAIN.MAC:1439/:1442) — our un-sequenced
+  // equivalent is the space -> surface edge itself. It rides OVER the towers
+  // loop below (the ROM's PMDES -> descend -> PM4TH spacing is sw7-9 / A-019).
+  if (s.phase === 'space' && next === 'surface') {
+    events.push({ type: 'tune', tune: 'descent' })
+  }
   // Swap the looping music channel to the entering phase's theme (sw3-5). Fires on
   // this edge only; `enterPhase` preserves the wave, so surface->'towers' /
   // trench->'trench' regardless of wave (the Imperial March is a space-only swap).
@@ -1088,6 +1169,11 @@ function clearRun(s: GameState): GameState {
   return {
     ...enterPhase(s, 'space'),
     wave: s.wave + 1,
+    // Restart the per-wave spawn walk so the new wave's TSPWAV plan (and the TBG
+    // lateral table) index from 0. The counter is monotonic within a wave but must
+    // reset at the wave boundary, or it would step past the Darth (RTH) slot and he
+    // would never appear in waves 2+ (sw7-13).
+    spawnCount: 0,
     forceBonusAwardedAt: s.forceBonusAwardedAt,
     deathStarDestroyedAt: s.deathStarDestroyedAt,
   }
@@ -1235,12 +1321,17 @@ const SPAWN_LATERALS: ReadonlyArray<readonly [number, number]> = [
  * from the ROM TBG table walked in order by `spawnIndex` (sw4-1, spec §A) — no
  * longer a continuous RNG spread — so every fighter appears on one of the authentic
  * {0, ±1024, ±2048} starting slots. The RNG still seeds only the swoop bank. */
-function spawnTie(rng: Rng, speed: number, spawnIndex: number): Enemy {
+function spawnTie(rng: Rng, speed: number, spawnIndex: number, spaceWave: number): Enemy {
   const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]
   const pos: Vec3 = [x, y, -TIE_SPAWN_DISTANCE]
   const dir = toCockpit(pos)
   const bank = (nextFloat(rng) < 0.5 ? 1 : -1) * TIE_SWOOP_BIAS
-  return { pos, vel: scale(dir, speed), kind: 'tie', orient: lookRotation(dir), bank }
+  // The wave's TSPWAV plan (sw7-12) says which slot is Darth: the RTH shape spawns
+  // kind 'darth', every other slot a plain TIE. Past the plan's end (a long wave that
+  // keeps refilling its slots) fall back to a mook.
+  const shape = waveSpawnPlan(spaceWave)[spawnIndex]?.shape ?? 'TIE'
+  const kind = shape === 'RTH' ? 'darth' : 'tie'
+  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), bank }
 }
 
 /** Unit vector from a world position back toward the cockpit at the origin. */

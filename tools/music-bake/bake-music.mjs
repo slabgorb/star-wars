@@ -31,18 +31,29 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import vm from 'node:vm'
 
-import { TRACKS, TICK_SECONDS } from './music-data.mjs'
+import { TRACKS, TUNES, TICK_SECONDS } from './music-data.mjs'
 import { renderVoice, toEmulatorDivisor } from './pm-player.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// Logical track -> the filename src/shell/audio.ts's MUSIC manifest fetches from R2.
-// These MUST agree with the manifest; a mismatch is a 404, and a 404 is silence.
+// Everything bakeable: the four looping tracks plus the five one-shot tunes
+// (sw7-8) — same segment shape, same render path, same output directory.
+const CATALOGUE = { ...TRACKS, ...TUNES }
+
+// Logical track -> the filename src/shell/audio.ts's MUSIC/TUNES manifests fetch
+// from R2. These MUST agree with the manifests; a mismatch is a 404, and a 404
+// is silence.
 export const OUTPUT_FILES = {
   space: 'space_theme.wav',
   towers: 'towers_theme.wav',
   trench: 'trench_theme.wav',
   imperialMarch: 'imperial_march.wav',
+  // sw7-8 — the five one-shot tunes (audio.ts TUNES):
+  deathKnell: 'death_knell.wav',
+  cantina: 'cantina.wav',
+  finale: 'finale.wav',
+  bensTheme: 'bens_theme.wav',
+  descent: 'descent.wav',
 }
 
 const AUDCTL = 0x78
@@ -101,7 +112,7 @@ function buildFeeds(track, { sampleRate, clockCorrect }) {
   let t0 = 0 // where the current segment starts, in seconds
   let end = 0
 
-  for (const seg of TRACKS[track].segments) {
+  for (const seg of CATALOGUE[track].segments) {
     let segTicks = 0
 
     seg.voices.forEach((bytes, vi) => {
@@ -146,7 +157,7 @@ function buildFeeds(track, { sampleRate, clockCorrect }) {
 
 /** Render one track to a mono Float32Array. */
 export function bakeTrack(name, { sampleRate = 48000, clockCorrect = true, gain = 1.0 } = {}) {
-  if (!TRACKS[name]) throw new Error(`bake-music: unknown track ${JSON.stringify(name)}`)
+  if (!CATALOGUE[name]) throw new Error(`bake-music: unknown track ${JSON.stringify(name)}`)
   if (!DIVIDER[sampleRate]) throw new Error(`bake-music: unsupported sample rate ${sampleRate}`)
 
   const POKEY = loadPokeyClass(sampleRate)

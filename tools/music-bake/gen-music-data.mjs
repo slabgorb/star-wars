@@ -87,7 +87,24 @@ function parseTuntab() {
 // (SNDPM.MAC:737 `LDA -1(X) / BNE 30$` → else re-init the voice). `.ENDL` is
 // `8F,00`, whose second byte is also 0 — but its first byte has the high bit set,
 // so it is an opcode, not a terminator.
-function parseVoice(label) {
+//
+// FLATTENING (sw7-8): the five one-shot tunes use subroutine machinery the four
+// loops never touched, and we resolve it HERE so the emitted streams stay pure
+// 2-byte pairs and the player's `,X++` walk survives untouched:
+//
+//   .CALL n  (0x8D — PKCPH, SNDPM.MAC:1046: save OPTR, jump to TUNTAB[n]) —
+//            inline TUNTAB[n]'s stream minus its terminator. SF2V1-4 are each
+//            "CALL 6 (setup), CKEY k, CALL 5 (the scale)"; SF2V5/V6 are TUNTAB
+//            subroutines no `.TUNE` ever references.
+//   .GOSUB L (0x90 + a 16-bit ADDRESS WORD — a 3-byte record that would break
+//            the pair walk) / .RETURN (0x91, 1 byte) — both survive in SWMUS as
+//            unexpanded macro calls, so inline the labelled block up to its
+//            `.RETURN`. Only the cantina uses them (CSUB1/CSUB2).
+function parseVoice(label, seen = new Set()) {
+  if (seen.has(label)) {
+    throw new Error(`gen-music-data: recursive .CALL/.GOSUB back into ${label}`)
+  }
+  seen.add(label)
   const start = labelLine.get(label)
   if (start == null) throw new Error(`gen-music-data: voice ${label} not found in SWMUS.MAC`)
 
@@ -95,15 +112,13 @@ function parseVoice(label) {
   for (let i = start; i < swmus.length; i++) {
     const code = codeOf(swmus[i])
 
-    // `.GOSUB LABEL` / `.RETURN` survive as unexpanded macro calls (they carry a
-    // 16-bit label ADDRESS, which we cannot resolve to a byte stream). None of the
-    // six in-scope tunes reaches them — the only .GOSUB in SWMUS.MAC belongs to
-    // CNTV4, the cantina. If one ever appears in scope, fail loudly.
-    if (/^\s*\.(GOSUB|RETURN)\b/.test(code)) {
-      throw new Error(
-        `gen-music-data: voice ${label} uses ${code.trim()} — .GOSUB/.RETURN carry a label ` +
-          `address and are not supported. Resolve the label or drop the tune from scope.`,
-      )
+    const gosub = /^\s*\.GOSUB\s+([A-Z][A-Z0-9$]*)/.exec(code)
+    if (gosub) {
+      bytes.push(...parseGosubBlock(gosub[1], new Set(seen)))
+      continue
+    }
+    if (/^\s*\.RETURN\b/.test(code)) {
+      throw new Error(`gen-music-data: voice ${label} hit a bare .RETURN outside any .GOSUB block`)
     }
 
     const m = /^\s*\.BYTE\s+(.+)$/.exec(code)
@@ -114,12 +129,59 @@ function parseVoice(label) {
       if (k + 1 >= vals.length) break
       const op = vals[k]
       const arg = vals[k + 1]
+      if (op === 0x8d) {
+        // .CALL n — inline the called TUNTAB entry, dropping ITS terminator;
+        // the caller's own stream continues (and terminates) after it.
+        const sub = tuntab[arg]
+        if (!sub) throw new Error(`gen-music-data: ${label} .CALLs TUNTAB[${arg}], which has no entry`)
+        bytes.push(...parseVoice(sub, new Set(seen)).slice(0, -2))
+        continue
+      }
       bytes.push(op, arg)
       // terminator: a NOTE (high bit clear) whose duration byte is 0
       if ((op & 0x80) === 0 && arg === 0) return bytes
     }
   }
   throw new Error(`gen-music-data: voice ${label} ran off the end of SWMUS.MAC without a terminator`)
+}
+
+// Inline a `.GOSUB` target: its `.BYTE` pairs from the label to its `.RETURN`.
+// A terminator INSIDE a gosub block would end the whole tune mid-subroutine —
+// that is malformed data, not a return, so it throws rather than truncates.
+function parseGosubBlock(label, seen) {
+  if (seen.has(label)) throw new Error(`gen-music-data: recursive .GOSUB back into ${label}`)
+  seen.add(label)
+  const start = labelLine.get(label)
+  if (start == null) throw new Error(`gen-music-data: .GOSUB target ${label} not found in SWMUS.MAC`)
+  const bytes = []
+  for (let i = start; i < swmus.length; i++) {
+    const code = codeOf(swmus[i])
+    if (/^\s*\.RETURN\b/.test(code)) return bytes
+    const gosub = /^\s*\.GOSUB\s+([A-Z][A-Z0-9$]*)/.exec(code)
+    if (gosub) {
+      bytes.push(...parseGosubBlock(gosub[1], new Set(seen)))
+      continue
+    }
+    const m = /^\s*\.BYTE\s+(.+)$/.exec(code)
+    if (!m) continue
+    const vals = m[1].split(',').map(parseLiteral)
+    for (let k = 0; k + 1 < vals.length + 1; k += 2) {
+      if (k + 1 >= vals.length) break
+      const op = vals[k]
+      const arg = vals[k + 1]
+      if (op === 0x8d) {
+        const sub = tuntab[arg]
+        if (!sub) throw new Error(`gen-music-data: ${label} .CALLs TUNTAB[${arg}], which has no entry`)
+        bytes.push(...parseVoice(sub, new Set(seen)).slice(0, -2))
+        continue
+      }
+      if ((op & 0x80) === 0 && arg === 0) {
+        throw new Error(`gen-music-data: end-of-tune terminator inside .GOSUB block ${label}`)
+      }
+      bytes.push(op, arg)
+    }
+  }
+  throw new Error(`gen-music-data: .GOSUB block ${label} has no .RETURN`)
 }
 
 // ── SNDPM.MAC: the driver's tables ───────────────────────────────────────────
@@ -208,20 +270,42 @@ const TRACK_SPEC = {
   imperialMarch: [{ tune: 'DAR', tuneIndices: [43, 44, 45, 46] }],
 }
 
+// ── the five one-shot tunes (sw7-8, audit U-010..U-014) ──────────────────────
+//
+// Same caller-truth rule as the tracks. Each has exactly one `JSR PM*` site:
+//
+//   deathKnell PMSF2 WSGUNS.MAC:1220 ";SOUND THE DEATH KNELL"  (FRPTGN — the torpedo LAUNCH)
+//   bensTheme  PMBEN WSMAIN.MAC:2161 ";BEN'S THEME WHEN LOSE GAME WITH NO HIGH SCORE"
+//   cantina    PMCNT WSMAIN.MAC:1164 ";CANTINA MUSIC"          (PHIENT, enter-initials)
+//   finale     PMEND WSMAIN.MAC:2179 ";START END OF DETH STAR MUSIC" (PHIDX1)
+//   descent    PMDES WSMAIN.MAC:1439 (space PH.TIM 400, before the descend flip)
+const TUNE_SPEC = {
+  deathKnell: { tune: 'SF2', tuneIndices: [1, 2, 3, 4] },
+  bensTheme: { tune: 'BEN', tuneIndices: [7, 8, 9, 10] },
+  cantina: { tune: 'CNT', tuneIndices: [11, 12, 13, 14] },
+  finale: { tune: 'END', tuneIndices: [15, 16, 17, 18] },
+  descent: { tune: 'DES', tuneIndices: [39, 40, 41, 42] },
+}
+
 const tuntab = parseTuntab()
+
+const segmentOf = ({ tune, tuneIndices }) => {
+  const voiceLabels = tuneIndices.map((n) => {
+    const label = tuntab[n]
+    if (!label) throw new Error(`gen-music-data: TUNTAB has no entry ${n} (for ${tune})`)
+    return label
+  })
+  return { tune, tuneIndices, voiceLabels, voices: voiceLabels.map((l) => parseVoice(l)) }
+}
 
 const TRACKS = {}
 for (const [track, segs] of Object.entries(TRACK_SPEC)) {
-  TRACKS[track] = {
-    segments: segs.map(({ tune, tuneIndices }) => {
-      const voiceLabels = tuneIndices.map((n) => {
-        const label = tuntab[n]
-        if (!label) throw new Error(`gen-music-data: TUNTAB has no entry ${n} (for ${tune})`)
-        return label
-      })
-      return { tune, tuneIndices, voiceLabels, voices: voiceLabels.map(parseVoice) }
-    }),
-  }
+  TRACKS[track] = { segments: segs.map(segmentOf) }
+}
+
+const TUNES = {}
+for (const [name, spec] of Object.entries(TUNE_SPEC)) {
+  TUNES[name] = { segments: [segmentOf(spec)] }
 }
 
 const NOTTAB = parseNottab()
@@ -249,8 +333,8 @@ const fmt = (arr, perLine) => {
   return out.join('\n')
 }
 
-const segLines = (track) =>
-  TRACKS[track].segments
+const segLines = (track, table = TRACKS) =>
+  table[track].segments
     .map(
       (s) => `    {
       tune: ${JSON.stringify(s.tune)},
@@ -313,14 +397,28 @@ ${Object.keys(TRACKS)
   .map((t) => `  ${t}: {\n    segments: [\n${segLines(t)}\n    ],\n  },`)
   .join('\n')}
 }
+
+// The five one-shot tunes (sw7-8, U-010..U-014) — same segment shape as TRACKS
+// so bake-music's voice walker serves both. \`.CALL\`/\`.GOSUB\`/\`.RETURN\` are
+// FLATTENED at generation time (see the generator), so these streams are pure
+// 2-byte pairs like every track above.
+export const TUNES = {
+${Object.keys(TUNES)
+  .map((t) => `  ${t}: {\n    segments: [\n${segLines(t, TUNES)}\n    ],\n  },`)
+  .join('\n')}
+}
 `
 
 const out = join(__dirname, 'music-data.mjs')
 writeFileSync(out, body)
 
 const nVoices = Object.values(TRACKS).reduce((n, t) => n + t.segments.length * 4, 0)
-console.log(`music-data.mjs written: ${Object.keys(TRACKS).length} tracks, ${nVoices} voices, NOTTAB[${NOTTAB.length}]`)
-for (const [t, { segments }] of Object.entries(TRACKS)) {
+const nTuneVoices = Object.values(TUNES).reduce((n, t) => n + t.segments.length * 4, 0)
+console.log(
+  `music-data.mjs written: ${Object.keys(TRACKS).length} tracks + ${Object.keys(TUNES).length} tunes, ` +
+    `${nVoices + nTuneVoices} voices, NOTTAB[${NOTTAB.length}]`,
+)
+for (const [t, { segments }] of [...Object.entries(TRACKS), ...Object.entries(TUNES)]) {
   console.log(
     `  ${t.padEnd(14)} ${segments.map((s) => `${s.tune}(${s.voices.map((v) => v.length / 2).join('/')})`).join(' + ')}`,
   )
