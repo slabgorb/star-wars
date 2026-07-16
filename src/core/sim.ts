@@ -29,6 +29,8 @@ import {
   WAVE_SIZE,
   MAX_FIREBALL_SLOTS,
   TIE_SCORE,
+  VADER_SCORE,
+  DARTH_GLOW_SECONDS,
   FIREBALL_SCORE,
   TIE_HIT_RADIUS,
   TIE_DEATH_SECONDS,
@@ -95,6 +97,7 @@ import {
   TRENCH_EYE_MAX,
   TRENCH_EYE_SEAT,
 } from './trench-channel'
+import { waveSpawnPlan } from './tie-waves'
 
 const COCKPIT: Vec3 = [0, 0, 0]
 const ZERO: Vec3 = [0, 0, 0]
@@ -208,13 +211,17 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // fresh fighter can take its place (story 9-3, AC#1).
   const movedEnemies = state.enemies
     .map((e) => moveEnemy(e, dt))
+    // Decay Darth's post-hit glow (the A$GLW window); plain TIEs never carry it.
+    .map((e) => (e.glow ? { ...e, glow: Math.max(0, e.glow - dt) } : e))
     .filter((e) => !(e.peeling && length(e.pos) > TIE_EXIT_RANGE))
   let spawnTimer = state.spawnTimer - dt
   let spawnCount = state.spawnCount
   if (spawnTimer <= 0 && movedEnemies.length < WAVE_SIZE) {
     // Walk the authentic TBG lateral table in order (sw4-1) — the spawn counter is
     // the deterministic per-slot index, advanced only when a fighter actually spawns.
-    movedEnemies.push(spawnTie(rng, params.enemySpeed, spawnCount))
+    // The counter also indexes the wave's TSPWAV plan (sw7-12) so the RTH slot spawns
+    // Darth; the plan is per-wave, walked 0-based from SP.WAV = state.wave − 1.
+    movedEnemies.push(spawnTie(rng, params.enemySpeed, spawnCount, state.wave - 1))
     spawnCount += 1
     spawnTimer = params.spawnInterval
   }
@@ -263,12 +270,26 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   const killedTie = new Set<number>()
   const spentBolt = new Set<number>()
   const spawnedDying: DyingTie[] = []
+  // Darth indices that took a SCORING hit this frame — they survive (KEEP DARTH
+  // ALIVE) but re-arm their glow window below so they cannot be re-scored yet.
+  const darthScored = new Set<number>()
   for (let ei = 0; ei < enemies.length; ei++) {
     for (let pi = 0; pi < projectiles.length; pi++) {
       if (spentBolt.has(pi)) continue
       if (collides(enemies[ei].pos, projectiles[pi].pos, TIE_HIT_RADIUS)) {
-        killedTie.add(ei)
         spentBolt.add(pi)
+        if (enemies[ei].kind === 'darth') {
+          // Darth is immortal in space: CPHTSA resets his hit counter to keep him
+          // alive (WSCPU.MAC:367-368), so a laser hit never destroys him. He scores
+          // 2,000 (SCRDARTH) once per hit, gated by the post-hit glow so a burst
+          // does not re-score while he is "glowing from a hit" (WSCPU.MAC:346-348).
+          if ((enemies[ei].glow ?? 0) <= 0 && !darthScored.has(ei)) {
+            score += VADER_SCORE
+            darthScored.add(ei)
+          }
+          break
+        }
+        killedTie.add(ei)
         score += TIE_SCORE
         events.push({ type: 'enemy-death', enemyType: 'tie', pos: [...enemies[ei].pos] as Vec3 })
         spawnedDying.push({ pos: [...enemies[ei].pos] as Vec3, age: 0 })
@@ -276,7 +297,11 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       }
     }
   }
-  const standingEnemies = enemies.filter((_, i) => !killedTie.has(i))
+  const standingEnemies = enemies
+    // Re-arm the glow window on every Darth that scored — a killed mook is dropped
+    // by the filter, but a hit Darth survives and starts his no-double-jeopardy timer.
+    .map((e, i) => (darthScored.has(i) ? { ...e, glow: DARTH_GLOW_SECONDS } : e))
+    .filter((_, i) => !killedTie.has(i))
   // Age existing death cues and drop the finished ones, then add this frame's kills.
   const dyingTies: DyingTie[] = [
     ...state.dyingTies
@@ -1144,6 +1169,11 @@ function clearRun(s: GameState): GameState {
   return {
     ...enterPhase(s, 'space'),
     wave: s.wave + 1,
+    // Restart the per-wave spawn walk so the new wave's TSPWAV plan (and the TBG
+    // lateral table) index from 0. The counter is monotonic within a wave but must
+    // reset at the wave boundary, or it would step past the Darth (RTH) slot and he
+    // would never appear in waves 2+ (sw7-13).
+    spawnCount: 0,
     forceBonusAwardedAt: s.forceBonusAwardedAt,
     deathStarDestroyedAt: s.deathStarDestroyedAt,
   }
@@ -1291,12 +1321,17 @@ const SPAWN_LATERALS: ReadonlyArray<readonly [number, number]> = [
  * from the ROM TBG table walked in order by `spawnIndex` (sw4-1, spec §A) — no
  * longer a continuous RNG spread — so every fighter appears on one of the authentic
  * {0, ±1024, ±2048} starting slots. The RNG still seeds only the swoop bank. */
-function spawnTie(rng: Rng, speed: number, spawnIndex: number): Enemy {
+function spawnTie(rng: Rng, speed: number, spawnIndex: number, spaceWave: number): Enemy {
   const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]
   const pos: Vec3 = [x, y, -TIE_SPAWN_DISTANCE]
   const dir = toCockpit(pos)
   const bank = (nextFloat(rng) < 0.5 ? 1 : -1) * TIE_SWOOP_BIAS
-  return { pos, vel: scale(dir, speed), kind: 'tie', orient: lookRotation(dir), bank }
+  // The wave's TSPWAV plan (sw7-12) says which slot is Darth: the RTH shape spawns
+  // kind 'darth', every other slot a plain TIE. Past the plan's end (a long wave that
+  // keeps refilling its slots) fall back to a mook.
+  const shape = waveSpawnPlan(spaceWave)[spawnIndex]?.shape ?? 'TIE'
+  const kind = shape === 'RTH' ? 'darth' : 'tie'
+  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), bank }
 }
 
 /** Unit vector from a world position back toward the cockpit at the origin. */
