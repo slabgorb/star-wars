@@ -1359,11 +1359,15 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     exhaustPortMissedAt: null,
     // The reward banners reset on phase entry too; `clearRun` re-stamps
     // shieldBonusAwardedAt (per-shield) so it survives the warp, and progress()
-    // stamps towerBonusAwardedAt on the surface->trench drop. shieldHitAt (the
-    // S-016 window) starts fresh each phase.
+    // stamps towerBonusAwardedAt on the surface->trench drop.
     shieldBonusAwardedAt: null,
     towerBonusAwardedAt: null,
-    shieldHitAt: null,
+    // NOTE (sw7-4 R2, Reviewer): shieldHitAt is DELIBERATELY carried through `...s`,
+    // NOT reset here — the ROM shield gauge (GS.GLW/GS.HIT) is ONE continuous
+    // mechanism across a whole run (space->surface->trench), so the post-hit window
+    // (S-016) must survive a wave-internal phase change. Resetting it let a hit on a
+    // phase-clear frame escape the debounce. `t` is monotonic, so an old stamp
+    // simply expires; no explicit reset is needed even at a new wave.
     enemyShots: [],
     altitude: phase === 'surface' ? SKIM_ALTITUDE : s.altitude,
     // Reset the surface scroll on every phase entry so a fresh (or jumped) surface

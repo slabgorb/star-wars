@@ -31,10 +31,11 @@ const font = vi.hoisted(() => {
   const calls: { text: string }[] = []
   return {
     calls,
-    layoutText(text: string) {
+    layoutText(text: string, opts?: { letterSpacing?: number }) {
       calls.push({ text })
       const n = [...text].length
-      return { strokes: [{ points: [{ x: 0, y: 0 }, { x: 16, y: 0 }] }], width: 16 * n }
+      const sp = opts?.letterSpacing ?? 0
+      return { strokes: [{ points: [{ x: 0, y: 0 }, { x: 16, y: 0 }] }], width: 16 * n + sp * n }
     },
   }
 })
@@ -69,20 +70,20 @@ function makeCtx(): CanvasRenderingContext2D {
 
 const texts = () => font.calls.map((c) => c.text)
 
-/** A won-run trench frame carrying the reward stamps under test. The stamp fields
- *  are added to GameState by Dev in GREEN; the cast lets the fixture name them now. */
-const rewarded = (over: Record<string, unknown>): GameState =>
-  ({
-    ...initialState(1983),
-    mode: 'playing',
-    phase: 'trench',
-    wave: 2,
-    lives: 4,
-    trenchScrollZ: 0,
-    exhaustPort: null,
-    t: 1,
-    ...over,
-  }) as unknown as GameState
+/** A won-run trench frame carrying the reward stamps under test (shieldBonusAwardedAt /
+ *  towerBonusAwardedAt are real GameState fields, so a plain Partial override suffices —
+ *  same pattern as the sibling core fixtures). */
+const rewarded = (over: Partial<GameState> = {}): GameState => ({
+  ...initialState(1983),
+  mode: 'playing',
+  phase: 'trench',
+  wave: 2,
+  lives: 4,
+  trenchScrollZ: 0,
+  exhaustPort: null,
+  t: 1,
+  ...over,
+})
 
 beforeEach(() => {
   font.calls.length = 0

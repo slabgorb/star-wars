@@ -31,11 +31,12 @@ import {
   initialState,
   PROJECTILE_TTL,
   POST_HIT_SHIELD_WINDOW,
+  SPACE_WAVE_QUOTA,
   type GameState,
   type Projectile,
   type Enemy,
 } from '../../src/core/state'
-import { stepGame } from '../../src/core/sim'
+import { stepGame, enterPhase } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
 import type { Vec3 } from '@arcade/shared/math3d'
 
@@ -100,5 +101,39 @@ describe('S-016 — at most one shield lost per gauge-redraw cycle (WSGLOW.MAC B
   it('is deterministic — identical double-hit input yields identical shields', () => {
     const mk = (): GameState => hitFrame({ enemyShots: [shot(AT_COCKPIT), shot(AT_COCKPIT)] })
     expect(stepGame(mk(), NO_INPUT, TICK).lives).toBe(stepGame(mk(), NO_INPUT, TICK).lives)
+  })
+})
+
+// Round-2 regression (Reviewer / Obi-Wan): the gauge-redraw window is the ROM SHIELD
+// GAUGE — one continuous mechanism across a whole run (space -> surface -> trench), NOT
+// per-phase. The first pass reset `shieldHitAt` on every phase entry, so a hit landing on
+// the exact frame a phase CLEARS had its debounce thrown away, and the next frame's hit was
+// wrongly charged — the S-016 invariant silently broke at every wave-internal boundary, in
+// normal play (clear a wave under fire). These guards live one level down from the in-phase
+// tests above, which all stayed inside 'space' and never crossed a boundary.
+describe('S-016 — the post-hit window survives a wave-internal phase change', () => {
+  it('enterPhase PRESERVES shieldHitAt (the shield gauge is continuous across phases)', () => {
+    const justHit: GameState = { ...wave(), t: 5, shieldHitAt: 5 }
+    expect(enterPhase(justHit, 'surface').shieldHitAt).toBe(5)
+    expect(enterPhase(justHit, 'trench').shieldHitAt).toBe(5)
+  })
+
+  it('a fresh hit survives the space->surface clear through the real step (not just enterPhase)', () => {
+    // Seed the space quota already met so this step advances to the surface, with a hit
+    // stamped this same frame. Pre-fix, progress()->enterPhase nulled shieldHitAt here.
+    const clearing: GameState = {
+      ...wave(),
+      phase: 'space',
+      phaseKills: SPACE_WAVE_QUOTA,
+      lives: 6,
+      t: 0.2,
+      shieldHitAt: 0.2, // a hit landed on this clearing frame
+      enemies: [],
+      enemyShots: [],
+      spawnTimer: 1e9,
+    }
+    const surfaced = stepGame(clearing, NO_INPUT, TICK)
+    expect(surfaced.phase).toBe('surface') // the phase really did clear (not a vacuous pin)
+    expect(surfaced.shieldHitAt).not.toBeNull() // the debounce survived the transition
   })
 })

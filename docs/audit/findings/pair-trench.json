@@ -151,7 +151,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1392,
+      "line": 1396,
       "verbatim": "  return { pos: [0, 0, -EXHAUST_PORT_DISTANCE] }"
     },
     "recommendation": "fix",
@@ -253,7 +253,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1392,
+      "line": 1396,
       "verbatim": "  return { pos: [0, 0, -EXHAUST_PORT_DISTANCE] }"
     }
   },
