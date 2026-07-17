@@ -33,7 +33,6 @@ import {
   SPACE_WAVE_QUOTA,
   towersForWave,
   FORCE_BONUS,
-  PROJECTILE_TTL,
   type GameState,
 } from '../../src/core/state'
 import { NO_INPUT } from '../../src/core/input'
@@ -45,20 +44,31 @@ function playing(overrides: Partial<GameState> = {}): GameState {
   return { ...initialState(1), ...overrides }
 }
 
-/** A trench state with a bolt sitting on the exhaust port, primed to detonate it
- *  on the next step (mirrors force-bonus.test.ts's fixture). */
+/** A trench run ARMED AND AT THE WALL: the proton-torpedo latch closed and the port
+ *  already inside the near-cockpit approach window, so the next step detonates it.
+ *  This is the state every winning run is in on its killing frame. */
 function portKill(state: GameState): GameState {
-  // sw3-15: a port kill now only resolves once the port has scrolled into the
-  // near-cockpit approach window, so seat the (dead-centre) port in-window
-  // rather than at its far spawn distance — mirrors the sibling force-bonus /
-  // exhaust-port-outcome re-seats — then park a bolt on it.
+  // sw3-15: a port kill only resolves once the port has scrolled into the near-cockpit
+  // approach window, so seat the (dead-centre) port in-window rather than at its far
+  // spawn distance.
+  //
+  // sw7-17: the bolt that used to be parked here is gone — the laser is HITSCAN, and
+  // nothing the player fires exists as an object any more. It cannot be replaced by "aim
+  // at the port and pull the trigger" ON THIS FRAME either, and not for a fixture reason:
+  // a port 300 ahead of a pilot flying 768 above the floor lies 68.7° below him, and the
+  // 60° FOV yoke reaches 30°. That shot is unmakeable, which is the whole point of sw5-6's
+  // ARM-early / RESOLVE-late split — the pilot earns it far out where the port is still a
+  // reachable ~17.7° (WSLAZR.MAC's PT.LZF box), and the machine takes it at the ROM's $800
+  // gate. So the honest one-frame fixture for "this run wins now" is the latch, not a shot:
+  // armed earlier, resolving here. The laser's own arming is pinned in tune-cue.test.ts /
+  // exhaust-port-challenge.test.ts; what this suite is about is the CUE on the kill frame.
   const p = state.exhaustPort!.pos
   const port: typeof p = [p[0], p[1], -300]
   return {
     ...state,
     mode: 'playing',
     exhaustPort: { pos: port },
-    projectiles: [{ pos: [port[0], port[1], port[2]], vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
+    portTorpedoArmed: true,
   }
 }
 

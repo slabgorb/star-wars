@@ -61,18 +61,30 @@ import {
   towersForWave,
   SURFACE_CLEAR_BONUS,
   TURRET_SCORE,
-  PROJECTILE_TTL,
+  SKIM_ALTITUDE,
   type GameState,
-  type Projectile,
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
+import { fireAt } from '../support/aim'
 import type { GameEvent } from '../../src/core/events'
 import type { Vec3 } from '@arcade/shared/math3d'
 
 const surface = (seed = 1983): GameState => ({ ...initialState(seed), phase: 'surface' })
-const bolt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, -1], ttl: PROJECTILE_TTL })
 const turretAt = (pos: Vec3): { pos: Vec3 } => ({ pos })
+
+/**
+ * The clearing tower's seat — the PILOT'S OWN CRUISE HEIGHT, not the floor (sw7-17).
+ *
+ * The one test in this file that shoots used to park a bolt on the tower; sw7-17 made the
+ * player's laser HITSCAN, so the gun spawns nothing and that fixture cannot occur in play. It is
+ * now a real trigger pull (`fireAt`), and that forces two things the bolt hid. The tower must be
+ * somewhere the yoke can actually POINT: at the old floor seat 100 units out it sat 52° below a
+ * pilot cruising at SKIM_ALTITUDE, outside the 30° the 60° FOV allows. And the shot must not fly
+ * the ship — on the surface the yoke's vertical axis is also the throttle. Level with the eye,
+ * dead-on is purely lateral and the yoke stays at rest. The quota never reads a tower's height.
+ */
+const EYE_HIGH = SKIM_ALTITUDE
 
 /** Step in small ticks until the phase leaves `from` (or give up after a few). */
 function crossFrom(s: GameState, from: string, input: Input = NO_INPUT): GameState {
@@ -222,18 +234,32 @@ describe('sw3-3 — clearing every tower scores the 50,000 bonus', () => {
   })
 
   it('the clearing tower kill scores BOTH its 200-point tower and the 50,000 bonus', () => {
-    // The last (16th, SQUARE) tower is alive this frame; the player bolt kills it,
+    // The last (16th, SQUARE) tower is alive this frame; the player's beam kills it,
     // meeting the quota — score gets TURRET_SCORE for the kill AND the completion bonus.
+    //
+    // ONE PULL IS ALL THIS NEEDS. `crossFrom` hands the same held input to every step, and the
+    // held trigger cannot open a second sweep (edge-triggered: no rising edge, no pull) — but the
+    // first pull's ~0.39 s sweep IS still burning across those steps. What keeps this the single
+    // "CLEARING kill" it claims to be is that the lone tower dies on the first frame and the aim
+    // never moves, so the remaining sweep frames find nothing under the site.
+    const site: Vec3 = [0, EYE_HIGH, -100]
     const s0: GameState = {
       ...surface(),
       wave: 1,
       phaseKills: towersForWave(1) - 1, // one short; this frame's kill meets it
       score: 0,
-      turrets: [turretAt([0, 0, -100])],
-      projectiles: [bolt([0, 0, -100])],
+      turrets: [turretAt(site)],
       enemyShots: [],
+      fireCooldown: 0,
+      firePrev: false, // a pull only lands off a released trigger
     }
-    const s1 = crossFrom(s0, 'surface')
+    const s1 = crossFrom(s0, 'surface', fireAt(s0, site))
+    // The kill EVENT, not an emptied `turrets` list: a tower also leaves that list by scrolling
+    // past the cockpit, so the list alone could not tell this kill from a total miss.
+    expect(
+      (s1.events as GameEvent[]).some((e) => e.type === 'enemy-death' && e.enemyType === 'turret'),
+      'the clearing tower really was shot, not merely flown past',
+    ).toBe(true)
     expect(s1.phase).toBe('trench')
     expect(s1.score).toBe(TURRET_SCORE + SURFACE_CLEAR_BONUS) // 200 + 50,000
   })
