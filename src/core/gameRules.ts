@@ -5,13 +5,11 @@
 // math routes through the Math Box (math3d), never ad-hoc trig, so there is a
 // single source of 3D truth.
 
-import { length, sub, add, scale, dot, normalize, perspective, transform, type Vec3 } from '@arcade/shared/math3d'
+import { length, sub, add, scale, dot, normalize, type Vec3 } from '@arcade/shared/math3d'
 import {
   SPAWN_INTERVAL,
   ENEMY_SPEED,
   ENEMY_FIRE_INTERVAL,
-  type GameState,
-  type Enemy,
 } from './state'
 
 /** Vertical field of view (radians) the renderer projects the scene with — the
@@ -130,62 +128,6 @@ export function beamHit(
   if (along > maxRange) return null // past the beam's far endpoint
   const closest = add(eye, scale(dir, along))
   return length(sub(pos, closest)) <= radius ? along : null
-}
-
-// --- Lock-on (story 8-14) ---------------------------------------------------
-//
-// The targeting reticle's green circle lights up over the TIE the player is
-// aimed at. The detection is the DUAL of the firing aim: project the enemy
-// through the SAME perspective the scene is drawn under and lock when its NDC
-// lands within LOCK_RADIUS_NDC of the crosshair NDC [aimX, aimY]. Because
-// aimDirection inverts this projection, a lock means a bolt fired now flies into
-// the target — "the circle never lies". Per the sacred core boundary the test is
-// in NDC, never screen pixels (which would need the canvas size); the shell scales
-// the NDC radius to a pixel circle when it strokes the ring.
-
-/**
- * Reticle lock radius in normalised-device units (NOT pixels) — the half-size of
- * the aim box the cabinet lights a target inside, and the on-screen radius the
- * shell strokes the green lock-on circle at (scaled NDC→pixels). Resolution-
- * independent so the core stays pure: no canvas size ever leaks in.
- */
-export const LOCK_RADIUS_NDC = 0.12
-
-/**
- * Is `enemyPos` under the reticle — would the next shot connect? Only targets in
- * FRONT of the camera (z < 0, looking down −Z) can lock: the perspective divide
- * flips a behind-camera point's NDC, which must not be mistaken for an on-screen
- * position near the reticle. Pure — no DOM, time, or randomness. `aspect`
- * (viewport width/height) scales the X axis exactly as the projection does and
- * defaults to 1 (square), which is all the pure vertical-axis callers need.
- */
-export function isLocked(enemyPos: Vec3, aimX: number, aimY: number, aspect = 1): boolean {
-  if (enemyPos[2] >= 0) return false // on or behind the camera plane — not on screen
-  // near/far scale only the projected DEPTH, never the x/y NDC the reticle
-  // compares, so any positive pair matches the renderer's x/y exactly (1/5000).
-  const ndc = transform(perspective(FOV_Y, aspect, 1, 5000), enemyPos)
-  return Math.hypot(ndc[0] - aimX, ndc[1] - aimY) <= LOCK_RADIUS_NDC
-}
-
-/**
- * The one enemy the green lock-on circle should ring: the NEAREST TIE under the
- * reticle (the first a shot reaches), or null when nothing is locked. A pure
- * derived query over `state.enemies` — no lock state is stored on GameState, so it
- * can never go stale; the render layer calls it each frame. `aspect` is threaded
- * to isLocked so the lock matches the viewport the scene is drawn in.
- */
-export function lockedEnemy(state: GameState, aspect = 1): Enemy | null {
-  let best: Enemy | null = null
-  let bestDist = Infinity
-  for (const e of state.enemies) {
-    if (!isLocked(e.pos, state.aimX, state.aimY, aspect)) continue
-    const d = length(e.pos) // distance from the cockpit at the origin
-    if (d < bestDist) {
-      bestDist = d
-      best = e
-    }
-  }
-  return best
 }
 
 // --- Difficulty ramp across waves -------------------------------------------

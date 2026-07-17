@@ -42,7 +42,7 @@ import {
 import { surfaceGrid } from '../core/surface-grid'
 import { trenchChannel } from '../core/trench-channel'
 import { trenchWallDetail } from '../core/trench-detail'
-import { crosshairNdc, lockedEnemy, LOCK_RADIUS_NDC, FOV_Y } from '../core/gameRules'
+import { crosshairNdc, FOV_Y } from '../core/gameRules'
 import { surfaceShip } from '../core/sim' // the ship point itself (sw7-16), not a copy of it
 import {
   perspective,
@@ -475,44 +475,10 @@ export function render(
   } else if (state.mode === 'gameover') {
     drawGameOver(ctx, state, highScores, w, h)
   } else {
-    // The green lock-on ring sits UNDER the cyan reticle so the crosshair always
-    // reads on top of it; both composite over the 3D scene (drawn above).
-    drawLockOn(ctx, state, proj, w, h)
     drawCrosshair(ctx, state, w, h)
     drawHudHeader(ctx, state, w, h)
     drawTrenchBanners(ctx, state, w, h)
   }
-}
-
-/**
- * The green lock-on ring (story 8-14). The core decides WHICH enemy is under the
- * reticle — `lockedEnemy` returns the nearest TIE a shot would hit — and the shell
- * only rings it, honouring the boundary. Drawn at the target's projected screen
- * position with the lock radius scaled NDC→pixels (LOCK_RADIUS_NDC spans the NDC
- * half-height, i.e. h/2 px). Nothing is drawn when no target is locked, so the
- * ring is the player's "your next shot connects" confirmation. Naturally limited
- * to the space phase: surface/trench carry no `enemies`, so nothing locks there.
- */
-function drawLockOn(
-  ctx: CanvasRenderingContext2D,
-  state: GameState,
-  proj: Mat4,
-  w: number,
-  h: number,
-): void {
-  const target = lockedEnemy(state, w / h)
-  if (!target) return
-  const c = project(target.pos, proj, w, h)
-  if (!c) return
-  const r = LOCK_RADIUS_NDC * (h / 2)
-  ctx.lineWidth = 2
-  ctx.strokeStyle = BOLT_GLOW
-  ctx.shadowColor = BOLT_GLOW
-  ctx.shadowBlur = 12
-  ctx.beginPath()
-  ctx.arc(c[0], c[1], r, 0, Math.PI * 2)
-  ctx.stroke()
-  ctx.shadowBlur = 0
 }
 
 /**
