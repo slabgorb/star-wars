@@ -8,7 +8,6 @@
 
 import {
   EXHAUST_PORT_DISTANCE,
-  PROJECTILE_TTL,
   ENEMY_SHOT_TTL,
   ENEMY_SHOT_HIT_RADIUS,
   SPAWN_DISTANCE,
@@ -113,10 +112,6 @@ const FIREBALL_GLOW = '#ff3b30' // enemy fireball red — VGCRED, the cabinet ve
  * ROM (no colour LUT survives there, only the register index).
  */
 const TRENCH_GLOW = '#22e600' // PROVISIONAL(findings ## Colors & intensities) — register pinned, hex matched to a cabinet screenshot
-
-// How long after a bolt is fired its cannon-tip laser beams stay lit — a brief
-// muzzle flash ("pew"), not a line trailing the bolt for its whole flight.
-const LASER_FLASH_SECONDS = 0.12
 
 // How long a TIE's muzzle starburst stays lit after it looses a fireball — the
 // enemy-fire "tell". Mirrors LASER_FLASH_SECONDS: a brief flash at the firing
@@ -439,15 +434,13 @@ export function render(
       }
     }
   }
-  // The player laser is a brief "pew" flash from the cannon tips at the moment of
-  // firing — NOT a line that trails the bolt for its whole 2s flight (that builds
-  // a static cyan web under rapid fire). Draw it only for freshly-fired bolts, and
-  // only during an active run so it never bleeds onto the attract/game-over screens
-  // (the sim freezes in-flight bolts there).
+  // The player laser is drawn for exactly as long as it is ON — the sweep the trigger opened
+  // (`state.laserEdge`, the ROM's LZ.EDG). That window IS the flash: the core already burns it
+  // down at the cabinet's 8-game-frame rate, so the shell needs no timer of its own and cannot
+  // drift from the frames that actually kill things. Gated to a live run so it never bleeds onto
+  // the attract/game-over screens.
   if (state.mode === 'playing') {
-    for (const p of state.projectiles)
-      if (PROJECTILE_TTL - p.ttl <= LASER_FLASH_SECONDS)
-        drawPlayerLaser(ctx, transform(view, p.pos), proj, w, h)
+    if (state.laserEdge > 0) drawPlayerLaserToSite(ctx, state, w, h)
     // A TIE's muzzle starburst at the instant of firing — the enemy-fire tell.
     // Like the player laser it is derived purely from elapsed flight vs TTL (no
     // shell-side effect state) and gated to a live run, so a fireball frozen by
@@ -520,21 +513,27 @@ function drawLockOn(
 
 /**
  * The player's shot as cabinet-style converging laser beams — the "pew pew".
- * Four cyan lines fire from the cannon tips at the screen corners and meet at the
- * bolt's projected position, replacing the old '+' spark placeholder. The cannon
- * tips are a fixed SCREEN-space frame (the cockpit guns), so they don't move with
- * the 3D camera; only the convergence point (the projected bolt) tracks the shot.
- * Off-screen/behind-camera bolts (no projection) simply draw nothing.
+ *
+ * Four cyan lines fire from the cannon tips at the screen corners and meet AT THE SITE — the
+ * crosshair the pilot is aiming with. The cannon tips are a fixed SCREEN-space frame (the
+ * cockpit guns), so they do not move with the 3D camera.
+ *
+ * They converge on the site rather than on a bolt because there is no bolt (story sw7-17 / R11b):
+ * the laser is hitscan, and the ROM draws it gun-ports → site every frame it is on —
+ * `VWLAZ ;VIEW ANY LASARS` (WSLAZR.MAC:149), fed by the site values the sweep latches each frame
+ * (`LDD VG.RSX ;16 BIT REAL SITE VALUE, FOR LAZAR / STD LZ.RSX`). Beam and reticle are now the
+ * same point by construction, which is also what makes the beam honest: it lands where it is drawn.
  */
-function drawPlayerLaser(
+function drawPlayerLaserToSite(
   ctx: CanvasRenderingContext2D,
-  pos: Vec3,
-  proj: Mat4,
+  state: GameState,
   w: number,
   h: number,
 ): void {
-  const tip = project(pos, proj, w, h)
-  if (!tip) return
+  const [nx, ny] = crosshairNdc(state.aimX, state.aimY)
+  // The same NDC→screen mapping `drawCrosshair` and `project` use (Y flipped for the canvas),
+  // so the beams converge exactly on the reticle rather than near it.
+  const tip: readonly [number, number] = [(nx * 0.5 + 0.5) * w, (-ny * 0.5 + 0.5) * h]
   const cannons: ReadonlyArray<readonly [number, number]> = [
     [0, 0],
     [w, 0],

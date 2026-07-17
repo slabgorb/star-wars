@@ -170,7 +170,12 @@ export const FIREBALL_SCORE = 33
  * — see PROJECTILE_SPEED for why the reach is split 12000 × 3 rather than a single
  * fast bolt. */
 export const PROJECTILE_TTL = 3
-/** Minimum seconds between player shots (trigger fire rate). */
+/** Minimum seconds between player shots (trigger fire rate).
+ *
+ * NOT the laser's on-time — see LASER_SWEEP_SECONDS, which is a different quantity and a
+ * longer one (0.39 s vs 0.25 s). G-012 says so in terms: "the 8-frame LZ.EDG value is the
+ * laser's on/collision DURATION per shot, a different quantity from a re-fire interval — do
+ * not port 8 frames as a cooldown." Re-fire is gated HERE and nowhere else. */
 export const FIRE_INTERVAL = 0.25
 /** Seconds between TIE spawns into a free slot. */
 export const SPAWN_INTERVAL = 1.5
@@ -238,6 +243,20 @@ export const ENEMY_SHOT_SPEED = 300
  *  space fireball (story sw4-2) reaches the cockpit well inside this, so the TTL is a
  *  cleanup cap, not the balance lever. */
 export const ENEMY_SHOT_TTL = 64 / TICK_HZ
+/** How long the player's laser stays ON — and therefore able to hit — after one trigger pull
+ *  (story sw7-17 / R11b, audit G-012). The ROM's LZ.EDG: a pull loads 8 and every game frame
+ *  decrements it, with the laser on while it is positive:
+ *
+ *      LDB #8 / STB LZ.EDG                     WSLAZR.MAC:106-107  (a pull LOADS it)
+ *      LDA LZ.EDG / IFGT / DEC LZ.EDG / STA LZ.ON                :110-113  (and burns it down)
+ *
+ *  8 / 20.508 Hz ≈ 0.390 s, expressed in the same idiom as ENEMY_SHOT_TTL above so it stays a
+ *  ROM frame count and not an invented cadence — and in seconds so it is dt-independent.
+ *
+ *  THIS IS A DURATION, NOT A COOLDOWN. Re-fire is FIRE_INTERVAL's job (0.25 s) and the two are
+ *  deliberately independent — a fresh pull RELOADS this counter mid-sweep (the ROM's `LDB #8`
+ *  is unconditional). Conflating them is the documented mis-port; see G-012. */
+export const LASER_SWEEP_SECONDS = 8 / TICK_HZ
 /** How long Darth "glows from a hit" and cannot be re-scored — the ROM loads
  *  `LDA #01F` into A$GLW/A$ROL ("TWO OR SO SECONDS", WSCPU.MAC:371) = 31 game
  *  frames, i.e. 31 / 20.508 Hz ≈ 1.51 s. During this the damage path is skipped
@@ -640,8 +659,20 @@ export interface GameState {
   /** Enemies destroyed in the CURRENT phase; clears the phase at its quota,
    * then resets to 0 on the transition into the next phase. */
   phaseKills: number
-  /** Player bolts currently in flight. */
+  /** Player bolts currently in flight.
+   *
+   * NOT the player's laser (sw7-17 / R11b): the laser is a HITSCAN beam and spawns nothing that
+   * travels — see `laserEdge`. What still lives here is the PROTON TORPEDO, which the ROM really
+   * does fly as an object (FRPTGN/MVPTGN; audit G-006 keeps our simplified model), plus anything
+   * a fixture hands us. Nothing in play adds to this list any more. */
   projectiles: Projectile[]
+  /** Seconds remaining in the laser's sweep — the ROM's LZ.EDG (sw7-17 / R11b, G-012).
+   *
+   * A trigger pull loads LASER_SWEEP_SECONDS and every step burns dt off it; the laser is ON,
+   * and can hit, exactly while this is positive. It gates collision the way LZ.ON gates
+   * CLSLZ/CLGLZ/CLBLZ (`LDA LZ.ON / IFNE ;?ARE LAZARS ON?`), and the shell reads it to know
+   * whether to draw the beam. 0 = off. */
+  laserEdge: number
   /** Live TIE fighters. */
   enemies: Enemy[]
   /** TIEs destroyed this frame or recently, playing their exploded-fragment death
@@ -701,6 +732,18 @@ export interface GameState {
    * asteroids startPrev precedent): the entry confirm fires on a fresh press
    * only, so a start held across the entry-screen transition cannot commit. */
   startPrev: boolean
+  /** Last step's `input.fire` — the trigger's rising-edge register (story sw7-17 / R11b,
+   * audit G-012; the same `startPrev` pattern one field up).
+   *
+   * The cabinet's gun is EDGE-TRIGGERED SEMI-AUTO: one shot per trigger pull, no auto-repeat.
+   * The laser runs off the fire-button edge latch VG.LON, set by the IRQ (WSINT.MAC:188-192) and
+   * consumed once per game frame by TSTLAZ (`LDA VG.LON / IFNE / … / CLR VG.LON ;PREPARE IRQ FOR
+   * NEXT MAINLINE`). Ours used to auto-fire ~4/s while the button was held — an invented cadence.
+   *
+   * This register is what makes the 8-frame sweep MEAN anything: LASER_SWEEP_SECONDS (0.39 s) is
+   * longer than FIRE_INTERVAL (0.25 s), so under the old level-triggered auto-fire a held trigger
+   * reloaded LZ.EDG before it could ever expire and the laser was simply always on. */
+  firePrev: boolean
   /** Seconds until the trigger can fire again. */
   fireCooldown: number
   /** Seconds until the next TIE spawns into a free slot. */
@@ -741,6 +784,7 @@ export function initialState(seed = 1983): GameState {
     trenchView: [0, TRENCH_EYE_SEAT, 0],
     phaseKills: 0,
     projectiles: [],
+    laserEdge: 0,
     enemies: [],
     dyingTies: [],
     turrets: [],
@@ -756,6 +800,7 @@ export function initialState(seed = 1983): GameState {
     gameOver: false,
     entry: null,
     startPrev: false,
+    firePrev: false,
     fireCooldown: 0,
     spawnTimer: SPAWN_INTERVAL,
     spawnCount: 0,

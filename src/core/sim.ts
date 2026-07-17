@@ -15,9 +15,8 @@ import { initialState } from './state'
 import { mazeForWave } from './surfaceMazes'
 import type { GameState, Projectile, Enemy, Turret, Phase, TrenchObstacle, DyingTie } from './state'
 import {
-  PROJECTILE_TTL,
-  PROJECTILE_SPEED,
   FIRE_INTERVAL,
+  LASER_SWEEP_SECONDS,
   SPAWN_INTERVAL,
   SPAWN_DISTANCE,
   TIE_SPAWN_DISTANCE,
@@ -81,7 +80,7 @@ import {
   lookRotation,
   type Vec3,
 } from '@arcade/shared/math3d'
-import { aimDirection, collides, sweptCollides, waveParams } from './gameRules'
+import { aimDirection, beamHit, collides, waveParams } from './gameRules'
 import { createRng, nextFloat, nextInt, type Rng } from '@arcade/shared/rng'
 import { stepNameEntry } from '@arcade/shared/name-entry'
 import {
@@ -96,6 +95,7 @@ import {
   TRENCH_EYE_MIN,
   TRENCH_EYE_MAX,
   TRENCH_EYE_SEAT,
+  TRENCH_FAR,
 } from './trench-channel'
 import { waveSpawnPlan } from './tie-waves'
 
@@ -158,29 +158,60 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // transition. Never seeded from `state.events`, so events never carry over.
   const events: GameEvent[] = []
 
-  // --- Player bolts: advance & expire, then fire on the trigger (all phases) -
+  // --- The player's laser: a trigger pull opens a sweep; nothing travels -----
+  //
+  // THE LASER IS HITSCAN (story sw7-17 / R11b, audit G-004). The ROM draws it gun-ports → site
+  // each frame and resolves collision instantly against the nearest object under the site; there
+  // is no travelling player shot and no lifetime in WSLAZR.MAC at all. What was here before was a
+  // 12,000 u/s projectile, and the field closing on the cockpit while it flew gave every shot a
+  // CONSTANT lead error of closing/(bolt+closing) — 4.8 % of the target's lateral offset today,
+  // 30-64 % at the authentic surface speeds sw7-18 restores. Dead-on aim missed everything past
+  // |x| ~ 4,100, and no aim could correct it. G-004 was re-ruled wont_fix → fix on that.
+  //
+  // `projectiles` still advances: it carries the proton torpedo and anything a fixture places.
+  // The PLAYER's gun adds nothing to it.
   const projectiles = advance(state.projectiles, dt)
   let fireCooldown = state.fireCooldown - dt
-  if (input.fire && fireCooldown <= 0) {
-    // THE GUN IS ON THE SHIP (story sw5-6; surface edition sw7-16). Wherever the pilot's eye
-    // rides, the bolt leaves from THERE. Spawning at the world origin while the eye flies above it
-    // puts the crosshair ray and the bolt ray on parallel lines, and everything the crosshair
-    // lands on is missed underneath by exactly that gap. In the trench the ship is `trenchView`
-    // (the pilot flies 512..3840 above the floor); on the surface it is [0, altitude, 0] (40..238
-    // above it). Only in space is the ship the fixed cockpit at the origin. `shipPoint` is that
-    // one point, per phase — see it for the whole story.
-    //
-    // ROM: `WSGUNS.MAC FRPTGN` spawns the shot at the ship — `LDD M$TX / ADDD #100 ;JUST A BIT IN
-    // FRONT`, `LDD M$TY` (lateral), `LDD M$TZ` (height).
-    const muzzle: Vec3 = shipPoint(state)
-    projectiles.push({
-      pos: muzzle,
-      vel: scale(aimDirection(aimX, aimY, input.aspect), PROJECTILE_SPEED),
-      ttl: PROJECTILE_TTL,
-    })
+  let laserEdge = state.laserEdge
+  // EDGE-TRIGGERED SEMI-AUTO: one sweep per PULL, no auto-repeat (G-012, ruled 2026-07-16). The
+  // cabinet's laser runs off the fire-button edge latch VG.LON — set by the IRQ (WSINT.MAC:188-192)
+  // and consumed once per game frame by TSTLAZ — so holding the trigger down fires exactly one
+  // shot. Ours auto-fired ~4/s while held, which was an invented cadence AND made the sweep
+  // meaningless: 0.25 s of auto-fire reloads a 0.39 s LZ.EDG before it can ever run out, so the
+  // laser was simply on for ever. `firePrev` is the rising-edge register (the `startPrev` pattern).
+  const fireEdge = input.fire && !state.firePrev
+  if (fireEdge && fireCooldown <= 0) {
+    // ROM: `LDB #8 / STB LZ.EDG` (WSLAZR.MAC:106-107) — a pull LOADS the sweep counter, and it
+    // does so unconditionally, so a fresh pull mid-sweep reloads it (retriggerable). Re-fire is
+    // gated by FIRE_INTERVAL and NOT by the sweep: they are different quantities (G-012, which
+    // says in terms "do not port 8 frames as a cooldown") and the sweep is the longer of the two.
+    laserEdge = LASER_SWEEP_SECONDS
     fireCooldown = FIRE_INTERVAL
     events.push({ type: 'fire' })
   }
+  // ROM: `LDA LZ.EDG / IFGT / DEC LZ.EDG / STA LZ.ON` — the laser is on WHILE the counter is
+  // positive and is decremented in the same breath, so the pull's own frame shoots. Everything
+  // downstream reads `laserOn` the way CLSLZ/CLGLZ/CLBLZ read `LDA LZ.ON / IFNE`.
+  const laserOn = laserEdge > 0
+  if (laserOn) laserEdge = Math.max(0, laserEdge - dt)
+
+  // THE BEAM, cast from THE SHIP (story sw5-6; surface edition sw7-16). Wherever the pilot's eye
+  // rides, the beam leaves from THERE. Cast from the world origin while the eye flies above it,
+  // the sight-line and the beam run on parallel rays and everything the crosshair lands on is
+  // missed underneath by exactly that gap. In the trench the ship is `trenchView` (the pilot flies
+  // 512..3840 above the floor); on the surface it is [0, altitude, 0] (40..238 above it). Only in
+  // space is the ship the fixed cockpit at the origin. `shipPoint` is that one point, per phase.
+  //
+  // It is the ship at the START of the step — the eye the pilot actually sighted down, since the
+  // shell renders from this state and then samples the yoke. Same reasoning as sw7-16's muzzle;
+  // see `shipPoint`.
+  //
+  // ROM: `WSGUNS.MAC FRPTGN` puts the shot on the ship — `LDD M$TX / ADDD #100 ;JUST A BIT IN
+  // FRONT`, `LDD M$TY` (lateral), `LDD M$TZ` (height). The site is re-latched EVERY frame of the
+  // sweep (`LDD VG.RSX / STD LZ.RSX` sits inside the `IFGT`), never frozen at the pull — which is
+  // why the direction is read from THIS frame's aim and the beam tracks the reticle while it is on.
+  const beamOrigin: Vec3 = shipPoint(state)
+  const beamDir: Vec3 = aimDirection(aimX, aimY, input.aspect)
 
   // Enemy fire advances & expires each step. SPACE-phase TIE fireballs HOME on the
   // cockpit (ROM sub_A875, story sw4-2 / spec §B): their position decays 7/8 per
@@ -191,7 +222,21 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       ? homeShots(state.enemyShots, dt)
       : advance(state.enemyShots, dt)
 
-  const common: StepCommon = { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots, events }
+  const common: StepCommon = {
+    t,
+    aimX,
+    aimY,
+    rng,
+    projectiles,
+    fireCooldown,
+    enemyShots,
+    events,
+    laserEdge,
+    firePrev: input.fire,
+    laserOn,
+    beamOrigin,
+    beamDir,
+  }
 
   // Each phase runs its own combat, then `progress` checks the kill quota and
   // drops the run into the next phase once the wave is cleared. The trench is
@@ -263,38 +308,77 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // fire still runs on a formation timer (stepSurface, unchanged).
   const enemyFireCooldown = Math.max(0, state.enemyFireCooldown - dt)
 
-  // --- Player bolts vs TIEs: destroy on contact, score per kill ------------
-  // A killed TIE also spawns its exploded-fragment death cue (story sw3-8), so it
-  // breaks apart on screen instead of blinking out; older cues age and expire.
+  // --- CLSLZ: the beam takes the nearest thing under the site ---------------
+  //
+  // ROM (WSLAZR.MAC:763-789), the whole of space's collision:
+  //
+  //     CLSLZ::
+  //         LDA LZ.ON
+  //         IFNE                    ;?ARE LAZARS ON?
+  //         LDD CL.GDS              ;CHECK ALIEN GUNS FIRST
+  //         IFPL                    ;?VALID GUN POSSIBILITY?
+  //         SUBD CL.ADS             ;CHECK AGAINST ALIEN DISTANCE
+  //         BLO HTSG                ;B IF CLOSER, THEN HIT THE GUN
+  //         BRA HTSA                ;J ELSE VALID ALIEN IS CLOSER
+  //
+  // ONE object resolves per frame, across BOTH categories — the fireballs (CL.GDS, the "alien
+  // guns'" shells) and the fighters (CL.ADS) rank in a single contest and the nearest wins. That
+  // is why this is one loop over two lists rather than two independent passes: a fireball drifting
+  // in front of the TIE that fired it eats the beam, and the TIE lives.
+  //
+  // A killed TIE also spawns its exploded-fragment death cue (story sw3-8), so it breaks apart on
+  // screen instead of blinking out; older cues age and expire.
   let score = state.score
   const killedTie = new Set<number>()
-  const spentBolt = new Set<number>()
   const spawnedDying: DyingTie[] = []
   // Darth indices that took a SCORING hit this frame — they survive (KEEP DARTH
   // ALIVE) but re-arm their glow window below so they cannot be re-scored yet.
   const darthScored = new Set<number>()
-  for (let ei = 0; ei < enemies.length; ei++) {
-    for (let pi = 0; pi < projectiles.length; pi++) {
-      if (spentBolt.has(pi)) continue
-      if (collides(enemies[ei].pos, projectiles[pi].pos, TIE_HIT_RADIUS)) {
-        spentBolt.add(pi)
-        if (enemies[ei].kind === 'darth') {
-          // Darth is immortal in space: CPHTSA resets his hit counter to keep him
-          // alive (WSCPU.MAC:367-368), so a laser hit never destroys him. He scores
-          // 2,000 (SCRDARTH) once per hit, gated by the post-hit glow so a burst
-          // does not re-score while he is "glowing from a hit" (WSCPU.MAC:346-348).
-          if ((enemies[ei].glow ?? 0) <= 0 && !darthScored.has(ei)) {
-            score += VADER_SCORE
-            darthScored.add(ei)
-          }
-          break
-        }
-        killedTie.add(ei)
-        score += TIE_SCORE
-        events.push({ type: 'enemy-death', enemyType: 'tie', pos: [...enemies[ei].pos] as Vec3 })
-        spawnedDying.push({ pos: [...enemies[ei].pos] as Vec3, age: 0 })
-        break
+  const killedShot = new Set<number>()
+
+  if (laserOn) {
+    let bestRange = Infinity
+    let hitTie = -1
+    let hitShot = -1
+    for (let ei = 0; ei < enemies.length; ei++) {
+      const range = beamHit(beamOrigin, beamDir, enemies[ei].pos, TIE_HIT_RADIUS)
+      if (range !== null && range < bestRange) {
+        bestRange = range
+        hitTie = ei
+        hitShot = -1
       }
+    }
+    for (let si = 0; si < enemyShots.length; si++) {
+      const range = beamHit(beamOrigin, beamDir, enemyShots[si].pos, ENEMY_SHOT_HIT_RADIUS)
+      if (range !== null && range < bestRange) {
+        bestRange = range
+        hitShot = si
+        hitTie = -1
+      }
+    }
+
+    if (hitTie >= 0) {
+      if (enemies[hitTie].kind === 'darth') {
+        // Darth is immortal in space: CPHTSA resets his hit counter to keep him
+        // alive (WSCPU.MAC:367-368), so a laser hit never destroys him. He scores
+        // 2,000 (SCRDARTH) once per hit, gated by the post-hit glow so a burst
+        // does not re-score while he is "glowing from a hit" (WSCPU.MAC:346-348).
+        if ((enemies[hitTie].glow ?? 0) <= 0) {
+          score += VADER_SCORE
+          darthScored.add(hitTie)
+        }
+      } else {
+        killedTie.add(hitTie)
+        score += TIE_SCORE
+        events.push({ type: 'enemy-death', enemyType: 'tie', pos: [...enemies[hitTie].pos] as Vec3 })
+        spawnedDying.push({ pos: [...enemies[hitTie].pos] as Vec3, age: 0 })
+      }
+    } else if (hitShot >= 0) {
+      // Shooting incoming fire down (story 8-18). Intercepted fireballs drop out HERE, before the
+      // cockpit-damage pass below, so a fireball shot down never also costs a shield.
+      killedShot.add(hitShot)
+      score += FIREBALL_SCORE
+      events.push({ type: 'fireball-destroyed', pos: [...enemyShots[hitShot].pos] as Vec3 })
     }
   }
   const standingEnemies = enemies
@@ -310,26 +394,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     ...spawnedDying,
   ]
 
-  // --- Player bolts vs enemy fireballs: shoot incoming fire down (story 8-18) -
-  // Mirror the TIE loop: one bolt downs one fireball, sharing `spentBolt` so a
-  // bolt already spent on a TIE can't also kill a fireball. Intercepted
-  // fireballs drop out HERE, before the cockpit-damage pass below, so a fireball
-  // shot down never also costs a shield.
-  const killedShot = new Set<number>()
-  for (let si = 0; si < enemyShots.length; si++) {
-    for (let pi = 0; pi < projectiles.length; pi++) {
-      if (spentBolt.has(pi)) continue
-      if (collides(enemyShots[si].pos, projectiles[pi].pos, ENEMY_SHOT_HIT_RADIUS)) {
-        killedShot.add(si)
-        spentBolt.add(pi)
-        score += FIREBALL_SCORE
-        events.push({ type: 'fireball-destroyed', pos: [...enemyShots[si].pos] as Vec3 })
-        break
-      }
-    }
-  }
   const standingShots = enemyShots.filter((_, i) => !killedShot.has(i))
-  const liveBolts = projectiles.filter((_, i) => !spentBolt.has(i))
 
   // --- Cockpit damage: any TIE that reaches it, any fireball that lands -----
   // SPACE ONLY — the surface and trench returned at :199/:200 above, so this block is reachable in
@@ -373,7 +438,9 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       gameOver: lives <= 0,
       mode: lives <= 0 ? 'gameover' : state.mode,
       phaseKills: state.phaseKills + killedTie.size,
-      projectiles: liveBolts,
+      projectiles,
+      laserEdge,
+      firePrev: input.fire,
       enemies: liveEnemies,
       dyingTies,
       enemyShots: liveShots,
@@ -476,6 +543,20 @@ interface StepCommon {
   /** The frame's event channel, pre-seeded with any player `fire`; each phase
    * pushes its own moments and `progress` appends level-clear. */
   events: GameEvent[]
+  /** Seconds left in the laser sweep AFTER this frame's decrement — what rides out on the
+   * returned state (the ROM's LZ.EDG). */
+  laserEdge: number
+  /** This frame's `input.fire`, to ride out as next step's rising-edge register. */
+  firePrev: boolean
+  /** Whether the laser is on THIS frame, and so whether the beam may hit anything at all.
+   * The ROM's LZ.ON: every collision routine opens `LDA LZ.ON / IFNE ;?ARE LAZARS ON?`. */
+  laserOn: boolean
+  /** Where the beam leaves the ship — `shipPoint` at the start of the step, the eye the pilot
+   * sighted down. */
+  beamOrigin: Vec3
+  /** The beam's unit direction — this frame's aim, because the ROM re-latches the site on every
+   * frame of the sweep rather than freezing it at the pull. */
+  beamDir: Vec3
 }
 
 /**
@@ -484,7 +565,8 @@ interface StepCommon {
  * ahead, lob bolts at the cockpit, and fall to the player's fire.
  */
 function stepSurface(state: GameState, input: Input, dt: number, common: StepCommon): GameState {
-  const { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots, events } = common
+  const { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots, events, laserEdge, firePrev, laserOn, beamOrigin, beamDir } =
+    common
 
   // --- Terrain skim: yoke flies up/down; can't pass the floor; scrape crashes
   let altitude = state.altitude + aimY * ALTITUDE_RATE * dt
@@ -584,25 +666,31 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
   // (sw3-11): the ROM's BUNKER maze macro never increments `.TWRS`, so bunkers
   // are shootable but quota-neutral — a bunker kill can never eat into the maze's
   // tower count (`.TWRS`/TTWRS) or trigger the cleared-all bonus.
+  //
+  // CLGLZ (WSLAZR.MAC:707) is CLSLZ's ground twin: gated on the laser being on, it takes the
+  // NEAREST object under the site, instantly, and exactly one per frame. No forward clip here —
+  // only the trench (CLBLZ) builds its beam against a fixed far line.
   let score = state.score
   let towerKills = 0
   const killed = new Set<number>()
-  const spentBolt = new Set<number>()
-  for (let ti = 0; ti < turrets.length; ti++) {
-    for (let pi = 0; pi < projectiles.length; pi++) {
-      if (spentBolt.has(pi)) continue
-      if (collides(turrets[ti].pos, projectiles[pi].pos, TURRET_HIT_RADIUS)) {
-        killed.add(ti)
-        spentBolt.add(pi)
-        score += TURRET_SCORE
-        if (turrets[ti].kind !== 'bunker') towerKills++
-        events.push({ type: 'enemy-death', enemyType: 'turret', pos: [...turrets[ti].pos] as Vec3 })
-        break
+  if (laserOn) {
+    let bestRange = Infinity
+    let hit = -1
+    for (let ti = 0; ti < turrets.length; ti++) {
+      const range = beamHit(beamOrigin, beamDir, turrets[ti].pos, TURRET_HIT_RADIUS)
+      if (range !== null && range < bestRange) {
+        bestRange = range
+        hit = ti
       }
+    }
+    if (hit >= 0) {
+      killed.add(hit)
+      score += TURRET_SCORE
+      if (turrets[hit].kind !== 'bunker') towerKills++
+      events.push({ type: 'enemy-death', enemyType: 'turret', pos: [...turrets[hit].pos] as Vec3 })
     }
   }
   const standingTurrets = turrets.filter((_, i) => !killed.has(i))
-  const liveBolts = projectiles.filter((_, i) => !spentBolt.has(i))
 
   // --- Cockpit damage: any turret bolt that lands (cause 'turret') ----------
   // Centred on the SHIP, not the origin (sw7-16): the hit sphere flies with the pilot. Left at the
@@ -635,7 +723,9 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     gameOver: lives <= 0,
     mode: lives <= 0 ? 'gameover' : state.mode,
     phaseKills: state.phaseKills + towerKills, // towers only — bunkers are quota-neutral
-    projectiles: liveBolts,
+    projectiles,
+    laserEdge,
+    firePrev,
     turrets: standingTurrets,
     enemyShots: liveShots,
     fireCooldown,
@@ -656,7 +746,8 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
  * scores, or damages), preserving the 8-8 terminal-hold edge case.
  */
 function stepTrench(state: GameState, common: StepCommon, dt: number): GameState {
-  const { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots, events } = common
+  const { t, aimX, aimY, rng, projectiles, fireCooldown, enemyShots, events, laserEdge, firePrev, laserOn, beamOrigin, beamDir } =
+    common
   // `events` carries the prologue's `fire` cue (story 8-7) and accumulates the
   // trench's own moments below; it rides every return path so the channel stays
   // a fresh per-frame list.
@@ -707,6 +798,8 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     projectiles,
     enemyShots,
     fireCooldown,
+    laserEdge,
+    firePrev,
     events,
     trenchView,
     trenchTimer,
@@ -721,13 +814,38 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   // --- catwalks crash the cockpit (findings ## Trench catwalks, turrets &
   // --- wall squares). Runs BEFORE the port logic below (and before the
   // --- no-port safe hold) so obstacles are live even on a passless trench, and
-  // --- consumes bolts from `base.projectiles` so a bolt spent on an obstacle
-  // --- can't also kill the port this same frame.
-  let bolts = base.projectiles
+  // --- SPENDS THE BEAM if it lands, so a beam that killed an obstacle can't also
+  // --- arm the torpedo this same frame (the precedence the bolt model had).
+  //
+  // CLBLZ (WSLAZR.MAC:391) is the trench's collision, and it is the one that CLIPS: the beam is
+  // built against a fixed forward line whose endpoint is $7000 = 28,672 units ahead of the ship —
+  //
+  //     10$:
+  //         LDD #7000               ;FARTHEST FORWARD POINT
+  //         ADDD M$TX+M.U1
+  //
+  // — so nothing beyond that line is under the beam at all, however clear the shot looks. The
+  // clone already carries that number, ROM-anchored, as the channel's own far cutoff.
+  let beamObstacle = -1
+  if (laserOn) {
+    let bestRange = Infinity
+    for (let i = 0; i < state.trenchObstacles.length; i++) {
+      const o = state.trenchObstacles[i]
+      if (o.kind === 'catwalk') continue // a catwalk is a hazard to fly into, not a target
+      const pos: Vec3 = [o.pos[0], o.pos[1], o.pos[2] + TRENCH_SCROLL_SPEED * dt]
+      const range = beamHit(beamOrigin, beamDir, pos, OBSTACLE_HIT_RADIUS, TRENCH_FAR)
+      if (range !== null && range < bestRange) {
+        bestRange = range
+        beamObstacle = i
+      }
+    }
+  }
+
   let obstacleScore = 0
   const survivors: TrenchObstacle[] = []
   let crashedCatwalk = false
-  for (const o of state.trenchObstacles) {
+  for (let oi = 0; oi < state.trenchObstacles.length; oi++) {
+    const o = state.trenchObstacles[oi]
     const pos: Vec3 = [o.pos[0], o.pos[1], o.pos[2] + TRENCH_SCROLL_SPEED * dt]
     if (o.kind === 'catwalk') {
       // Hazard check FIRST, before the despawn cutoff below: a catwalk starting
@@ -746,21 +864,16 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
         events.push({ type: 'terrain-crash' })
         continue // crashed through it — removed
       }
-    } else {
-      const hit = bolts.findIndex((b) => collides(pos, b.pos, OBSTACLE_HIT_RADIUS))
-      if (hit >= 0) {
-        bolts = bolts.filter((_, i) => i !== hit)
-        obstacleScore += o.kind === 'turret' ? TRENCH_TURRET_SCORE : TRENCH_SQUARE_SCORE
-        events.push({ type: 'trench-obstacle-destroyed', kind: o.kind })
-        continue
-      }
+    } else if (oi === beamObstacle) {
+      obstacleScore += o.kind === 'turret' ? TRENCH_TURRET_SCORE : TRENCH_SQUARE_SCORE
+      events.push({ type: 'trench-obstacle-destroyed', kind: o.kind })
+      continue
     }
     if (pos[2] > 0) continue // scrolled past the cockpit — despawn
     survivors.push({ kind: o.kind, pos })
   }
   const afterObstacles: GameState = {
     ...base,
-    projectiles: bolts,
     score: base.score + obstacleScore,
     trenchObstacles: survivors,
     ...(crashedCatwalk
@@ -786,7 +899,7 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   ]
 
   // --- Player bolt vs the port: a hit clears the run and scores the bonus -----
-  // Reads `afterObstacles.projectiles` (post-obstacle bolts), not the raw
+  // Reads the post-obstacle beam state, not the raw
   // `projectiles` — a bolt already spent destroying a turret/square this frame
   // cannot also detonate the port.
   // The hit/miss only resolves once the port has scrolled into the narrow
@@ -808,18 +921,25 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   // So the shot is EARNED EARLY — out where the port is still a reachable ~17.7° and the yoke can
   // point at it — and RESOLVES LATE, inside the ROM's $800 gate: precision lives in the ARMING.
   //
-  // Swept, not snapshot, and for the same reason as the old terminal test: `advance` has already
-  // moved the bolt this tick, so a 12,000 u/s bolt can step clean over the box between two frames.
-  const armingBolt = afterObstacles.projectiles.findIndex((b) =>
-    sweptCollides(port, sub(b.pos, scale(b.vel ?? ZERO, dt)), b.pos, PORT_HIT_RADIUS),
-  )
-  const armed = afterObstacles.portTorpedoArmed || armingBolt >= 0
-  // The arming laser is CONSUMED — the ROM latches PT.LZF to $FF ("MARK THAT PROTON TORP HAS
-  // FIRED") so one run arms one torpedo, and the bolt becomes the torpedo rather than flying on.
-  const boltsAfterArming =
-    !afterObstacles.portTorpedoArmed && armingBolt >= 0
-      ? afterObstacles.projectiles.filter((_, i) => i !== armingBolt)
-      : afterObstacles.projectiles
+  // IT IS THE BEAM THAT ARMS IT, and now literally so (sw7-17 / R11b). This was a swept test
+  // against a travelling bolt — swept precisely because a 12,000 u/s bolt could step clean over
+  // the box between two frames. A hitscan beam is an exact ray and cannot tunnel, so the sweep
+  // goes with the projectile it existed to chase; the ROM's own arming test is the LASER's:
+  //
+  //     LDA PT.LZF              ;PROTON TORP LAZAR FLAG
+  //     IFGT                    ;?LAZAR GOT CLOSE ENUF TO FIRE PROTON TORPS?
+  //     LDA #0FF
+  //     STA PT.LZF              ;MARK THAT PROTON TORP HAS FIRED
+  //     JSR FRPTGN              ;THEN LAUNCH DIRECT HIT PROTON TORPS   (WSLAZR.MAC:406-411)
+  //
+  // — and it sits in CLBLZ, immediately above the `#7000` clip, so it is the same beam and the
+  // same forward line. The beam is SPENT if it already killed an obstacle this frame, which keeps
+  // the precedence the bolt model had ("a bolt spent on an obstacle can't also kill the port").
+  const armingBeam =
+    laserOn &&
+    beamObstacle < 0 &&
+    beamHit(beamOrigin, beamDir, port, PORT_HIT_RADIUS, TRENCH_FAR) !== null
+  const armed = afterObstacles.portTorpedoArmed || armingBeam
   // The death knell (sw7-8, U-010) rings when the torpedo is FIRED, not when it
   // lands: WSGUNS.MAC:1220 puts `JSR PMSF2 ;SOUND THE DEATH KNELL` in FRPTGN —
   // the routine that CREATES the torpedo (PT.LIV=1). Our launch moment is this
@@ -827,7 +947,7 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   // latch is set after this frame, and a fresh port re-primes it (the miss path
   // below). Pushed BEFORE the detonation resolution so the degenerate
   // armed-inside-the-window frame carries knell-then-finale, the ROM's order.
-  if (!afterObstacles.portTorpedoArmed && armingBolt >= 0) {
+  if (!afterObstacles.portTorpedoArmed && armingBeam) {
     events.push({ type: 'tune', tune: 'deathKnell' })
   }
 
@@ -838,8 +958,8 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   // sw3-15 pinned still holds: an armed run does not win at the trench mouth, it wins at the wall.
   const detonates = armed && inApproachWindow
   if (detonates) {
-    // The arming laser is already gone (it became the torpedo); everything still in flight rides on.
-    const liveBolts = boltsAfterArming
+    // The beam is not an object; everything still in flight rides on untouched.
+    const liveBolts = afterObstacles.projectiles
     // "Use the Force": a clean run — no trench shots before the killing torpedo
     // itself — awards FORCE_BONUS on top of TRENCH_BONUS (fidelity epic, task 4;
     // findings ## Exhaust port & run outcome, the type-4 marker's one-shot latch).
@@ -917,11 +1037,11 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   }
 
   // Otherwise the port keeps scrolling in toward the cockpit — carrying the torpedo latch and
-  // the surviving bolts (the arming laser, if there was one, BECAME the torpedo and is gone).
+  // the surviving projectiles (the beam that armed the torpedo was never an object in flight).
   return {
     ...afterObstacles,
     exhaustPort: { pos: port },
-    projectiles: boltsAfterArming,
+    projectiles: afterObstacles.projectiles,
     portTorpedoArmed: armed,
   }
 }

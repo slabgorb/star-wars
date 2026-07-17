@@ -64,7 +64,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 369,
+      "line": 388,
       "verbatim": "export const TURRET_SCORE = 200"
     }
   },
@@ -81,8 +81,8 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 597,
-      "verbatim": "        score += TURRET_SCORE"
+      "line": 688,
+      "verbatim": "      score += TURRET_SCORE"
     }
   },
   {
@@ -132,7 +132,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 450,
+      "line": 469,
       "verbatim": "export const TRENCH_BONUS = 25000"
     }
   },
@@ -149,7 +149,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 574,
+      "line": 593,
       "verbatim": "export const SURFACE_CLEAR_BONUS = 50000"
     }
   },
@@ -183,7 +183,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 360,
+      "line": 425,
       "verbatim": "  const lives = Math.max(0, state.lives - damage)"
     }
   },
@@ -200,7 +200,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 533,
+      "line": 552,
       "verbatim": "export const FORCE_BONUS = 5000"
     },
     "recommendation": "fix",
@@ -271,7 +271,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 345,
+      "line": 410,
       "verbatim": "      damage++"
     },
     "recommendation": "fix",

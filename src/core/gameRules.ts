@@ -80,6 +80,52 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v
 }
 
+// --- The laser beam (story sw7-17 / R11b) -----------------------------------
+//
+// The player's laser is HITSCAN: the ROM draws it gun-ports → site each frame (VWLAZ) and
+// resolves collision INSTANTLY against the nearest object under the site — CLSLZ picks
+// min(CL.GDS, CL.ADS) in space, CLGLZ on the ground, CLBLZ in the trench. There is no
+// travelling player shot and no lifetime anywhere in WSLAZR.MAC.
+//
+// "Under the site" is recorded during the object DRAW: each object tests the site against its
+// own projected size and keeps the nearest (WSGUNS.MAC:938-948 — a box test, then `LDD TMPSIZ /
+// LSRD / ADDD TMPSIZ ;MAKE 1.5 FOR OCTAGON`, then `LDD M.XT ;THEN SEE IF WE ARE THE CLOSEST
+// ALIEN / CMPD CL.GDS / IFLO / STD CL.GDS`).
+//
+// Screen-space is the cabinet's way of saying a world-space thing, and we say it directly: an
+// object is under the site exactly when the AIM RAY passes within its hit radius. That is the
+// same predicate — a cone through the object's projected size IS a ray within its radius at that
+// depth — and it keeps the test in world space, where this core does all its collision. It also
+// reuses the hit radii the game already has (TIE_HIT_RADIUS &c.) instead of inventing a reticle
+// size, so the beam and the sphere can never disagree about how big a target is.
+
+/**
+ * How far along the beam it strikes a sphere at `pos`, or `null` if it misses.
+ *
+ * `eye` is the ship point the beam is cast from and `dir` its unit aim direction. Returns the
+ * distance along the beam to the target's closest approach — the ROM's `M.XT`, the number
+ * CL.GDS/CL.ADS rank on — so callers can pick the nearest. Targets behind the gun never hit
+ * (the perspective divide would otherwise fold them onto the reticle), and `maxRange` is the
+ * beam's far endpoint: infinite in space and on the ground, but $7000 = 28,672 in the trench,
+ * where CLBLZ builds the beam against a fixed forward line (`LDD #7000 ;FARTHEST FORWARD
+ * POINT`, WSLAZR.MAC:417).
+ *
+ * Pure Math Box (dot/sub/add/scale/length) — no ad-hoc trig, no screen pixels.
+ */
+export function beamHit(
+  eye: Vec3,
+  dir: Vec3,
+  pos: Vec3,
+  radius: number,
+  maxRange = Infinity,
+): number | null {
+  const along = dot(sub(pos, eye), dir)
+  if (along <= 0) return null // behind the gun — never under the site
+  if (along > maxRange) return null // past the beam's far endpoint
+  const closest = add(eye, scale(dir, along))
+  return length(sub(pos, closest)) <= radius ? along : null
+}
+
 // --- Lock-on (story 8-14) ---------------------------------------------------
 //
 // The targeting reticle's green circle lights up over the TIE the player is
