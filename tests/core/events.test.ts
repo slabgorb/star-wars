@@ -38,6 +38,7 @@ import { stepGame } from '../../src/core/sim'
 import { initialState, SPACE_WAVE_QUOTA, SKIM_ALTITUDE, MIN_SKIM_ALTITUDE } from '../../src/core/state'
 import type { Enemy, Turret, Projectile, GameState } from '../../src/core/state'
 import { NO_INPUT } from '../../src/core/input'
+import { fireAt } from '../support/aim'
 import { IDENTITY } from '@arcade/shared/math3d'
 // Read core source as text via Vite's `?raw` (no Node `fs` types — the project is
 // deliberately browser-pure, which is exactly the boundary this suite guards).
@@ -190,10 +191,14 @@ describe('event emission — space phase gameplay moments (AC1)', () => {
     expect(out.events).toContainEqual({ type: 'fire' })
   })
 
-  it("emits 'enemy-death' (tie) carrying enemyType + death position on a bolt hit", () => {
+  it("emits 'enemy-death' (tie) carrying enemyType + death position on a laser hit", () => {
+    // sw7-17: the laser is HITSCAN, so "the player shot this TIE" is no longer a bolt
+    // hand-placed on top of it (nothing the player fires exists as an object any more)
+    // — it is AIM AT IT AND PULL THE TRIGGER, resolved in the same frame. The event
+    // under test is unchanged; only the way the kill is caused is.
     const tie: Enemy = { pos: [0, 0, -300], vel: [0, 0, 0], kind: 'tie', orient: IDENTITY }
-    const bolt: Projectile = { pos: [0, 0, -300], vel: [0, 0, 0], ttl: 1 } // overlaps the TIE
-    const out = stepGame(playing({ enemies: [tie], projectiles: [bolt] }), NO_INPUT, DT)
+    const s0 = playing({ enemies: [tie] })
+    const out = stepGame(s0, fireAt(s0, tie.pos), DT)
     expect(out.events).toContainEqual({ type: 'enemy-death', enemyType: 'tie', pos: [0, 0, -300] })
   })
 
@@ -230,10 +235,13 @@ describe('event emission — space phase gameplay moments (AC1)', () => {
 })
 
 describe('event emission — surface phase gameplay moments (AC1, Wave 2+)', () => {
-  it("emits 'enemy-death' (turret) when a bolt destroys a turret", () => {
+  it("emits 'enemy-death' (turret) when the laser destroys a turret", () => {
+    // sw7-17 (hitscan): aimed at from the surface ship — which flies SKIM_ALTITUDE above
+    // the floor the turret stands on (sw7-16), so this is a real ~38°-down shot the yoke
+    // can make, not a bolt parked on the target.
     const turret: Turret = { pos: [0, 0, -300] }
-    const bolt: Projectile = { pos: [0, 0, -300], vel: [0, 0, 0], ttl: 1 }
-    const out = stepGame(playing({ phase: 'surface', turrets: [turret], projectiles: [bolt] }), NO_INPUT, DT)
+    const s0 = playing({ phase: 'surface', turrets: [turret] })
+    const out = stepGame(s0, fireAt(s0, turret.pos), DT)
     expect(out.events).toContainEqual(
       expect.objectContaining({ type: 'enemy-death', enemyType: 'turret' }),
     )

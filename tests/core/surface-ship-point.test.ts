@@ -48,7 +48,7 @@
 // pure function of GameState; it just stops keeping its own private copy of where the ship is.
 
 import { describe, it, expect } from 'vitest'
-import { stepGame, enterPhase, surfaceShip } from '../../src/core/sim'
+import { enterPhase, surfaceShip, shipPoint } from '../../src/core/sim'
 import {
   initialState,
   SKIM_ALTITUDE,
@@ -56,11 +56,7 @@ import {
   MAX_SKIM_ALTITUDE,
   type GameState,
 } from '../../src/core/state'
-import type { Input } from '../../src/core/input'
 import { eyeOf } from '../support/aim'
-
-const DT = 1 / 60
-const ASPECT = 16 / 9
 
 const surface = (over: Partial<GameState> = {}): GameState => ({
   ...enterPhase(initialState(1983), 'surface'),
@@ -70,14 +66,6 @@ const surface = (over: Partial<GameState> = {}): GameState => ({
   projectiles: [],
   enemyShots: [],
   fireCooldown: 0,
-  ...over,
-})
-
-const trigger = (over: Partial<Input> = {}): Input => ({
-  aimX: 0,
-  aimY: 0,
-  fire: true,
-  aspect: ASPECT,
   ...over,
 })
 
@@ -120,14 +108,35 @@ describe('sw7-16 — the surface ship point is ONE function', () => {
     expect(eyeOf(s)).toEqual(surfaceShip(s.altitude))
   })
 
-  it('IS the muzzle — the gun and the camera cannot drift apart', () => {
-    // The core's other consumer, closing the triangle: gun == ship point == camera eye. The
-    // muzzle is the ship at the START of the step (the eye the pilot aimed down — see the
-    // sibling suite's section (b)), so it is built from `s0`, not from the returned state.
+  it('IS where the gun is — `shipPoint` and the camera cannot drift apart', () => {
+    // The core's other consumer, closing the triangle: gun == ship point == camera eye.
+    //
+    // == HOW sw7-17 CHANGED THIS TEST, AND WHY IT IS NOT WEAKER =================
+    //
+    // Round 2 pinned this through the muzzle of a travelling bolt:
+    //
+    //     const s = stepGame(s0, trigger(), DT)
+    //     expect(s.projectiles[0].pos).toEqual(surfaceShip(s0.altitude))
+    //
+    // sw7-17 took the bolt away — the player's laser is a HITSCAN beam and spawns nothing that
+    // flies (audit G-004), so `s.projectiles` is empty after a trigger frame and there is no
+    // object anywhere on the state whose position IS the muzzle. The gun's origin is now
+    // `shipPoint(state)` itself, read straight out of the core.
+    //
+    // So the assertion splits in two, and BOTH halves are held:
+    //
+    //   * THE VALUE half is here: `shipPoint` — the phase-dispatching function the gun actually
+    //     calls — agrees with the shell's REAL camera (`eyeOf` inverts `render.ts cameraView`) at
+    //     an arbitrary in-band height. This is a strictly TIGHTER link than the test above it,
+    //     which checks `surfaceShip` against the camera: this one goes through the phase switch,
+    //     so it also fails if `shipPoint`'s surface branch is ever wired to something else.
+    //
+    //   * THE BEHAVIOURAL half — that the gun really does cast from this point rather than merely
+    //     agreeing with it — is `hitscan-laser.test.ts`'s "the beam is cast from the ship point,
+    //     not the world origin", which fires a shot that lands ONLY from the flying eye (the same
+    //     ray cast from the origin passes ~228 away, outside TURRET_HIT_RADIUS). That is where the
+    //     "the gun uses it" claim is earned; this file does not take credit for it.
     const s0 = surface({ altitude: 173 })
-    const s = stepGame(s0, trigger(), DT)
-
-    expect(s.projectiles).toHaveLength(1)
-    expect(s.projectiles[0].pos).toEqual(surfaceShip(s0.altitude))
+    expect(shipPoint(s0)).toEqual(eyeOf(s0))
   })
 })

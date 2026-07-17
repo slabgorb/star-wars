@@ -43,7 +43,7 @@
 import { describe, it, expect } from 'vitest'
 import type { SpeechLine } from '../../src/core/events'
 import { stepGame, enterPhase } from '../../src/core/sim'
-import { initialState, PROJECTILE_TTL, type GameState } from '../../src/core/state'
+import { initialState, type GameState } from '../../src/core/state'
 import { NO_INPUT } from '../../src/core/input'
 
 const DT = 1 / 60
@@ -57,15 +57,23 @@ function trenchAtWave(seed: number, wave: number): GameState {
   return { ...enterPhase(initialState(seed), 'trench'), mode: 'playing', wave, trenchObstacles: [] }
 }
 
-/** Park a bolt on the (in-window) exhaust port so the NEXT step destroys it — driving
- *  the winning-shot speech gate AND the trench->next-wave-space music gate. */
+/** A run ARMED AND AT THE WALL, so the NEXT step destroys the port — driving the
+ *  winning-shot speech gate AND the trench->next-wave-space music gate.
+ *
+ *  sw7-17: this used to park a bolt on the port. The laser is HITSCAN now — nothing the
+ *  player fires exists as an object — and the replacement is NOT "shoot the port this
+ *  frame": in the window the port lies 68.7° below the pilot and the yoke reaches 30°.
+ *  The cabinet's own answer is the ARM-early / RESOLVE-late split (sw5-6): the laser
+ *  closes the PT.LZF latch far out where the port is a reachable ~17.7°, and the machine
+ *  cashes it at the $800 gate. That armed-at-the-window state is what this builds, and it
+ *  is exactly what a real winning run carries on its killing frame. */
 function portKill(state: GameState): GameState {
   const p = state.exhaustPort!.pos
   const port: typeof p = [p[0], p[1], -300] // sw3-15: seat it in the near-cockpit window
   return {
     ...state,
     exhaustPort: { pos: port },
-    projectiles: [{ pos: [port[0], port[1], port[2]], vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
+    portTorpedoArmed: true,
   }
 }
 

@@ -37,13 +37,13 @@ import {
   TIE_NEAR_BOUND,
   COCKPIT_HIT_RADIUS,
   FIREBALL_SCORE,
-  PROJECTILE_TTL,
   type GameState,
   type Enemy,
   type Projectile,
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
+import { fireAt } from '../support/aim'
 import { normalize, sub, scale, length, type Vec3, type Mat4 } from '@arcade/shared/math3d'
 
 const COCKPIT: Vec3 = [0, 0, 0]
@@ -207,17 +207,22 @@ describe('Story 9-4 — invariants preserved under per-TIE fire (AC2, AC3, AC4)'
     }
   })
 
-  it('a player bolt still shoots an enemy fireball out of the air (story 8-18 intact)', () => {
+  it('the player laser still shoots an enemy fireball out of the air (story 8-18 intact)', () => {
+    // sw7-17: the player's half of this used to be a hand-placed bolt sitting on the fireball.
+    // The gun is HITSCAN now and spawns nothing, so the honest fixture is to AIM AT the fireball
+    // and PULL. The enemy's half is untouched on purpose — enemy fire is still a real travelling
+    // projectile in the ROM and in the sim, which is what `enemyShots` below still encodes.
     const P: Vec3 = [0, 0, -300]
     const base: GameState = {
       ...initialState(7),
       enemies: [],
-      projectiles: [{ pos: [...P] as Vec3, vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
       enemyShots: [{ pos: [...P] as Vec3, vel: [0, 0, 1], ttl: ENEMY_SHOT_TTL }],
       spawnTimer: 1e9,
       enemyFireCooldown: 1e9,
+      fireCooldown: 0,
+      firePrev: false,
     }
-    const s1 = stepGame(base, NO_INPUT, 0.001)
+    const s1 = stepGame(base, fireAt(base, P), 0.001)
     expect(s1.enemyShots).toHaveLength(0)
     expect(s1.score).toBe(base.score + FIREBALL_SCORE)
   })

@@ -37,6 +37,16 @@
 // porthole. The hit sphere therefore GROWS (70 → 96-136) and the finish gets easier
 // by exactly that much. Full contract + difficulty call-out: exhaust-port-hit-rom.test.ts.
 //
+// ⚠ RE-SEATED AGAIN BY sw7-17 / R11b — how the trigger is pulled, not what is being proved.
+// The player's gun is now the cabinet's HITSCAN beam (audit G-004): it spawns nothing, so the
+// hand-placed bolts this file used to stage its shots with are unbuildable in play, and — worse —
+// a step with the trigger UP now fires no beam at all, which would have quietly turned the miss
+// cases into tests that shoot nothing and find the port standing. Every shot below is a real pull
+// with the crosshair on a real world point, and each one is asserted REACHABLE first, since
+// `aimAt` does not clamp and would otherwise hand back a direction no yoke could hold. The two
+// window tests are untouched in substance: sw5-6's arm-early/resolve-late reading of the ROM is
+// exactly what a hitscan beam does, so the mechanism finally matches the story this header tells.
+//
 // Like the sibling suites (exhaust-port-outcome, force-bonus) these drive behaviour
 // through the pure surface — stepGame(state, input, dt) and the GameState/events it
 // returns — asserting observable gameplay, never internal shape, and obey the sacred
@@ -47,17 +57,15 @@ import {
   initialState,
   PORT_HIT_RADIUS,
   EXHAUST_PORT_DISTANCE,
-  PROJECTILE_TTL,
   STARTING_LIVES,
   type GameState,
-  type Projectile,
 } from '../../src/core/state'
 import { EXHAUST_PORT } from '../../src/core/models'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
 import type { GameEvent } from '../../src/core/events'
 import type { Vec3 } from '@arcade/shared/math3d'
-import { FIRE_AT_PORT } from '../support/aim'
+import { FIRE_AT_PORT, aimAt, eyeOf, fireAt } from '../support/aim'
 import { PORT_APPROACH_WINDOW, TRENCH_SCROLL_SPEED } from '../../src/core/state'
 
 /** A live exhaust port at a world position — the hit-test reads `.pos`. */
@@ -71,23 +79,29 @@ const trench = (
   seed = 1983,
 ): GameState => ({ ...initialState(seed), phase: 'trench', exhaustPort: port, ...over })
 
-/** A hand-placed bolt at rest (unit -Z velocity, micro-tick friendly) — used where
- *  the geometry is pinned dead-on and real-speed flight is irrelevant. */
-const bolt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, -1], ttl: PROJECTILE_TTL })
-
 /** One real 60fps frame. */
 const FRAME = 1 / 60
 
-/** Trigger held, aim dead-centre, square aspect: the sim spawns a bolt at the
- *  cockpit with velocity aimDirection(0,0,1) * PROJECTILE_SPEED = [0,0,-5000]. */
-// sw5-6: RE-SEATED — see tests/support/aim.ts. `aimY: 0` now points at empty sky, not the port.
+/** The crosshair on the porthole at its spawn range, trigger down — one pull, one shot (G-012).
+ *  sw5-6: RE-SEATED — see tests/support/aim.ts. `aimY: 0` now points at empty sky, not the port. */
 const FIRE: Input = FIRE_AT_PORT
 
-/** A world Z near the cockpit — deep inside ANY plausible approach window, so tests
- *  that want the RADIUS or the AIM (not the window) to decide the outcome can seat
- *  the port here and know the window never confounds them. Matches the -300 the
- *  sibling suites use for their in-range port kills. */
-const IN_WINDOW_Z = -300
+/**
+ * The range every shot in this file is taken from: the port's own spawn distance, at the trench
+ * mouth. RE-SEATED BY sw7-17 from the old in-window -300.
+ *
+ * The -300 was never "deep inside the window so the radius decides"; since sw5-6 it has been an
+ * IMPOSSIBLE place to shoot from. The pilot flies TRENCH_EYE_SEAT = 768 above a porthole lying in
+ * the floor, so an in-window port sits ~44° below him against the 30° the 60° FOV allows, and only
+ * ranges past f·768 ≈ 1,330 are inside the yoke's cone at all. It went unnoticed while the shots
+ * were hand-placed bolts, which never had to be aimable. A beam does.
+ *
+ * The window still never confounds the radius here, for the reason the second describe block
+ * spells out: the shot is EARNED at the mouth and RESOLVED at the wall, and an armed run always
+ * reaches the wall while a missed one never resolves at all. So what decides these outcomes is
+ * still, only, whether the shot was on the hole.
+ */
+const SHOT_Z = -EXHAUST_PORT_DISTANCE
 
 /**
  * The visible target's outer reach — the geometry sw3-15's WYSIWYG bound is pinned
@@ -173,7 +187,7 @@ describe('sw3-15 — the exhaust-port hit sphere is tightened to the visible tar
     expect(PORT_HIT_RADIUS, 'the lip is not the hole').toBeLessThan(BERM_HALF_WIDTH)
   })
 
-  it('a bolt offset past the porthole (out on the support berm) does not detonate the port', () => {
+  it('a shot offset past the porthole (out on the support berm) does not detonate the port', () => {
     // The "require aim alignment" pin, RE-SEATED BY sw5-4. GAP_OFFSET must sit in the
     // band the tightening removes: genuinely off the hole the player sees, yet still on
     // the plate — a near-miss on the structure, not a wild shot. It used to be 96,
@@ -181,28 +195,42 @@ describe('sw3-15 — the exhaust-port hit sphere is tightened to the visible tar
     // and now legitimately SCORES (exhaust-port-hit-rom.test.ts pins that as the
     // difficulty change). Moving it out onto the berm preserves this test's actual
     // intent — an unaligned shot must miss the small target — under the real geometry.
+    //
+    // sw7-17: the offset is now where the CROSSHAIR goes, not where a bolt sits, and the tell is
+    // the torpedo latch — `?LAZAR GOT CLOSE ENUF?` is the ROM's own question and the sim's own
+    // answer, read one step after the pull rather than 200 frames later at the wall. The lateral
+    // offset survives the change intact: the pilot's line into a floor-mounted plate is almost
+    // perpendicular to it, so 160 out reads as ~159.7 of miss distance against the 108 sphere.
     const GAP_OFFSET = BERM_HALF_WIDTH // 160: on the lip, off the hole
     expect(GAP_OFFSET).toBeGreaterThan(PORTHOLE_REACH) // genuinely off the visible hole
-    const base = trench(portAt([0, 0, IN_WINDOW_Z]), { trenchShotsFired: 2 })
-    const s1 = stepGame({ ...base, projectiles: [bolt([GAP_OFFSET, 0, IN_WINDOW_Z])] }, NO_INPUT, 0.001)
+    const base = trench(portAt([0, 0, SHOT_Z]), { trenchShotsFired: 2 })
+    expect(aimAt([GAP_OFFSET, 0, SHOT_Z], eyeOf(base)).reachable).toBe(true)
+    const s1 = stepGame(base, fireAt(base, [GAP_OFFSET, 0, SHOT_Z]), FRAME)
+    expect(s1.portTorpedoArmed, 'the laser never got close enuf').toBe(false)
     expect(hit(s1.events)).toBe(false)
     expect(s1.exhaustPort).not.toBeNull() // still standing — the shot wasn't on target
   })
 
-  it('a dead-centre bolt on the in-window port still detonates it (you CAN hit when aimed)', () => {
+  it('a dead-centre shot on the porthole still detonates it (you CAN hit when aimed)', () => {
     // The tightening must not make the port unhittable — a shot actually ON the
     // hole still wins. Guards against over-shrinking the sphere.
-    const base = trench(portAt([0, 0, IN_WINDOW_Z]), { trenchShotsFired: 2 })
-    const s1 = stepGame({ ...base, projectiles: [bolt([0, 0, IN_WINDOW_Z])] }, NO_INPUT, 0.001)
-    expect(hit(s1.events)).toBe(true)
-    expect(s1.exhaustPort).toBeNull()
+    //
+    // sw7-17: this is the SAME state and the SAME trigger pull as the berm shot above, differing
+    // only in where the crosshair points — which is what makes the pair mean anything. It is flown
+    // all the way out to the wall rather than asserted at the latch, so the file keeps one
+    // end-to-end witness that a threaded shot really does blow the Death Star.
+    const base = trench(portAt([0, 0, SHOT_Z]), { trenchShotsFired: 2 })
+    expect(aimAt([0, 0, SHOT_Z], eyeOf(base)).reachable).toBe(true)
+    const { state, events } = fireAndFollowPort(base, 320)
+    expect(hit(events)).toBe(true)
+    expect(state.exhaustPort).toBeNull()
   })
 
-  it('a REAL torpedo fired with the yoke hard over veers off-axis and does NOT detonate the dead-centre port', () => {
-    // Fire-path coverage for "aim alignment": a bolt inherits the yoke deflection
-    // (aimDirection(aimX,…)), so a shot fired while steering hard away flies wide of
-    // the centred port and cannot win. (Not RED — a hard-over bolt misses even the old
-    // 120 sphere — but it keeps a sneaky GREEN from special-casing hand-placed bolts.)
+  it('a REAL shot fired with the yoke hard over veers off-axis and does NOT detonate the dead-centre port', () => {
+    // Fire-path coverage for "aim alignment": the beam is cast down the yoke's own deflection
+    // (aimDirection(aimX,…)), so a shot fired while steering hard away goes wide of
+    // the centred port and cannot win. (Not RED — a hard-over shot misses even the old
+    // 120 sphere — but it keeps a sneaky GREEN from special-casing a dead-centre aim.)
     const HARD_OVER: Input = { aimX: 0.9, aimY: 0, fire: true, aspect: 1 }
     const events: GameEvent[] = []
     let s = stepGame(trench(portAt([0, 0, -600])), HARD_OVER, FRAME)
@@ -249,10 +277,14 @@ describe('sw3-15 — the hit/miss decision is gated to the narrow approach windo
     let s = trench(portAt([0, 0, -EXHAUST_PORT_DISTANCE]))
     s = stepGame(s, FIRE, FRAME) // pull the trigger, crosshair on the hole
 
-    // The bolt has 2,400 units to cross at 12,000 u/s, so the latch cannot close on the firing
-    // frame — it closes when the laser actually reaches the porthole. Coast until it does, and
-    // assert the whole way that the armed run does NOT cash in early: the $800 gate still holds.
-    //
+    // sw7-17: the latch closes on the FIRING FRAME. The old note here said it could not — "the
+    // bolt has 2,400 units to cross at 12,000 u/s" — and that was true of a travelling shot and is
+    // the exact fiction sw7-17 removed: the beam is hitscan, so it is on the porthole the instant
+    // the trigger goes down. Which makes this test STRONGER, not weaker. The shot is now provably
+    // earned before the coast even starts, and every frame of that coast then shows the $800 gate
+    // holding a live, armed torpedo back — the gate is doing the work, not the flight time.
+    expect(s.portTorpedoArmed, 'the beam is instant: the shot is earned at the mouth').toBe(true)
+
     // Stop ONE frame's travel short of the gate: the port advances TRENCH_SCROLL_SPEED*dt per
     // step, so the step that carries it ACROSS the threshold is legitimately the winning one.
     const MARGIN = TRENCH_SCROLL_SPEED * FRAME
@@ -276,8 +308,14 @@ describe('sw3-15 — the hit/miss decision is gated to the narrow approach windo
   it('a run that never threads the porthole MISSES and costs a shield — the finish is not unmissable', () => {
     // The other half of sw3-15's intent, and the half that actually matters: the finish must be
     // losable. A pilot who never puts a laser through the hole never arms the torpedo, the port
-    // slips past, and it costs him. Here he holds the trigger with the crosshair CENTRED — which,
-    // now that the porthole lies in the floor, points at the vanishing point: at nothing.
+    // slips past, and it costs him. Here he sits on the trigger with the crosshair CENTRED —
+    // which, now that the porthole lies in the floor, points at the vanishing point: at nothing.
+    //
+    // sw7-17: "sits on the trigger" is now literally one shot, not a stream. The gun is
+    // edge-triggered semi-auto (G-012) — `firePrev` is the rising-edge register, so holding
+    // `fire: true` across 320 frames pulls it exactly ONCE, on the first. That does not soften the
+    // test at all: the whole point is that this aim is at empty sky, and firing at empty sky a
+    // hundred times over would arm nothing either.
     const CENTRED: Input = { aimX: 0, aimY: 0, fire: true, aspect: 1 }
     let s = trench(portAt([0, 0, -EXHAUST_PORT_DISTANCE]))
     const events: GameEvent[] = []
@@ -310,14 +348,19 @@ describe('sw3-15 — the restored challenge preserves core purity & determinism'
   })
 
   it('resolving the outcome never mutates the input state', () => {
-    const s0: GameState = {
-      ...trench(portAt([0, 0, IN_WINDOW_Z]), { trenchShotsFired: 2 }),
-      projectiles: [bolt([0, 0, IN_WINDOW_Z])],
-    }
+    // sw7-17: the step now actually RESOLVES something — the old version placed a bolt and stepped
+    // with the trigger up, so under a hitscan gun it would have been checking that a step which
+    // does nothing changes nothing. The `portTorpedoArmed` assertion is the proof of work: the
+    // beam fired, connected, and set a latch on the way out, and the input state still did not
+    // move an inch.
+    const s0 = trench(portAt([0, 0, SHOT_Z]), { trenchShotsFired: 2 })
     const beforePort: Vec3 | null = s0.exhaustPort ? ([...s0.exhaustPort.pos] as Vec3) : null
     const beforeLives = s0.lives
-    stepGame(s0, NO_INPUT, 0.001)
+    const beforeArmed = s0.portTorpedoArmed
+    const stepped = stepGame(s0, fireAt(s0, [0, 0, SHOT_Z]), FRAME)
+    expect(stepped.portTorpedoArmed, 'the step really did resolve a shot').toBe(true)
     expect(s0.exhaustPort ? s0.exhaustPort.pos : null).toEqual(beforePort) // input untouched
     expect(s0.lives).toBe(beforeLives)
+    expect(s0.portTorpedoArmed).toBe(beforeArmed)
   })
 })
