@@ -148,5 +148,5 @@ describe('sw6-4 — the clock scales TIME ONLY, which is why an ear signoff miss
     expect(samples.length).toBeGreaterThan(0)
     expect(peak).toBeGreaterThan(0.05) // a silent bake is the failure this epic exists to end
     expect(peak).toBeLessThanOrEqual(1.0) // and a clipped one is the other
-  })
+  }, 30_000) // CPU-bound bake: death_star_boom exceeds vitest's 5s default on GitHub's slower runners
 })

@@ -70,7 +70,7 @@ describe('sw7-8 — the dedicated Death Star boom exists (U-021, AUDDF)', () => 
     const tie = bakeSfx({ ...byName('enemy_explosion') })
     expect(boom.samples.length).toBeGreaterThan(0)
     expect(boom.seconds).toBeGreaterThan(tie.seconds) // 2 x 144 ticks dwarfs the zap
-  })
+  }, 30_000) // CPU-bound double bake exceeds vitest's 5s default on GitHub's slower runners
 })
 
 describe('sw7-8 — the dedicated fireball hit exists (U-022, AUDSS)', () => {
@@ -108,5 +108,5 @@ describe('sw7-8 — the dedicated fireball hit exists (U-022, AUDSS)', () => {
     const tie = bakeSfx({ ...byName('enemy_explosion') })
     expect(hit.samples.length).toBeGreaterThan(0)
     expect(hit.seconds).toBeLessThan(tie.seconds)
-  })
+  }, 30_000) // CPU-bound double bake exceeds vitest's 5s default on GitHub's slower runners
 })
