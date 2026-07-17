@@ -48,7 +48,7 @@
 // pure function of GameState; it just stops keeping its own private copy of where the ship is.
 
 import { describe, it, expect } from 'vitest'
-import { stepGame, enterPhase, surfaceShip, shipPoint } from '../../src/core/sim'
+import { enterPhase, surfaceShip, shipPoint } from '../../src/core/sim'
 import {
   initialState,
   SKIM_ALTITUDE,
@@ -56,11 +56,7 @@ import {
   MAX_SKIM_ALTITUDE,
   type GameState,
 } from '../../src/core/state'
-import type { Input } from '../../src/core/input'
 import { eyeOf } from '../support/aim'
-
-const DT = 1 / 60
-const ASPECT = 16 / 9
 
 const surface = (over: Partial<GameState> = {}): GameState => ({
   ...enterPhase(initialState(1983), 'surface'),
@@ -70,14 +66,6 @@ const surface = (over: Partial<GameState> = {}): GameState => ({
   projectiles: [],
   enemyShots: [],
   fireCooldown: 0,
-  ...over,
-})
-
-const trigger = (over: Partial<Input> = {}): Input => ({
-  aimX: 0,
-  aimY: 0,
-  fire: true,
-  aspect: ASPECT,
   ...over,
 })
 

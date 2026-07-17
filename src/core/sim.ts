@@ -469,7 +469,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
  * `prev` is the frame's input state (its `score`/`bonusFlash` are the pre-step
  * values); `next` is the fully-stepped state whose `score` is final.
  */
-function finalizeScore(prev: GameState, next: GameState): GameState {
+export function finalizeScore(prev: GameState, next: GameState): GameState {
   const scoreChanged = next.score !== prev.score
   let lives = next.lives
   for (const threshold of EXTRA_LIFE_THRESHOLDS) {
