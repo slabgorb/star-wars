@@ -9,8 +9,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   initialState,
-  FORCE_BONUS,
-  TRENCH_BONUS,
+  forceBonusForWave,
   PORT_AHEAD_RANGE,
   type GameState,
 } from '../../src/core/state'
@@ -71,7 +70,7 @@ describe('force bonus — using the Force in the trench', () => {
     expect(s1.trenchShotsFired).toBe(1)
   })
 
-  it('a clean port kill (only the shot that armed it) awards TRENCH_BONUS + FORCE_BONUS and the event', () => {
+  it('a clean port kill (only the shot that armed it) awards the wave Force bonus and the event', () => {
     // sw7-17: ONE, not zero. `clean` is `trenchShotsFired <= 1` — "no trench shots before the
     // killing torpedo itself" — and one is the honest floor now that the torpedo is armed by the
     // pilot's own laser: arriving at the window armed means he pulled the trigger exactly once, out
@@ -79,23 +78,34 @@ describe('force bonus — using the Force in the trench', () => {
     // shot count of ZERO is unreachable in play, and a fixture that asserted from there would be
     // pinning the bonus against a run nobody can fly. The discrimination is untouched: this is the
     // clean side of the `<= 1` boundary, the test below is the dirty side.
+    // sw7-4 / S-012: the amount is now wave-scaled (forceBonusForWave), and the
+    // per-shield bonus (S-013) lands on this same frame — so we pin the Force bonus
+    // via its EVENT + stamp, not the exact total (that combined total is owned by
+    // shield-wave-bonus.test.ts). base is wave 1 -> forceBonusForWave(1) = 5,000.
     const s0 = { ...portKill(enterPhase(initialState(), 'trench')), trenchShotsFired: 1 }
     const s1 = stepGame(s0, NO_INPUT, 1 / 60)
-    expect(s1.score).toBe(TRENCH_BONUS + FORCE_BONUS)
     expect(s1.forceBonusAwardedAt).not.toBeNull()
-    expect(s1.events).toContainEqual({ type: 'force-bonus', amount: FORCE_BONUS })
+    expect(s1.events).toContainEqual({ type: 'force-bonus', amount: forceBonusForWave(s0.wave) })
   })
 
-  it('a port kill after prior trench shots scores only TRENCH_BONUS', () => {
+  it('a port kill after prior trench shots awards NO Force bonus (per-shield bonus still banks — see shield-wave-bonus)', () => {
     const s0 = { ...portKill(enterPhase(initialState(), 'trench')), trenchShotsFired: 3 }
     const s1 = stepGame(s0, NO_INPUT, 1 / 60)
-    expect(s1.score).toBe(TRENCH_BONUS)
     expect(s1.forceBonusAwardedAt).toBeNull()
     expect(s1.events.some((e) => e.type === 'force-bonus')).toBe(false)
   })
 
-  it('PORT_AHEAD_RANGE and FORCE_BONUS are positive (banner/table sanity)', () => {
-    expect(FORCE_BONUS).toBeGreaterThan(0)
+  it('the Force bonus is exactly the clean-minus-dirty score delta (isolated from TRENCH + per-shield)', () => {
+    // Both runs carry identical surviving shields, so TRENCH_BONUS and the per-shield
+    // bonus cancel in the difference; the only thing left is the clean-run Force bonus.
+    const base = portKill(enterPhase(initialState(), 'trench'))
+    const clean = stepGame({ ...base, trenchShotsFired: 1 }, NO_INPUT, 1 / 60)
+    const dirty = stepGame({ ...base, trenchShotsFired: 3 }, NO_INPUT, 1 / 60)
+    expect(clean.score - dirty.score).toBe(forceBonusForWave(base.wave))
+  })
+
+  it('PORT_AHEAD_RANGE and the Force bonus are positive (banner/table sanity)', () => {
+    expect(forceBonusForWave(1)).toBeGreaterThan(0)
     expect(PORT_AHEAD_RANGE).toBeGreaterThan(0)
   })
 })
