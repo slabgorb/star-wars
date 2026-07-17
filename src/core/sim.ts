@@ -1513,7 +1513,7 @@ export function surfaceShip(altitude: number): Vec3 {
  * where the bump TELEPORTS the ship 40 -> 128 rather than flying it — so do not derive that bound
  * from ALTITUDE_RATE alone. Pinned by `surface-aim-wysiwyg.test.ts` (b), which fires with aimY != 0.
  */
-function shipPoint(s: GameState): Vec3 {
+export function shipPoint(s: GameState): Vec3 {
   switch (s.phase) {
     case 'trench':
       return [...s.trenchView] as Vec3

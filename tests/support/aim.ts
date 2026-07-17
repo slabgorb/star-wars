@@ -59,6 +59,34 @@ export function aimAt(
 }
 
 /**
+ * THE YOKE THAT SHOOTS `target`, from the eye `s` is actually seen through (story sw7-17 / R11b).
+ *
+ * WHY THIS EXISTS. Until sw7-17 the player's gun threw a 12,000 u/s projectile, so a test could
+ * say "the player shot this thing" by hand-placing a bolt on top of it:
+ *
+ *     projectiles: [{ pos: target, vel: [0, 0, -1], ttl: PROJECTILE_TTL }]
+ *
+ * and stepping once with the trigger up. That fixture is now unbuildable in play — the laser is
+ * HITSCAN and nothing the player fires ever exists as an object (audit G-004). The honest
+ * replacement is not a different fixture but a different sentence: AIM AT IT AND PULL THE TRIGGER.
+ * That is what this returns, and it is strictly stronger than the old bolt — it goes through the
+ * real aim, the real ship point and the real resolve, so it fails if any of them break.
+ *
+ * The trigger is EDGE-triggered (G-012): the state must carry `firePrev: false` for this to fire
+ * at all, and `fireCooldown <= 0`. Holding this input for a second frame fires NOTHING — that is
+ * the point of it. Use `release()` to keep flying with the trigger up.
+ */
+export function fireAt(s: GameState, target: readonly [number, number, number], aspect = 1): Input {
+  const { aimX, aimY } = aimAt(target, eyeOf(s), aspect)
+  return { aimX, aimY, fire: true, aspect }
+}
+
+/** The same aim with the trigger released — one pull is one shot, so coasting needs this. */
+export function release(input: Input): Input {
+  return { ...input, fire: false }
+}
+
+/**
  * Hold the trigger with the crosshair on the exhaust port, from the seated pilot's eye at the
  * port's spawn distance (~17.7° down — comfortably inside the 30° cone the 60° FOV allows).
  *
