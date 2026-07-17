@@ -16,7 +16,7 @@
 //   - WHERE the beams meet is THE SITE — the crosshair, `crosshairNdc(aimX, aimY)` mapped
 //     NDC→screen. `VWLAZ ;VIEW ANY LASARS` draws gun-ports → site, and the site is the
 //     reticle: the beam converges on what the player is pointing at, hit or miss.
-//   - WHEN they are drawn is `state.laserEdge > 0` — the core's own LZ.EDG sweep counter
+//   - WHEN they are drawn is `state.laserOn` — the core's own LZ.ON gate, NOT the LZ.EDG counter
 //     (8 game frames ≈ 0.39 s). The ROM draws the laser every frame it is on, and the
 //     frames it is on are exactly the frames it can kill, so the flash window and the
 //     collision window are one quantity. The shell keeps no timer of its own and cannot
@@ -149,7 +149,7 @@ function convergencePoint(segments: ReadonlyArray<Seg>): [number, number] {
 
 /** A "playing" space-combat scene with no enemies/fireballs, so the only world
  *  strokes are the player laser under test (plus the HUD crosshair at the site).
- *  `laserEdge` is the whole gate now: initialState opens with the laser off. */
+ *  `laserOn` is the whole gate now: initialState opens with the laser off. */
 const scene = (over: Partial<GameState>): GameState => ({
   ...initialState(1983),
   mode: 'playing',
@@ -159,10 +159,11 @@ const scene = (over: Partial<GameState>): GameState => ({
   ...over,
 })
 
-/** A live LZ.EDG sweep — the state a trigger pull leaves behind, mid-window. The
- *  value is deliberately mid-sweep rather than the full 8 frames: the gate render
- *  reads is `> 0`, not "freshly fired". */
-const SWEEPING = 4 / 20.508
+/** A live sweep — the state a trigger pull leaves behind, mid-window. Carries BOTH the gate the
+ *  shell reads (`laserOn`) and a mid-window counter, because a real mid-sweep state has both. The
+ *  counter is deliberately mid-sweep rather than the full 8 frames: the shell must not care how
+ *  freshly the trigger was pulled. */
+const SWEEPING = { laserOn: true, laserEdge: 4 / 20.508 } as const
 
 /** An enemy fireball in flight (the 8-18 scope guard's subject). ttl is the
  *  fireball's own ENEMY_SHOT_TTL — the player's projectile lifetime no longer has
@@ -172,7 +173,7 @@ const fireballAt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, 0], ttl: ENEMY
 describe('sw7-17 — the player laser renders as four cyan beams converging on the site', () => {
   it('fires a beam from each of the four cannon-tip corners while the sweep is live', () => {
     const { ctx, segments } = makeCtx()
-    render(ctx, scene({ laserEdge: SWEEPING }), W, H)
+    render(ctx, scene({ ...SWEEPING }), W, H)
 
     const beams = laserBeams(segments)
     for (const [cx, cy] of CORNERS) {
@@ -184,7 +185,7 @@ describe('sw7-17 — the player laser renders as four cyan beams converging on t
   it('converges every cannon-tip beam on ONE point, and that point is the reticle', () => {
     const { ctx, segments } = makeCtx()
     // Yoke centred: the site — and so the reticle — sits at screen centre.
-    render(ctx, scene({ laserEdge: SWEEPING, aimX: 0, aimY: 0 }), W, H)
+    render(ctx, scene({ ...SWEEPING, aimX: 0, aimY: 0 }), W, H)
 
     // Each corner must emit a beam that actually REACHES the meeting point — not a
     // stray muzzle stub that stops short.
@@ -217,7 +218,7 @@ describe('sw7-17 — the player laser renders as four cyan beams converging on t
     // Yoke right and DOWN. +aimY is UP (the core's convention), so a negative aimY must
     // drag the site toward the BOTTOM of the canvas — the NDC→screen Y flip, pinned by
     // direction rather than by a hardcoded pixel.
-    render(ctx, scene({ laserEdge: SWEEPING, aimX: 0.5, aimY: -0.4 }), W, H)
+    render(ctx, scene({ ...SWEEPING, aimX: 0.5, aimY: -0.4 }), W, H)
 
     const meet = convergencePoint(segments)
     expect(meet[0]).toBeGreaterThan(CENTER[0] + 20)
@@ -235,7 +236,7 @@ describe('sw7-17 — the player laser renders as four cyan beams converging on t
 
   it('strokes the player laser in cockpit cyan, not the green "+" placeholder', () => {
     const { ctx, segments } = makeCtx()
-    render(ctx, scene({ laserEdge: SWEEPING }), W, H)
+    render(ctx, scene({ ...SWEEPING }), W, H)
 
     const beams = laserBeams(segments)
     expect(beams.length).toBeGreaterThan(0)
@@ -248,23 +249,50 @@ describe('sw7-17 — the player laser renders as four cyan beams converging on t
     }
   })
 
+  it('DRAWS on the last live frame, where the counter has clamped to 0 but the beam still kills', () => {
+    // THE BUG THIS FILE SHIPPED FOR ONE ROUND, now pinned. Caught in review by the rule-checker.
+    //
+    // The core keeps two values, exactly as the cabinet does (WSLAZR.MAC:110-113):
+    //
+    //     LDA LZ.EDG / IFGT / DEC LZ.EDG / STA LZ.ON
+    //
+    // `laserOn` is read PRE-decrement; `laserEdge` is stored POST-decrement. So on the final live
+    // frame of every single sweep the counter has already clamped to 0 while the laser is still on
+    // and a kill can still land. Gating the shell on `laserEdge > 0` therefore drew NOTHING on a
+    // frame the beam was still shooting — once per sweep, for ever, and invisible to every other
+    // test in this file because they all use a mid-window fixture where the two agree.
+    //
+    // This is that exact state, and it is the ONLY fixture here where the counter and the gate
+    // disagree — so it is the only one that can catch the regression.
+    const c = makeCtx()
+    render(c.ctx, scene({ laserOn: true, laserEdge: 0 }), W, H)
+
+    expect(
+      laserBeams(c.segments).length,
+      'the shell must gate on laserOn (LZ.ON), never on the post-decrement counter',
+    ).toBeGreaterThan(0)
+  })
+
   it('is the sweep and nothing else: on while LZ.EDG runs, off the frame it expires', () => {
     // A live sweep flashes the cannon-tip beams…
     const on = makeCtx()
-    render(on.ctx, scene({ laserEdge: SWEEPING }), W, H)
+    render(on.ctx, scene({ ...SWEEPING }), W, H)
     expect(laserBeams(on.segments).length).toBeGreaterThan(0)
 
-    // …and a spent one (the counter run down to 0, the pilot not shooting) draws none.
-    // The laser is a brief "pew", not a cyan web that never clears — and the window the
-    // shell draws is exactly the window the core can kill in, because it IS that counter.
+    // …and a spent one (the laser off, the pilot not shooting) draws none. The laser is a brief
+    // "pew", not a cyan web that never clears — and the window the shell draws is exactly the
+    // window the core can kill in, because it reads the SAME GATE the collision does (`laserOn`,
+    // the ROM's LZ.ON). See the test below for why that phrasing is load-bearing rather than
+    // decorative: an earlier cut of this file said "because it IS that counter", and that was
+    // false — the counter and the gate are off by one frame.
     const off = makeCtx()
-    render(off.ctx, scene({ laserEdge: 0 }), W, H)
+    render(off.ctx, scene({ laserOn: false, laserEdge: 0 }), W, H)
     expect(laserBeams(off.segments)).toHaveLength(0)
 
     // …and the sim freezes the state on the game-over screen (sim.ts), so a sweep caught
     // mid-flight there must not bleed its beams over the framing screens.
     const over = makeCtx()
-    render(over.ctx, scene({ laserEdge: SWEEPING, mode: 'gameover' }), W, H)
+    render(over.ctx, scene({ ...SWEEPING, mode: 'gameover' }), W, H)
     expect(laserBeams(over.segments)).toHaveLength(0)
   })
 })
@@ -293,7 +321,7 @@ describe('sw7-17 — enemy fireballs keep their own render (scope guard for 8-18
     const { ctx, segments } = makeCtx()
     render(
       ctx,
-      scene({ laserEdge: SWEEPING, aimX: 0, aimY: 0, enemyShots: [fireballAt([300, 0, -1000])] }),
+      scene({ ...SWEEPING, aimX: 0, aimY: 0, enemyShots: [fireballAt([300, 0, -1000])] }),
       W,
       H,
     )

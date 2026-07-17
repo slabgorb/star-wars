@@ -109,7 +109,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 608,
+      "line": 621,
       "verbatim": "  ctx.strokeStyle = '#ffdd66'"
     },
     "recommendation": "fix",
@@ -144,7 +144,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 888,
+      "line": 901,
       "verbatim": "const DEATH_STAR_BOOM_SECONDS = 2.5"
     },
     "recommendation": "accept",
@@ -167,7 +167,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 390,
+      "line": 405,
       "verbatim": "  const dyingTies: DyingTie[] = ["
     },
     "recommendation": "accept"

@@ -263,3 +263,67 @@ describe('sw7-17 — the 8-frame sweep is the laser ON-time, not the re-fire int
     expect(towerDied(s), 're-fire is gated by FIRE_INTERVAL, never by LZ.EDG').toBe(true)
   })
 })
+
+// ---------------------------------------------------------------------------
+// (d) The beam you SEE is the beam that KILLS. One fact, not two.
+// ---------------------------------------------------------------------------
+
+describe('sw7-17 — the drawn window IS the collision window (LZ.ON)', () => {
+  // FOUND IN REVIEW, and it was a real bug rather than a tidiness point.
+  //
+  // The ROM keeps TWO bytes and is careful about which one anything reads:
+  //
+  //     LDA LZ.EDG      ;the counter
+  //     IFGT
+  //     DEC LZ.EDG      ;burn a game frame
+  //     STA LZ.ON       ;<- the PRE-decrement value, in its own byte
+  //
+  // CLSLZ/CLGLZ/CLBLZ all gate on `LDA LZ.ON / IFNE`, and VWLAZ draws off the same byte. One
+  // fact. Our first cut derived the shell's gate from the STORED counter (`laserEdge > 0`)
+  // instead — and the counter is stored POST-decrement, so on the LAST live frame of every
+  // sweep it clamps to 0 while `laserOn` (read pre-decrement) is still true and a kill can
+  // still land. The player got killed by a beam that was not drawn, once per sweep, for ever.
+  //
+  // This is the guard. It walks a sweep to its last live frame and asserts that the frame which
+  // can still kill is also a frame the shell will draw.
+
+  it('every frame that can still kill is a frame the shell draws', () => {
+    let s = stepGame(surface(), yoke(SKY_AIM_X, true), DT) // one pull, then coast
+    let killsSeen = 0
+    for (let i = 0; i < 60; i++) {
+      // Put a tower under the site and see whether it dies THIS frame.
+      const withTower: GameState = { ...s, turrets: [{ pos: [...TOWER] as Vec3, age: 0 }] }
+      const aim = aimAt(TOWER, eyeOf(withTower), ASPECT)
+      const n = stepGame(withTower, yoke(aim.aimX, false), DT)
+      const killed = n.events.some((e) => e.type === 'enemy-death' && e.enemyType === 'turret')
+      if (killed) {
+        killsSeen++
+        // THE POINT: a frame that killed must be a frame the shell drew a beam on.
+        expect(
+          n.laserOn,
+          `a kill landed on a frame the shell would draw NOTHING (laserEdge=${n.laserEdge})`,
+        ).toBe(true)
+      }
+      s = stepGame(s, yoke(SKY_AIM_X, false), DT)
+      if (!s.laserOn) break // sweep spent
+    }
+    // Non-vacuity: the loop must actually have exercised kills, or it asserted nothing at all.
+    expect(killsSeen, 'the walk must have landed real kills, or this test proves nothing').toBeGreaterThan(0)
+  })
+
+  it('the counter and the gate disagree by exactly one frame — read the GATE', () => {
+    // Pins WHY `laserEdge > 0` is the wrong question, so nobody "simplifies" the extra field
+    // away. Walk to the last live frame: the gate is still true while the counter has clamped.
+    let s = stepGame(surface({ turrets: [] }), yoke(SKY_AIM_X, true), DT)
+    let sawTheGap = false
+    for (let i = 0; i < 60 && s.laserOn; i++) {
+      if (s.laserOn && s.laserEdge === 0) sawTheGap = true
+      s = stepGame(s, yoke(SKY_AIM_X, false), DT)
+    }
+    expect(
+      sawTheGap,
+      'the last live frame of a sweep has laserOn=true with the counter already at 0 — which is ' +
+        'exactly why the shell must gate on laserOn and not on laserEdge',
+    ).toBe(true)
+  })
+})

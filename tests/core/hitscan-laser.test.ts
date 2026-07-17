@@ -106,11 +106,12 @@ import {
   ENEMY_SHOT_SPEED,
   TOWER_HEIGHT,
   TICK_HZ,
+  EXHAUST_PORT_DISTANCE,
   type GameState,
 } from '../../src/core/state'
 import { TRENCH_FAR } from '../../src/core/trench-channel'
-import { aimAt, eyeOf } from '../support/aim'
-import { length, sub, normalize, type Vec3 } from '@arcade/shared/math3d'
+import { aimAt, eyeOf, fireAt } from '../support/aim'
+import { length, sub, add, scale, normalize, type Vec3 } from '@arcade/shared/math3d'
 import type { Input } from '../../src/core/input'
 
 const DT = 1 / 60
@@ -528,5 +529,72 @@ describe('sw7-17 — the hitscan gun is pure and deterministic', () => {
     stepGame(s0, trigger(), DT)
 
     expect(s0).toEqual(before)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// (h) The trench ranks its TWO kinds of target against each other. CLSLZ, again.
+// ---------------------------------------------------------------------------
+
+describe('sw7-17 — obstacles and the exhaust port compete for ONE beam, by distance', () => {
+  // FOUND IN REVIEW. The trench is the one phase holding two different kinds of thing the beam can
+  // land on — wall obstacles, and the porthole that arms the torpedo. CLSLZ resolves exactly one
+  // object per frame, the NEAREST, so they must be ranked against each other.
+  //
+  // The first cut asked "did the beam hit any obstacle?" (`beamObstacle < 0`) rather than "which
+  // is nearer?", which let an obstacle standing BEHIND the port shadow it and silently refuse the
+  // arming. It was unreachable with today's obstacle stations — they sit at y ∈ [768, 1280], all
+  // above the floor, and the ray to a floor-mounted port descends below them beyond it — but
+  // sw7-6 rebuilds this field on the B-010 panel grid and can trivially make it reachable.
+  //
+  // Both directions are pinned, because the naive fix for one is the bug in the other: rank the
+  // port first and a NEAR obstacle stops stopping the beam.
+
+  const PORT_Z = -EXHAUST_PORT_DISTANCE
+  const port: Vec3 = [0, 0, PORT_Z]
+
+  /** A trench with the port live at its spawn distance and whatever obstacles the test places. */
+  const withPort = (obstacles: GameState['trenchObstacles']): GameState =>
+    trench({ exhaustPort: { pos: [...port] as Vec3 }, trenchObstacles: obstacles })
+
+  /** A point exactly on the beam's own ray, `factor` × as far out as the port. Built from the real
+   *  aim so it is genuinely under the site rather than approximately so. */
+  const onTheRay = (s: GameState, factor: number): Vec3 => {
+    const eye = eyeOf(s)
+    const dir = normalize(sub(port, eye))
+    return add(eye, scale(dir, length(sub(port, eye)) * factor)) as Vec3
+  }
+
+  it('a FAR obstacle behind the port does not shadow it — the port is nearer, so the port arms', () => {
+    const s0 = withPort([])
+    const far = onTheRay(s0, 2.5) // same ray, two and a half times the distance
+    const s = stepGame(withPort([{ kind: 'square', pos: far }]), fireAt(s0, port, ASPECT), DT)
+
+    expect(s.portTorpedoArmed, 'the beam reaches the port first — distance decides').toBe(true)
+    expect(
+      s.events.some((e) => e.type === 'trench-obstacle-destroyed'),
+      'and the beam is SPENT on the port: the far obstacle must survive, not die in the same frame',
+    ).toBe(false)
+  })
+
+  it('a NEAR obstacle in front of the port DOES stop the beam — the obstacle is nearer', () => {
+    // The other direction, and the reason the fix is a ranking rather than a re-ordering.
+    const s0 = withPort([])
+    const near = onTheRay(s0, 0.4) // same ray, well short of the port
+    const s = stepGame(withPort([{ kind: 'square', pos: near }]), fireAt(s0, port, ASPECT), DT)
+
+    expect(
+      s.events.some((e) => e.type === 'trench-obstacle-destroyed'),
+      'the near obstacle eats the beam',
+    ).toBe(true)
+    expect(s.portTorpedoArmed, 'so the port behind it is NOT armed this frame').toBe(false)
+  })
+
+  it('the control: with nothing in the way the same shot arms the port', () => {
+    // Without this, the near-obstacle test above could pass for the wrong reason (a shot that
+    // never arms anything).
+    const s0 = withPort([])
+    const s = stepGame(s0, fireAt(s0, port, ASPECT), DT)
+    expect(s.portTorpedoArmed).toBe(true)
   })
 })

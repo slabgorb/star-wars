@@ -5,10 +5,12 @@
 // `state.rng`. This boundary is what makes the game unit-testable and
 // frame-rate independent — the same rule that anchors tempest.
 //
-// Wave 1 — space combat: the player's bolts fly down the aim direction; TIEs
-// spawn into their slots and bear down on the cockpit; the formation lobs
-// fireballs back; bolts kill TIEs (score), and TIEs or fireballs that reach the
-// cockpit cost a shield. Every spatial test routes through the Math Box and the
+// Wave 1 — space combat: the player's LASER is a hitscan beam cast from the ship down the aim
+// direction (sw7-17 / R11b — it spawns nothing that travels, and `state.projectiles` is no longer
+// fed by firing); TIEs spawn into their slots and bear down on the cockpit; the formation lobs
+// fireballs back — those ARE real travelling objects, as in the ROM; the beam kills the nearest
+// thing under the site (score), and TIEs or fireballs that reach the cockpit cost a shield. Every
+// spatial test routes through the Math Box and the
 // rule helpers — there is no ad-hoc geometry in here.
 
 import { initialState } from './state'
@@ -189,9 +191,22 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     fireCooldown = FIRE_INTERVAL
     events.push({ type: 'fire' })
   }
-  // ROM: `LDA LZ.EDG / IFGT / DEC LZ.EDG / STA LZ.ON` — the laser is on WHILE the counter is
-  // positive and is decremented in the same breath, so the pull's own frame shoots. Everything
-  // downstream reads `laserOn` the way CLSLZ/CLGLZ/CLBLZ read `LDA LZ.ON / IFNE`.
+  // ROM (WSLAZR.MAC:110-113), and note that it keeps TWO variables, not one:
+  //
+  //     LDA LZ.EDG      ;the counter
+  //     IFGT            ;?HAVE AN EDG TO DETECT?
+  //     DEC LZ.EDG      ;burn one game frame off it
+  //     STA LZ.ON       ;<- stores the PRE-decrement value, in its own byte
+  //
+  // `LZ.ON` is the GATE — CLSLZ/CLGLZ/CLBLZ all open with `LDA LZ.ON / IFNE ;?ARE LAZARS ON?`,
+  // and VWLAZ draws off the same byte. One value, so the beam you see and the beam that kills are
+  // the same beam by construction.
+  //
+  // We keep both for exactly that reason. Deriving the gate from the STORED counter instead
+  // (`state.laserEdge > 0`) is off by one frame and was a real bug: `laserOn` is read
+  // pre-decrement, so on the last live frame of every sweep the counter clamps to 0 while a kill
+  // can still land — the shell drew nothing on a frame the beam was still shooting. `laserOn`
+  // rides out on the state so the shell gates on the same fact the collision does.
   const laserOn = laserEdge > 0
   if (laserOn) laserEdge = Math.max(0, laserEdge - dt)
 
@@ -440,6 +455,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       phaseKills: state.phaseKills + killedTie.size,
       projectiles,
       laserEdge,
+      laserOn,
       firePrev: input.fire,
       enemies: liveEnemies,
       dyingTies,
@@ -549,7 +565,8 @@ interface StepCommon {
   /** This frame's `input.fire`, to ride out as next step's rising-edge register. */
   firePrev: boolean
   /** Whether the laser is on THIS frame, and so whether the beam may hit anything at all.
-   * The ROM's LZ.ON: every collision routine opens `LDA LZ.ON / IFNE ;?ARE LAZARS ON?`. */
+   * The ROM's LZ.ON: every collision routine opens `LDA LZ.ON / IFNE ;?ARE LAZARS ON?`, and the
+   * shell draws off the same fact. Rides out on the returned state. */
   laserOn: boolean
   /** Where the beam leaves the ship — `shipPoint` at the start of the step, the eye the pilot
    * sighted down. */
@@ -725,6 +742,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     phaseKills: state.phaseKills + towerKills, // towers only — bunkers are quota-neutral
     projectiles,
     laserEdge,
+    laserOn,
     firePrev,
     turrets: standingTurrets,
     enemyShots: liveShots,
@@ -799,6 +817,7 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     enemyShots,
     fireCooldown,
     laserEdge,
+    laserOn,
     firePrev,
     events,
     trenchView,
@@ -826,20 +845,47 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   //
   // — so nothing beyond that line is under the beam at all, however clear the shot looks. The
   // clone already carries that number, ROM-anchored, as the channel's own far cutoff.
+  //
+  // The trench holds TWO kinds of thing the beam can land on — the obstacles here and the exhaust
+  // port below — and CLSLZ resolves exactly ONE per frame: the NEAREST. So both are ranged first
+  // and ranked against each other, and whichever is closer takes the beam. The port's range is
+  // computed up here, before the obstacle loop, purely so the comparison is possible; the port's
+  // own logic still lives below.
+  //
+  // An earlier cut asked "did the beam hit any obstacle?" instead of "which is nearer?", which let
+  // an obstacle standing BEHIND the port shadow it — not CLSLZ, and not what the bolt model did
+  // either (a travelling bolt reached the nearest thing first, so its precedence WAS distance).
+  const portPos: Vec3 | null =
+    state.exhaustPort === null
+      ? null
+      : [
+          state.exhaustPort.pos[0],
+          state.exhaustPort.pos[1],
+          state.exhaustPort.pos[2] + TRENCH_SCROLL_SPEED * dt,
+        ]
+  const portRange =
+    laserOn && portPos !== null
+      ? beamHit(beamOrigin, beamDir, portPos, PORT_HIT_RADIUS, TRENCH_FAR)
+      : null
+
   let beamObstacle = -1
+  let beamObstacleRange = Infinity
   if (laserOn) {
-    let bestRange = Infinity
     for (let i = 0; i < state.trenchObstacles.length; i++) {
       const o = state.trenchObstacles[i]
       if (o.kind === 'catwalk') continue // a catwalk is a hazard to fly into, not a target
       const pos: Vec3 = [o.pos[0], o.pos[1], o.pos[2] + TRENCH_SCROLL_SPEED * dt]
       const range = beamHit(beamOrigin, beamDir, pos, OBSTACLE_HIT_RADIUS, TRENCH_FAR)
-      if (range !== null && range < bestRange) {
-        bestRange = range
+      if (range !== null && range < beamObstacleRange) {
+        beamObstacleRange = range
         beamObstacle = i
       }
     }
   }
+  // The winner of the one-object-per-frame contest. A tie cannot matter: the two are different
+  // objects at different depths, and an exact float tie hands it to the obstacle, which is the
+  // same way the space loop breaks its ties (first list wins).
+  const obstacleTakesTheBeam = beamObstacle >= 0 && beamObstacleRange <= (portRange ?? Infinity)
 
   let obstacleScore = 0
   const survivors: TrenchObstacle[] = []
@@ -864,7 +910,7 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
         events.push({ type: 'terrain-crash' })
         continue // crashed through it — removed
       }
-    } else if (oi === beamObstacle) {
+    } else if (oi === beamObstacle && obstacleTakesTheBeam) {
       obstacleScore += o.kind === 'turret' ? TRENCH_TURRET_SCORE : TRENCH_SQUARE_SCORE
       events.push({ type: 'trench-obstacle-destroyed', kind: o.kind })
       continue
@@ -935,10 +981,10 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   // — and it sits in CLBLZ, immediately above the `#7000` clip, so it is the same beam and the
   // same forward line. The beam is SPENT if it already killed an obstacle this frame, which keeps
   // the precedence the bolt model had ("a bolt spent on an obstacle can't also kill the port").
-  const armingBeam =
-    laserOn &&
-    beamObstacle < 0 &&
-    beamHit(beamOrigin, beamDir, port, PORT_HIT_RADIUS, TRENCH_FAR) !== null
+  // The port arms only if it WON the one-object-per-frame contest ranked above — i.e. the beam
+  // reached it before it reached any obstacle. `portRange` was computed up there, against the same
+  // scrolled position `port` carries here.
+  const armingBeam = portRange !== null && !obstacleTakesTheBeam
   const armed = afterObstacles.portTorpedoArmed || armingBeam
   // The death knell (sw7-8, U-010) rings when the torpedo is FIRED, not when it
   // lands: WSGUNS.MAC:1220 puts `JSR PMSF2 ;SOUND THE DEATH KNELL` in FRPTGN —

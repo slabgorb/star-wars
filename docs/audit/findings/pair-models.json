@@ -131,7 +131,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 646,
+      "line": 659,
       "verbatim": "const FIREBALL_FRAMES: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = ["
     }
   },

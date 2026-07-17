@@ -216,7 +216,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 384,
+      "line": 404,
       "verbatim": "export const SKIM_ALTITUDE = 128"
     },
     "verdict": "CONFIRMED",
@@ -293,7 +293,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 657,
+      "line": 674,
       "verbatim": "      vel: scale(normalize(sub(ship, muzzle)), ENEMY_SHOT_SPEED),"
     },
     "recommendation": "accept",
@@ -326,7 +326,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1078,
+      "line": 1124,
       "verbatim": "      return allTowersKilled(s) || s.surfaceScrollZ >= surfaceFieldDepth(s.wave)"
     },
     "recommendation": "accept",
@@ -361,7 +361,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 586,
+      "line": 603,
       "verbatim": "  if (altitude < MIN_SKIM_ALTITUDE) {"
     },
     "recommendation": "accept",
@@ -380,7 +380,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 451,
+      "line": 472,
       "verbatim": "export const TURRET_SCROLL_SPEED = 600"
     },
     "recommendation": "accept",

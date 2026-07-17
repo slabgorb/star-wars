@@ -57,6 +57,12 @@ export function collides(a: Vec3, b: Vec3, radius: number): boolean {
 }
 
 /**
+ * NO PRODUCTION CALLER (sw7-17 / R11b). This existed to stop a 12,000 u/s bolt stepping clean over
+ * the exhaust port between two frames; the player's gun is now a hitscan ray, and an exact ray
+ * cannot tunnel, so the last caller went with the projectile it was chasing. Retained for
+ * `swept-port-collision.test.ts`, which still pins the dt-independence guarantee it protected.
+ * Deleting it is a follow-up on sw7-17.
+ *
  * Swept 3D sphere overlap: true when the SEGMENT `a`→`b` passes within `radius`
  * of `center`. This is the anti-tunnelling twin of `collides` — a fast target
  * that steps clean over a small sphere between two frames still registers,
