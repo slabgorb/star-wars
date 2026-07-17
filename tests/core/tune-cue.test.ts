@@ -57,6 +57,7 @@ import {
   towersForWave,
   EXHAUST_PORT_DISTANCE,
   PORT_APPROACH_WINDOW,
+  TRENCH_SCROLL_SPEED,
   type GameState,
 } from '../../src/core/state'
 import { TRENCH_EYE_MIN } from '../../src/core/trench-channel'
@@ -169,7 +170,14 @@ describe('tune cue — the finale fires when the Death Star detonates (U-012, WS
     // pilot must be flying the floor himself. At TRENCH_EYE_MIN (512, the ROM's minimum
     // ground clearance) with the yoke hard down, the beam grazes the porthole exactly as
     // it crosses the $800 gate — the last frame on which this shot is takeable at all.
-    const atGate: Vec3 = [0, 0, -PORT_APPROACH_WINDOW]
+    // RE-DERIVED for the ROM scroll (sw7-6 / B-008): the port advances one scroll-step
+    // (TRENCH_SCROLL_SPEED × DT ≈ 262 u) between the frame's start and the beam's resolution, so
+    // it must be seated one step + a hair OUTSIDE the gate to land just inside the $800 window on
+    // the resolution frame — where it both detonates (in-window) and is still within the EYE_MIN
+    // hard-down beam's grazing reach (which the port climbs out of as it closes). At the old 500
+    // u/s speed it barely moved, so seating it AT the gate sufficed. The 30-unit inset keeps it
+    // clear of the window edge without climbing past where the yoke-hard-down beam can reach.
+    const atGate: Vec3 = [0, 0, -(PORT_APPROACH_WINDOW + TRENCH_SCROLL_SPEED * DT - 30)]
     const HARD_DOWN: Input = { aimX: 0, aimY: -1, fire: true, aspect: 1 }
     const s0 = trench(portAt(atGate), { trenchView: [0, TRENCH_EYE_MIN, 0] })
     const s1 = stepGame(s0, HARD_DOWN, DT)

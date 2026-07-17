@@ -114,7 +114,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 623,
+      "line": 629,
       "verbatim": "export const EXHAUST_PORT: Model3D = {"
     }
   },
@@ -148,7 +148,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 803,
+      "line": 818,
       "verbatim": "export const MODELS: readonly Model3D[] = ["
     }
   },
@@ -165,7 +165,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 719,
+      "line": 734,
       "verbatim": "export function buildDeathStar(): Model3D {"
     },
     "recommendation": "fix",
@@ -186,7 +186,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 653,
+      "line": 659,
       "verbatim": "export const TRENCH_TURRET: Model3D = {"
     },
     "recommendation": "fix",
@@ -206,7 +206,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 688,
+      "line": 703,
       "verbatim": "export const TRENCH_CATWALK: Model3D = {"
     },
     "recommendation": "fix",
@@ -226,12 +226,13 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 558,
+      "line": 566,
       "verbatim": "  edges: ["
     },
     "recommendation": "fix",
     "size": "s",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-6"
   },
   {
     "id": "M-014",

@@ -13,7 +13,8 @@ import type { Vec3, Mat4 } from '@arcade/shared/math3d'
 import type { GameEvent } from './events'
 import { createRng, type Rng } from '@arcade/shared/rng'
 import { mazeForWave } from './surfaceMazes'
-import { TRENCH_EYE_SEAT } from './trench-channel'
+import { TRENCH_EYE_SEAT, TRENCH_FAR } from './trench-channel'
+import { TRENCH_PORT_OFFSET } from './trench-wedges'
 
 /** The three phases of an attack run, in order. */
 export type Phase = 'space' | 'surface' | 'trench'
@@ -480,16 +481,43 @@ export const TURRET_SCROLL_SPEED = 600
 // scrolls up the channel toward the cockpit; the player destroys it for the
 // bonus or it reaches the cockpit and costs a shield.
 
-/** Distance ahead (−Z) at which the exhaust port appears when the trench opens. */
-export const EXHAUST_PORT_DISTANCE = 2400
+/**
+ * Distance ahead (−Z) at which the exhaust port becomes an interactive target when
+ * the trench opens — finding B-009. No longer the fabricated 2400 stub (which gave
+ * the trench no channel body at all).
+ *
+ * The port's true location is the ROM's BS.PLC, DERIVED from the wedge chain
+ * (`trenchPortDistance`) — the sum of the $800/$1000 wedge lengths before the PORT
+ * wedge (0x50000 = 327,680 on the balanced pies), with the END wall $1000 beyond.
+ * That full length is the pure model (tests/core/trench-length.test.ts). But the
+ * ROM only lets the beam reach `#7000 = TRENCH_FAR = 28,672` units forward
+ * (WSLAZR.MAC CLBLZ, "FARTHEST FORWARD POINT"), and our channel renders only that
+ * far. Our sim carries ONE port object that must exist to scroll, so we seat it at
+ * its BS.PLC CLAMPED into that forward window — the farthest it can be and still be
+ * under the beam. The ~19 s of empty channel the pilot flies before the port comes
+ * into range is the trench length buildTrench models; streaming the wedges in
+ * one-by-one is R6b/R6c, out of this story's scope. `sim.ts spawnPort` recomputes
+ * this per wave from the chain so it stays data-driven. */
+export const EXHAUST_PORT_DISTANCE = Math.min(TRENCH_PORT_OFFSET, TRENCH_FAR)
 /** Points for destroying the exhaust port — the run's big payoff. ROM
  *  `byte_985F` = 25,000 (sw3-1, from the sw2-6 audit; the load-bearing
  *  cross-note settles this at 25,000, "do NOT ×10"). Was a 1,000-point
  *  authentic-feel guess. The clean-run "Use the Force" bonus (FORCE_BONUS,
  *  5,000) still lands on top of this. */
 export const TRENCH_BONUS = 25000
-/** How fast the exhaust port scrolls toward the cockpit (units/second). */
-export const TRENCH_SCROLL_SPEED = 500
+/**
+ * How fast the whole trench scrolls toward the cockpit (units/second) — finding
+ * B-008. The ROM sets the forward speed once at trench entry (PHIBS `LDD #300
+ * ;INITIAL PLAYER SPEED`, WSMAIN.MAC:1834 → $300 = 768) and integrates it ONCE PER
+ * GAME-FRAME by the single caller S1MVBS (`ADDD M$TX+M.S1`, WSMAIN.MAC:2654). So
+ * the per-second rate is that immediate times the game-frame rate — 768 × TICK_HZ
+ * ≈ 15,750 u/s, 31.5× the old invented 500. Frame-true like every other sw7 speed
+ * constant (ENEMY_SHOT_TTL, DARTH_GLOW_SECONDS …): derived from the timebase, not
+ * a re-tuned magic number. length ÷ speed is ONE traversal system, so this single
+ * rate scrolls the whole channel — ribs, port, and end wall alike. (Playable only
+ * because sw7-17 made the gun hitscan; the old 12,000 u/s projectile bolt was
+ * out-run at this speed.) */
+export const TRENCH_SCROLL_SPEED = 0x300 * TICK_HZ
 /** Hit sphere around the exhaust port for player bolts. WYSIWYG (sw3-15): you may
  *  only HIT what you can SEE — a rule this constant keeps, re-pointed by sw5-4 at
  *  the geometry that is actually there.

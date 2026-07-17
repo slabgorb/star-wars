@@ -535,13 +535,21 @@ export const SURFACE_BUNKER: Model3D = {
 }
 
 /**
- * Authentic `Obj_Trench_Squares` geometry from the cabinet disassembly: two
- * concentric floor squares (outer 0-3, inner 4-7) lying flat in y=0. The ported
- * floor rings already close cleanly; story 8-5 adds the CATWALK RAILS that bridge
- * each outer corner to its matching inner corner, so the trench reads as one
- * connected channel instead of two free-floating rims. Rails stay in the y=0
- * plane (the camera skims the floor) and span the rings without disturbing either
- * loop, so the induced-single-cycle topology guard still holds.
+ * The trench floor, straight off the ROM wall panel `.WP WPN` (WSOBJ.MAC:560-571,
+ * `.S=8`): two concentric squares lying flat in y=0 — outer ±256/±192 (0-3), inner
+ * ±128/±64 (4-7). `.WGD WPN` (WSOBJ.MAC:1803-1813) strokes ONLY those two rings —
+ *   PLOT 0 / DRAWTO 1,2,3,0     ← outer square, edges 0-1,1-2,2-3,3-0
+ *   BDRAWTO 4,5,6,7,4           ← inner square, edges 4-5,5-6,6-7,7-4
+ * — in VGCGRN, and nothing bridges them.
+ *
+ * ⚠ CORRECTED BY sw7-6 (finding M-013). Story 8-5 ADDED four "catwalk rail" edges
+ * [0,4],[1,5],[2,6],[3,7] so the trench would read as one connected channel. The
+ * ROM never draws them: the rings are DISJOINT by design. The rails were a
+ * fabrication — the exact thing the fidelity audit removes — so they are gone, and
+ * the two rings are back to the two separate loops `.WGD WPN` actually strokes.
+ * (tests/core/trench-wpn-rails.test.ts and the inverted 8-5 guard in models.test.ts
+ * pin this; catwalks are a WALL-PANEL slot — TD$WFF, in trench-wedges.ts — not a
+ * floor rail.)
  */
 export const TRENCH: Model3D = {
   name: 'Trench',
@@ -556,12 +564,10 @@ export const TRENCH: Model3D = {
     [128, 0, -64],
   ],
   edges: [
-    // outer floor square
-    [0, 1], [0, 3], [1, 2], [2, 3],
-    // inner floor square
-    [4, 5], [4, 7], [5, 6], [6, 7],
-    // catwalk rails: each outer corner to its matching inner corner
-    [0, 4], [1, 5], [2, 6], [3, 7],
+    // outer square — `.WGD WPN` DRAWTO 1,2,3,0
+    [0, 1], [1, 2], [2, 3], [3, 0],
+    // inner square — `.WGD WPN` BDRAWTO 4,5,6,7,4
+    [4, 5], [5, 6], [6, 7], [7, 4],
   ],
 }
 
@@ -666,16 +672,25 @@ export const TRENCH_TURRET: Model3D = {
 }
 
 /**
- * Trench wall square — the shootable wall panel (fidelity epic task 3;
- * findings ## Trench catwalks, turrets & wall squares — `sub_720B` "Draws
- * trench green squares"; scored via `byte_9850`). Authored as a flat panel
- * rectangle; PROVISIONAL for the same reason as TRENCH_TURRET — no recovered
- * exact ROM shape data (Open follow-ups #1/#3).
+ * Trench wall panel — the ROM `.WP WPN` (WSOBJ.MAC:560-571), the SAME wall panel
+ * TRENCH is built from.
+ *
+ * ⚠ CORRECTED BY sw7-6 (finding M-013). This used to be a hand-authored flat 80×80
+ * square in the x/y plane — a second, geometrically-wrong stand-in for the same WPN
+ * wall panel. It is reconciled here onto WPN's real geometry: the two concentric
+ * rectangles (±256/±192 outer, ±128/±64 inner), stroked `.WGD WPN`'s way — the two
+ * rings, no fabricated rails. (The old 80×80 shape carried no ROM anchor; the WPN
+ * table does. tests/core/trench-wpn-rails.test.ts pins the reconciliation.)
  */
 export const TRENCH_SQUARE: Model3D = {
   name: 'Trench Square',
-  vertices: [[-40, -40, 0], [40, -40, 0], [40, 40, 0], [-40, 40, 0]],
-  edges: [[0, 1], [1, 2], [2, 3], [3, 0]],
+  vertices: TRENCH.vertices, // `.WP WPN` — the same wall-panel table as TRENCH
+  edges: [
+    // outer square — `.WGD WPN` DRAWTO 1,2,3,0
+    [0, 1], [1, 2], [2, 3], [3, 0],
+    // inner square — `.WGD WPN` BDRAWTO 4,5,6,7,4
+    [4, 5], [5, 6], [6, 7], [7, 4],
+  ],
 }
 
 /**

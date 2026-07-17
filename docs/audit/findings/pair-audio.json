@@ -63,7 +63,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1177,
+      "line": 1204,
       "verbatim": "  surface: 'towers',"
     }
   },
@@ -144,7 +144,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1267,
+      "line": 1294,
       "verbatim": "  { timer: 16, parity: 'even', line: 'lukeTrustMe' }, // BS.WAV even / human odd — SPKTRU (Sound_18)"
     },
     "verdict": "CONFIRMED",

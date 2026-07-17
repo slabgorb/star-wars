@@ -53,7 +53,6 @@ import {
   SPACE_WAVE_QUOTA,
   towersForWave,
   SURFACE_CLEAR_BONUS,
-  EXHAUST_PORT_DISTANCE,
   TRENCH_SCROLL_SPEED,
   TRENCH_BONUS,
   PORT_HIT_RADIUS,
@@ -92,6 +91,7 @@ import {
   TRENCH_SQUARE_SCORE,
   OBSTACLE_HIT_RADIUS,
 } from './trench-obstacles'
+import { trenchPortDistance } from './trench-wedges'
 import {
   TRENCH_VIEW_HALF_W,
   TRENCH_VIEW_RATE,
@@ -877,8 +877,14 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     for (let i = 0; i < state.trenchObstacles.length; i++) {
       const o = state.trenchObstacles[i]
       if (o.kind === 'catwalk') continue // a catwalk is a hazard to fly into, not a target
-      const pos: Vec3 = [o.pos[0], o.pos[1], o.pos[2] + TRENCH_SCROLL_SPEED * dt]
-      const range = beamHit(beamOrigin, beamDir, pos, OBSTACLE_HIT_RADIUS, TRENCH_FAR)
+      // The instantaneous beam hits the obstacle the pilot SEES — its position at the
+      // START of the frame, before this frame's scroll (WYSIWYG, sw5-6). At the ROM
+      // scroll speed (B-008) the obstacle advances ~768 units per frame, so ranging
+      // against the post-scroll position would move the target off the aim between
+      // sighting and resolution and make "aim at it, hit it" depend on the frame rate
+      // — the exact defect trench-aim-wysiwyg.test.ts guards. The obstacle's own
+      // scroll below still carries it up the channel for the next frame.
+      const range = beamHit(beamOrigin, beamDir, o.pos, OBSTACLE_HIT_RADIUS, TRENCH_FAR)
       if (range !== null && range < beamObstacleRange) {
         beamObstacleRange = range
         beamObstacle = i
@@ -908,7 +914,19 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
       // seated within one hit radius of it, so it still bites; a dive to TRENCH_EYE_MIN opens
       // more than a hit radius of clearance beneath it, so it stays dodgeable. Both bounds are
       // asserted behaviourally in tests/core/trench-viewpoint.test.ts.
-      if (collides(pos, trenchView, CATWALK_HIT_RADIUS)) {
+      // At the ROM scroll speed a catwalk seated near the cockpit advances ~768
+      // units per frame (B-008) and can leap clean over the hit sphere between two
+      // frames — a catwalk at z=-1 lands at +261 in one step, well past the 240
+      // radius. So the sphere (which still catches a catwalk that lands inside it on
+      // approach) is backed by a CROSSING test: once the catwalk reaches or passes
+      // the cockpit plane (z >= 0) still within a hit radius LATERALLY and
+      // VERTICALLY of the ship, it has struck. dt-independent, and a full dive
+      // (trenchView at TRENCH_EYE_MIN, > a hit radius below the catwalk) still opens
+      // clean under it — the dodge is unchanged.
+      const spanCrash = collides(pos, trenchView, CATWALK_HIT_RADIUS)
+      const crossCrash =
+        pos[2] >= 0 && Math.hypot(pos[0] - trenchView[0], pos[1] - trenchView[1]) <= CATWALK_HIT_RADIUS
+      if (spanCrash || crossCrash) {
         crashedCatwalk = true
         events.push({ type: 'terrain-crash' })
         continue // crashed through it — removed
@@ -1064,7 +1082,16 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
   }
 
   // --- The port reaching the cockpit un-destroyed is a crash: costs a shield --
-  if (collides(port, COCKPIT, COCKPIT_HIT_RADIUS)) {
+  // At the ROM scroll speed the port advances up to ~768 units per game frame (B-008),
+  // far past COCKPIT_HIT_RADIUS (80), so the old symmetric-sphere test let it TUNNEL
+  // clean through the nose in one step and scroll away un-missed — a hazard the old
+  // 500 u/s speed hid. Detect the CROSSING instead: the port has reached the nose
+  // once it is at or past the cockpit plane (z >= 0) while still laterally within a
+  // hit-radius. dt-independent (no overshoot escape), and an off-axis port — a test
+  // construct; the ROM's port is centred — still never counts, exactly as the sphere
+  // did (its 3D distance stayed ≥ its lateral offset ≫ the radius).
+  const reachedCockpit = port[2] >= 0 && Math.hypot(port[0] - COCKPIT[0], port[1] - COCKPIT[1]) <= COCKPIT_HIT_RADIUS
+  if (reachedCockpit) {
     const portHit = loseShield(afterObstacles.lives, afterObstacles.shieldHitAt, 1, t) // S-016 window
     const lives = portHit.lives
     // The run is LOST — the port slipped past un-destroyed. A distinct miss cue
@@ -1085,7 +1112,7 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
       shieldHitAt: portHit.shieldHitAt,
       gameOver: lives <= 0,
       mode: lives <= 0 ? 'gameover' : afterObstacles.mode,
-      exhaustPort: spawnPort(), // another pass down the trench
+      exhaustPort: spawnPort(romWave0(state.wave), createRng(state.rng.seed)), // another pass down the trench
       // A fresh port is a fresh torpedo: the ROM re-primes both flags the moment a new porthole
       // comes into sight (WSBASE.MAC, at `STD BS.PLC ;LOCATION OF THE PORT` — `STA PT.LZF ;NO
       // FIRE VIA LAZAR YET` / `STA PT.LIV ;PROTON TORP NOT LIVE YET`). Without this an armed run
@@ -1336,8 +1363,9 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     // A leftover death cue never crosses into the next phase (story sw3-8).
     dyingTies: [],
     turrets: [],
-    // The trench opens with its target downrange; other phases carry no port.
-    exhaustPort: phase === 'trench' ? spawnPort() : null,
+    // The trench opens with its target downrange at the chain-derived BS.PLC
+    // (B-009); other phases carry no port. Seeded per-run like the obstacles below.
+    exhaustPort: phase === 'trench' ? spawnPort(romWave0(s.wave), createRng(s.rng.seed)) : null,
     // ...and its wall obstacles (fidelity epic, task 3); other phases carry none.
     // Seeded per-run variation (sw3-7): the trench chain's picked tail is drawn
     // from the run RNG via a LOCAL cursor (createRng(s.rng.seed)), so different
@@ -1391,9 +1419,15 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
   }
 }
 
-/** A fresh exhaust port: centred on the run, far down −Z toward the player. */
-function spawnPort(): { pos: Vec3 } {
-  return { pos: [0, 0, -EXHAUST_PORT_DISTANCE] }
+/** A fresh exhaust port: centred on the run, at the wave's chain-derived BS.PLC
+ *  offset down −Z (finding B-009), clamped into the beam's `#7000` forward reach
+ *  (TRENCH_FAR — WSLAZR CLBLZ) so the port that must exist to scroll is seated at
+ *  the farthest point still under the beam. The location is read from the wedge
+ *  chain (`trenchPortDistance`), not the old fixed −2400; the run RNG is threaded
+ *  through a LOCAL cursor so the seed is never consumed here (core purity),
+ *  matching how `enterPhase` seeds the trench obstacles. */
+function spawnPort(baseWave: number, rng: Rng): { pos: Vec3 } {
+  return { pos: [0, 0, -Math.min(trenchPortDistance(baseWave, rng), TRENCH_FAR)] }
 }
 
 /**

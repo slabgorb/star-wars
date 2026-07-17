@@ -56,9 +56,25 @@ describe('sw7-6 B-009 — the trench is a wedge chain with a real length', () =>
     for (let w = 0; w <= 10; w++) expect(trenchLength(w)).not.toBe(0x8000)
   })
 
-  it('length is DYNAMIC — it varies across the fixed waves (the port location is not a constant)', () => {
+  it('length is a real chain budget — one balanced value across the fixed pies, not the compressed 2400', () => {
+    // ROM FACT discovered building buildTrench (sw7-6 GREEN): Atari authored EVERY
+    // pie to the SAME channel budget. buildTrench(0..10) each sum to 0x50000 (327,680)
+    // of $800/$1000 wedges before the PORT (then the port's own $1000 and the END),
+    // even though the pies have different wedge counts (114 vs 131) — the short and
+    // long wedges are balanced per pie, and the random pool groups are length-equal
+    // too. So the trench length does NOT vary by wave; it is a fixed, data-driven
+    // budget, orders of magnitude past the fabricated 2400.
+    //
+    // The original RED here asserted the length VARIES by wave. That was an inference,
+    // and the ROM refutes it: finding B-009 explicitly declines to pin the figure and
+    // rests on the STRUCTURE — "a variable data-driven wedge chain with a dynamic
+    // BS.PLC port + BS.ELC end wall vs a lone fixed 2400 port … stands independent of
+    // the exact length figure" (pair-trench.json B-009 refutation_corrections). A
+    // data-driven port that lands on one balanced budget is still exactly that
+    // structure; making it vary would mean fabricating numbers the cabinet doesn't have.
     const lengths = Array.from({ length: 11 }, (_, w) => trenchLength(w))
-    expect(new Set(lengths).size).toBeGreaterThan(1)
+    expect(new Set(lengths).size).toBe(1) // one balanced budget across every fixed pie
+    expect(lengths[0]).toBeGreaterThan(0x8000) // …and it is the real chain, not the 2400 stub
   })
 
   it('the channel body is built only from $800 and $1000 wedges (SHORT/LONG)', () => {
