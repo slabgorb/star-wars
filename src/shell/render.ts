@@ -44,6 +44,7 @@ import { surfaceGrid } from '../core/surface-grid'
 import { trenchChannel } from '../core/trench-channel'
 import { trenchWallDetail } from '../core/trench-detail'
 import { crosshairNdc, lockedEnemy, LOCK_RADIUS_NDC, FOV_Y } from '../core/gameRules'
+import { surfaceShip } from '../core/sim' // the ship point itself (sw7-16), not a copy of it
 import {
   perspective,
   multiply,
@@ -281,7 +282,9 @@ export function deathStarPlacement(state: GameState): { pos: Vec3; scale: number
  * of shoving the world down, we raise the camera. Pure core math; the boundary holds.
  */
 export function cameraView(state: GameState): Mat4 {
-  if (state.phase === 'surface') return viewMatrix([0, state.altitude, 0], IDENTITY)
+  // The surface eye IS the core's ship point, not a copy of it (sw7-16): the camera and the gun
+  // read the same function, so they cannot drift apart.
+  if (state.phase === 'surface') return viewMatrix(surfaceShip(state.altitude), IDENTITY)
   // The trench eye rides the fixed skim PLUS the pilotable viewpoint offset (story
   // sw3-2): steering pans/dives the camera so the dodge the sim computes is what the
   // player sees. `trenchView` is a collision-world offset (z unused); added onto the

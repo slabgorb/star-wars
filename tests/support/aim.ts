@@ -12,10 +12,30 @@
 // "shoot the sky". These helpers say what they mean, and keep the suites honest when the geometry
 // moves again.
 
-import { EXHAUST_PORT_DISTANCE } from '../../src/core/state'
+import { EXHAUST_PORT_DISTANCE, type GameState } from '../../src/core/state'
 import { TRENCH_EYE_SEAT } from '../../src/core/trench-channel'
 import { FOV_Y } from '../../src/core/gameRules'
 import type { Input } from '../../src/core/input'
+import { transform, type Vec3 } from '@arcade/shared/math3d'
+import * as RenderModule from '../../src/shell/render'
+
+/**
+ * THE EYE THE SHELL ACTUALLY BUILDS, recovered from `render.ts cameraView` (story sw7-16).
+ *
+ * Never hand-write `[0, altitude, 0]` (or `trenchView`) in a test to stand in for the camera. Round
+ * 1 of sw7-16 did exactly that, and it made "the muzzle is on the camera eye" a comparison between
+ * the muzzle and a constant typed twice in the same file — it would have sat green through any
+ * drift in render.ts. Going through `cameraView` binds the assertion to the shell's real camera,
+ * across the boundary. (Tests may import the shell; only `src/core/**` may not.)
+ *
+ * Every phase's view matrix is IDENTITY-oriented, so it is a pure translation by −eye and the eye
+ * falls straight out of the world origin's image: transform(view, [0,0,0]) = −eye.
+ * (`+ 0` normalises −0, which `toEqual` reports as a difference from 0.)
+ */
+export function eyeOf(s: GameState): Vec3 {
+  const originInView = transform(RenderModule.cameraView(s), [0, 0, 0])
+  return [-originInView[0] + 0, -originInView[1] + 0, -originInView[2] + 0]
+}
 
 /**
  * The yoke position that puts the crosshair ON a world point, seen from `eye`. This inverts the
