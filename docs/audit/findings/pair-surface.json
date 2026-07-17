@@ -216,7 +216,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 404,
+      "line": 405,
       "verbatim": "export const SKIM_ALTITUDE = 128"
     },
     "verdict": "CONFIRMED",
@@ -326,7 +326,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1139,
+      "line": 1166,
       "verbatim": "      return allTowersKilled(s) || s.surfaceScrollZ >= surfaceFieldDepth(s.wave)"
     },
     "recommendation": "accept",
@@ -380,7 +380,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 472,
+      "line": 473,
       "verbatim": "export const TURRET_SCROLL_SPEED = 600"
     },
     "recommendation": "accept",

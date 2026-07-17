@@ -317,10 +317,15 @@ describe('sw2-4 — a missed run gives a clear miss indication', () => {
     // not fire. That is the same guard, and a stronger statement of it — the cue is the port's
     // business, and it is not merely indifferent to what the gun launched, there is nothing to be
     // indifferent to.
-    const portZ = -COCKPIT_HIT_RADIUS * 5 // 400u ahead — nowhere near arrival
+    // RE-DERIVED for the ROM scroll (sw7-6 / B-008): the port advances ~262 units per 1/60 s
+    // frame here, so the old 400u-downrange probe reaches the cockpit in two frames and the loop
+    // below would read a real arrival as the thing it means to rule out. Seat it at its full spawn
+    // distance — far downrange, nowhere near arrival across the frames checked — so the guard
+    // isolates what it claims: a stray shot, not the port's own arrival, and no miss fires.
+    const portZ = -EXHAUST_PORT_DISTANCE
     const s0 = trench(portAt([0, 0, portZ]))
-    // The port itself is unaimable from here (~62° down), which is the point — the pilot's shot
-    // goes down the trench, where the yoke actually reaches, and the port is nowhere near it.
+    // The pilot's shot goes wide — far off-axis, down the trench where the yoke reaches — nowhere
+    // near the on-axis port, so it cannot arm it; the port simply scrolls on, un-hit.
     const wide: Vec3 = [EXHAUST_PORT_DISTANCE / 2, 0, -EXHAUST_PORT_DISTANCE]
     expect(aimAt(wide, eyeOf(s0)).reachable).toBe(true)
     let s = stepGame(s0, fireAt(s0, wide), FRAME)

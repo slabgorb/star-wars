@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1465,
+      "line": 1499,
       "verbatim": "  const decay = Math.pow(7 / 8, dt * TICK_HZ)"
     },
     "verdict": "CONFIRMED",
@@ -33,7 +33,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 287,
+      "line": 288,
       "verbatim": "export const MAX_FIREBALL_SLOTS = 6"
     }
   },

@@ -136,7 +136,8 @@
     },
     "recommendation": "fix",
     "size": "m",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-6"
   },
   {
     "id": "B-009",
@@ -159,7 +160,8 @@
     "verdict": "CONFIRMED",
     "refutation_corrections": [
       "The length ESTIMATES are approximate, not pinned: 'a full pie is 16 wedges -> on the order of $8000-$10000+ units' and 'our 2400 is ~1/4 of even one short-wedge pie' are not certified constants. The $8000 in DOFAR ('?WILL ALL OF NEW WEDGES FIT INTO 8000?', WSBASE.MAC:1111) is a streaming look-ahead WINDOW governing how many wedges are generated ahead of the player, not the certified total trench length. The structural divergence (variable data-driven wedge chain with dynamic BS.PLC port + BS.ELC end wall vs a lone fixed 2400 port) stands independent of the exact length figure."
-    ]
+    ],
+    "remediated_by": "sw7-6"
   },
   {
     "id": "B-010",
@@ -180,7 +182,8 @@
     "recommendation": "fix",
     "size": "l",
     "verdict": "CONFIRMED",
-    "refutation_corrections": "(1) The finding says '49 named wedge groups (TWDG01..TWDG99)'; the actual count is 53 (TWDG01-37, 41-45, 53-55, 92-99). (2) The finding's key hedge — that the packing macro 'does NOT obviously produce a 4x2-bit byte' and was 'left un-decoded rather than guessed' — is now RESOLVED: under MACRO-11 left-to-right evaluation it decodes cleanly to A1*64+A2*16+A3*4+A4, a proper 4x2-bit byte with A1=top, A4=bottom (verified by the CATWALK-AT-TOP/BOTTOM comments). The 4-slot semantics are no longer merely 'certain from the WSPANL loop' — the literal encoding is now fully decoded. (3) '11 pies (TPIE) + one random pie' is exact: TPIE = PIE1..PIE11 (WSBASE:176-178), PIEXX = RANDOM (:162). Cluster note: B-012 is a specific instance of THIS model gap (the catwalk is force-field panel type 2 inside this same grid), and one rewrite — porting the 4x2-bit panel grid — subsumes both; they are distinct observable claims (encoding vs collision behaviour), not the same defect filed twice."
+    "refutation_corrections": "(1) The finding says '49 named wedge groups (TWDG01..TWDG99)'; the actual count is 53 (TWDG01-37, 41-45, 53-55, 92-99). (2) The finding's key hedge — that the packing macro 'does NOT obviously produce a 4x2-bit byte' and was 'left un-decoded rather than guessed' — is now RESOLVED: under MACRO-11 left-to-right evaluation it decodes cleanly to A1*64+A2*16+A3*4+A4, a proper 4x2-bit byte with A1=top, A4=bottom (verified by the CATWALK-AT-TOP/BOTTOM comments). The 4-slot semantics are no longer merely 'certain from the WSPANL loop' — the literal encoding is now fully decoded. (3) '11 pies (TPIE) + one random pie' is exact: TPIE = PIE1..PIE11 (WSBASE:176-178), PIEXX = RANDOM (:162). Cluster note: B-012 is a specific instance of THIS model gap (the catwalk is force-field panel type 2 inside this same grid), and one rewrite — porting the 4x2-bit panel grid — subsumes both; they are distinct observable claims (encoding vs collision behaviour), not the same defect filed twice.",
+    "remediated_by": "sw7-6"
   },
   {
     "id": "B-011",
@@ -200,7 +203,8 @@
     },
     "recommendation": "fix",
     "size": "m",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-6"
   },
   {
     "id": "B-012",
@@ -215,8 +219,8 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 911,
-      "verbatim": "      if (collides(pos, trenchView, CATWALK_HIT_RADIUS)) {"
+      "line": 926,
+      "verbatim": "      const spanCrash = collides(pos, trenchView, CATWALK_HIT_RADIUS)"
     },
     "recommendation": "fix",
     "size": "l",
@@ -236,7 +240,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 526,
+      "line": 554,
       "verbatim": "export const PORT_APPROACH_WINDOW = 800"
     }
   },
@@ -253,8 +257,8 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1396,
-      "verbatim": "  return { pos: [0, 0, -EXHAUST_PORT_DISTANCE] }"
+      "line": 1430,
+      "verbatim": "  return { pos: [0, 0, -Math.min(trenchPortDistance(baseWave, rng), TRENCH_FAR)] }"
     }
   },
   {
@@ -270,7 +274,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 517,
+      "line": 545,
       "verbatim": "export const PORT_HIT_RADIUS = 108"
     },
     "recommendation": "accept"
@@ -288,7 +292,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1010,
+      "line": 1028,
       "verbatim": "  const detonates = armed && inApproachWindow"
     }
   },
@@ -320,8 +324,8 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1067,
-      "verbatim": "  if (collides(port, COCKPIT, COCKPIT_HIT_RADIUS)) {"
+      "line": 1094,
+      "verbatim": "  if (reachedCockpit) {"
     },
     "recommendation": "accept",
     "verdict": "CONFIRMED"

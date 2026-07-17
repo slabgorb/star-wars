@@ -451,11 +451,16 @@ describe('sw7-17 — the trench beam is clipped to 28,672 units forward (CLBLZ)'
   // draw cull (`TRENCH_FAR`, trench-channel.ts:72) — the beam clip is the same number and must
   // read it rather than re-typing 28672.
   //
-  // The probes straddle the line by 400 units. That margin is not arbitrary: an obstacle
-  // scrolls TRENCH_SCROLL_SPEED × the 8-frame sweep ≈ 195 units closer while the laser is on,
-  // so a probe placed nearer than that to the boundary would cross it mid-sweep and the test
-  // would measure the scroll instead of the clip.
-  const MARGIN = 400
+  // The probes straddle the line, and the margin is RE-DERIVED off the ROM scroll speed
+  // (sw7-6 / B-008): a trench object advances $300 = 768 units per game frame, and the
+  // laser holds a LZ.EDG sweep for 8 game frames, so an obstacle scrolls 768 × 8 = 6,144
+  // units closer while the beam is on — the TICK_HZ cancels, so this is exact and
+  // frame-rate independent. (At the old invented 500 u/s it was only ~195 units, which is
+  // why MARGIN = 400 used to be safe and now is not — re-derived, not relabelled.) A probe
+  // nearer the boundary than the sweep scroll would cross it mid-sweep and the test would
+  // measure the scroll instead of the clip, so the margin sits comfortably past 6,144.
+  const SWEEP_SCROLL = 0x300 * 8 // 6,144 — $300/frame × the 8-frame LZ.EDG sweep
+  const MARGIN = SWEEP_SCROLL + 400
   const obstacleDied = (s: GameState): boolean =>
     s.events.some((e) => e.type === 'trench-obstacle-destroyed')
 
@@ -486,18 +491,26 @@ describe('sw7-17 — the trench beam is clipped to 28,672 units forward (CLBLZ)'
     const s0 = trench({ trenchObstacles: [{ kind: 'square', pos: [0, 0, startZ] }] })
     const aim = aimAt([0, 0, startZ], eyeOf(s0), ASPECT)
 
-    // One trigger frame, then coast with the trigger RELEASED for 4 s — comfortably past the
-    // old bolt's whole lifetime, so "it never dies" is a claim about the model and not about
-    // the clock running out.
+    // One trigger frame, then coast with the trigger RELEASED for the WHOLE life of the probe
+    // in the channel — comfortably past the LZ.EDG sweep, so "it never dies TO THE BEAM" is a
+    // claim about the model, not the clock. RE-DERIVED for the ROM scroll (sw7-6 / B-008): at
+    // 768 u/frame the probe scrolls the entire trench and out through the cockpit in ~135
+    // frames, so it despawns by SCROLLING rather than lingering — the old 500 u/s speed left it
+    // barely-moved and "still standing" after 240 frames, which is no longer true. What the
+    // clip guarantees is unchanged: the beam is never built out to 29,072, so across every frame
+    // it is on, the far probe takes no `trench-obstacle-destroyed` event; it simply flies past.
     let s = stepGame(s0, trigger({ aimX: aim.aimX, aimY: aim.aimY }), DT)
-    let died = obstacleDied(s)
-    for (let i = 0; i < 240 && !died; i++) {
+    let everDied = obstacleDied(s)
+    for (let i = 0; i < 240 && !everDied; i++) {
       s = stepGame(s, trigger({ aimX: aim.aimX, aimY: aim.aimY, fire: false }), DT)
-      died = obstacleDied(s)
+      everDied = everDied || obstacleDied(s)
     }
 
-    expect(died, '29,072 is beyond $7000 — the beam is not built out that far').toBe(false)
-    expect(s.trenchObstacles, 'and it is still standing, having only scrolled').toHaveLength(1)
+    expect(everDied, '29,072 is beyond $7000 — the beam is not built out that far').toBe(false)
+    // It left the channel un-destroyed: it scrolled clear through the cockpit (despawn), never
+    // took a beam kill. `everDied === false` above is the clip's teeth; this pins that its exit
+    // was the harmless scroll-past, not a destruction the guard failed to see.
+    expect(s.trenchObstacles, 'the far probe scrolled clear un-destroyed').toHaveLength(0)
   })
 })
 

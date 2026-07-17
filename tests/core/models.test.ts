@@ -607,23 +607,25 @@ describe('models — trench floor ring topology (8-5 regression guard)', () => {
   })
 })
 
-describe('models — trench catwalk rails (8-5)', () => {
-  it('the trench is a single connected wireframe (rails bridge the floor loops)', () => {
-    // RED: the ported TRENCH is two disjoint squares. Wave 3 adds catwalk rails so
-    // the floor reads as one connected structure, not two free-floating rims.
+describe('models — trench has NO catwalk rails (sw7-6 M-013, inverts 8-5)', () => {
+  // Story 8-5 bridged the two floor rings with four "catwalk rail" edges
+  // [0,4],[1,5],[2,6],[3,7] so the trench read as one connected structure. Finding
+  // M-013 proves those rails are a fabrication: `.WGD WPN` (WSOBJ.MAC:1803-1813)
+  // strokes ONLY the two rectangles (DRAWTO 1,2,3,0 / BDRAWTO 4,5,6,7,4) — the ROM
+  // never joins the rings. So the 8-5 guard is inverted here: the rings are DISJOINT.
+  // (The exact rail-edge and vertex pins live in tests/core/trench-wpn-rails.test.ts.)
+  it('the two floor rings are DISJOINT — not bridged into one component', () => {
     const m = findTrench()
     expect(m).toBeDefined()
     if (!m) return
-    expect(isSingleComponent(m)).toBe(true)
+    expect(isSingleComponent(m)).toBe(false)
   })
 
-  it('has at least one catwalk rail bridging the inner and outer floor rings', () => {
-    // RED: zero cross-ring edges today. Derived from the rings, not hardcoded
-    // indices, so GREEN stays free to choose which vertices the rails join.
+  it('has ZERO cross-ring rails (the 8-5 bridge edges are removed)', () => {
     const m = findTrench()
     expect(m).toBeDefined()
     if (!m) return
-    expect(countCrossRingRails(m)).toBeGreaterThanOrEqual(1)
+    expect(countCrossRingRails(m)).toBe(0)
   })
 })
 

@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 233,
+      "line": 234,
       "verbatim": "export const TIE_SPAWN_DISTANCE = 0x7c00 // 31744 — WSCPU STARTING LOCATIONS depth word"
     }
   },
@@ -29,7 +29,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1546,
+      "line": 1580,
       "verbatim": "const ROM_LATERAL_UNIT = 0x400 // 1024 — the ×$400 STARTING-LOCATION lateral step"
     }
   },
@@ -46,7 +46,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1557,
+      "line": 1591,
       "verbatim": "  [-2 * ROM_LATERAL_UNIT, 0], // 1D1"
     }
   },
@@ -63,7 +63,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 191,
+      "line": 192,
       "verbatim": "export const WAVE_SIZE = 3"
     }
   },
@@ -97,7 +97,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 373,
+      "line": 374,
       "verbatim": "export const TIE_NEAR_BOUND = 0x800 // 2048 — WSCPU \"not too close\" fire/peel floor"
     }
   },
@@ -131,7 +131,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1578,
+      "line": 1612,
       "verbatim": "  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), bank }"
     }
   },
@@ -191,7 +191,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1504,
+      "line": 1538,
       "verbatim": "  const peeling = e.peeling ?? (dist <= TIE_NEAR_BOUND && lateralOffset >= COCKPIT_HIT_RADIUS)"
     },
     "recommendation": "accept",
@@ -248,7 +248,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 242,
+      "line": 243,
       "verbatim": "export const ENEMY_SPEED = 10000"
     },
     "recommendation": "accept",
@@ -267,7 +267,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1569,
+      "line": 1603,
       "verbatim": "  const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]"
     },
     "recommendation": "accept",
@@ -336,7 +336,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 613,
+      "line": 641,
       "verbatim": "export const SPACE_WAVE_QUOTA = 6"
     },
     "recommendation": "accept",
