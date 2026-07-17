@@ -50,20 +50,48 @@
 //
 // Behaviour is driven through the pure surface — stepGame(state, input, dt) — and
 // asserts observable gameplay (the event stream), never internal shape.
+//
+// -- ⚠ RE-SEATED BY sw7-17 / R11b: HOW THE SHOT IS TAKEN ---------------------
+//
+// Every bound above is untouched; only the way this suite pulls the trigger moves. It used to
+// hand-place a bolt at an (x, y) offset from the port and step once, because the player's gun threw
+// a 12,000 u/s object. The gun is now the cabinet's HITSCAN beam (audit G-004): it spawns nothing,
+// so there is no bolt to place, and a step with the trigger up fires no beam at all — the old
+// fixture would have gone green on an arbitrarily broken hit test. `shootAt` therefore AIMS at the
+// offset and PULLS, which is the same sentence the offsets always meant ("put the shot here") and
+// is strictly stronger: it goes through the real yoke, the real ship point and the real resolve.
+//
+// It also has to fly the run out, and that is the machine's doing rather than ours. sw5-6 seated
+// the pilot 768 above a porthole lying in the floor, so an in-window port is ~44° below him against
+// a 30° cone: he cannot shoot from -300, and the old IN_WINDOW_Z is not a stale number but an
+// impossible one. The ROM never asked for that shot — WSLAZR arms the torpedo when a laser gets
+// close enuf to the hole, and WSMAIN reads the flag later at the $800 wall — so `shootAt` threads
+// the porthole at the trench mouth, where the yoke can reach it, and follows the run to the window.
+// The radius is what decides it either way; that is all this file has ever been about.
+//
+// One geometric consequence, stated rather than buried, because it changes what two of the shots
+// below are worth. A bolt sat AT an offset, so the offset WAS the miss distance. A beam is a ray,
+// and its miss distance is the perpendicular from the port to that ray — so an offset only counts
+// in full where it lies across the beam. The pilot's line into a floor-mounted plate runs almost
+// entirely in the Y-Z plane, which means:
+//
+//   • an X (lateral) offset is very nearly perpendicular to the beam and survives intact —
+//     96 out reads as ~95.9 of miss distance. The lateral shots below still discriminate the
+//     radius to within a fraction of a unit, and they are the ones with teeth.
+//   • a Y offset is raked along the beam and foreshortens — 96 below the hole reads as ~90.3.
+//     `shootAt(0, -96)` therefore still passes, and honestly (a ray through a point 96 under the
+//     porthole really does pass 90 from its centre), but it no longer pins the radius at 96: it
+//     would pass at 91. It is kept as second-axis COVERAGE, and the rim's discriminating case is
+//     pinned on X — both signs of it.
 
 import { describe, it, expect } from 'vitest'
-import {
-  initialState,
-  PORT_HIT_RADIUS,
-  PROJECTILE_TTL,
-  type GameState,
-  type Projectile,
-} from '../../src/core/state'
+import { initialState, PORT_HIT_RADIUS, EXHAUST_PORT_DISTANCE, type GameState } from '../../src/core/state'
 import { EXHAUST_PORT } from '../../src/core/models'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
 import type { GameEvent } from '../../src/core/events'
 import type { Vec3 } from '@arcade/shared/math3d'
+import { aimAt, eyeOf, fireAt } from '../support/aim'
 
 // --- the ROM geometry the contract is pinned against ------------------------
 //
@@ -108,24 +136,39 @@ const trench = (
   seed = 1983,
 ): GameState => ({ ...initialState(seed), phase: 'trench', exhaustPort: port, ...over })
 
-/** A hand-placed bolt at rest — the geometry is pinned dead-on, so real-speed
- *  flight is irrelevant and a micro-tick keeps the scroll from moving the port. */
-const bolt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, -1], ttl: PROJECTILE_TTL })
+/** The range every shot below is taken from: the port's own spawn distance, at the trench mouth.
+ *  RE-SEATED BY sw7-17 from the old in-window -300 — see the header. It is where the ROM means the
+ *  shot to be earned, and (unlike -300) it is a range the yoke can actually point at, which the
+ *  reachability guard inside `shootAt` proves rather than assumes. The window never confounds the
+ *  RADIUS question here either: an armed run always resolves at the wall, a missed one never does,
+ *  so the sphere alone still decides every outcome in this file. */
+const SHOT_Z = -EXHAUST_PORT_DISTANCE
 
-/** Deep inside any plausible approach window, so the RADIUS (not the sw3-15 $800
- *  window) decides every outcome below. Matches the sibling suites' -300. */
-const IN_WINDOW_Z = -300
+/** One real 60fps frame. */
+const FRAME = 1 / 60
 
 const hit = (events: readonly GameEvent[]): boolean =>
   events.some((e) => e.type === 'death-star-destroyed')
 
-/** Fire one hand-placed bolt at an (x,y) offset from the port's centre and report
- *  whether the Death Star blew. `trenchShotsFired: 2` keeps the clean-run Force
- *  bonus out of the way — this suite is about the sphere, not the bonus. */
+/** Put the crosshair at an (x,y) offset from the port's centre, pull the trigger ONCE, fly the run
+ *  to the $800 wall, and report whether the Death Star blew. `trenchShotsFired: 2` keeps the
+ *  clean-run Force bonus out of the way — this suite is about the sphere, not the bonus. */
 function shootAt(x: number, y: number): boolean {
-  const port: Vec3 = [0, 0, IN_WINDOW_Z]
-  const base = trench(portAt(port), { trenchShotsFired: 2 })
-  const s = stepGame({ ...base, projectiles: [bolt([x, y, IN_WINDOW_Z])] }, NO_INPUT, 0.001)
+  const port: Vec3 = [0, 0, SHOT_Z]
+  const s0 = trench(portAt(port), { trenchShotsFired: 2 })
+  // ANTI-VACUOUS. `aimAt` deliberately does not clamp, so a test can ask for a yoke position no
+  // player could hold (|NDC| > 1) and get a confident direction back. Every shot in this file is a
+  // shot a pilot could actually take — which is exactly what the old -300 fixture was not.
+  const aim = aimAt([x, y, SHOT_Z], eyeOf(s0))
+  expect(aim.reachable, `the yoke can point at (${x}, ${y}) from the trench mouth`).toBe(true)
+  let s = stepGame(s0, fireAt(s0, [x, y, SHOT_Z]), FRAME)
+  // One pull is one shot (G-012), so the trigger comes up and the run coasts to the window; a
+  // miss simply flies the whole trench and never resolves. The budget covers the full scroll from
+  // the mouth to the cockpit with room to spare.
+  for (let i = 0; i < 320 && s.phase === 'trench'; i++) {
+    if (hit(s.events)) return true
+    s = stepGame(s, NO_INPUT, FRAME)
+  }
   return hit(s.events)
 }
 
@@ -187,8 +230,15 @@ describe('sw5-4 AC-4 — what detonates the port, and what does not', () => {
   it('a torpedo on the porthole\'s edge (96 out, dead on the rim) detonates it', () => {
     // The WYSIWYG floor, as behaviour: this shot is visibly ON the red porthole
     // the ROM draws. Under the old octagon sphere (70) it MISSES — which is what
-    // makes this test RED today, and what "re-tuned against the ROM" has to mean.
+    // made this test RED in sw5-4, and what "re-tuned against the ROM" has to mean.
+    //
+    // sw7-17: the LATERAL rim is where this bites, so both signs of it are pinned — a beam through
+    // either side of the hole reads ~95.9 of miss distance against the 108 sphere, and would go red
+    // the moment the radius fell back under the rim. The Y shot below it is raked along the beam
+    // and reads only ~90.3, so it is honest second-axis coverage rather than a 96 bound; the header
+    // has the geometry. Neither line was dropped: the discriminating case was ADDED next to it.
     expect(shootAt(PORTHOLE_HALF_WIDTH, 0)).toBe(true)
+    expect(shootAt(-PORTHOLE_HALF_WIDTH, 0)).toBe(true)
     expect(shootAt(0, -PORTHOLE_HALF_WIDTH)).toBe(true)
   })
 

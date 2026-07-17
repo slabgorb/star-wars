@@ -18,11 +18,18 @@
 // (it sets PT.LIV=1 and positions the torpedo) — NOT by the detonation. U-010's
 // one-line claim ("firing the proton torpedo into the exhaust port") is easy to
 // misread as the kill frame; the routine name and its body settle it. In our sim
-// the torpedo comes into existence on the ARMING frame (the bolt that touches the
-// port is consumed and becomes the guided torpedo — sim.ts's portTorpedoArmed
-// latch, sw3-15), so that frame is the launch and carries the knell. The
-// detonation (the port scrolling into the $800 approach window with the latch
-// set) carries the finale, exactly the ROM's PMSF2 -> [explosion] -> PMEND order.
+// the torpedo comes into existence on the ARMING frame (the LASER lands in the
+// PT.LZF box around the porthole and the machine launches the torpedo for the
+// pilot — sim.ts's portTorpedoArmed latch, sw3-15), so that frame is the launch
+// and carries the knell. The detonation (the port scrolling into the $800 approach
+// window with the latch set) carries the finale, exactly the ROM's
+// PMSF2 -> [explosion] -> PMEND order.
+//
+// sw7-17 re-seat: the arming used to be driven here by a bolt hand-parked on the
+// port, because the player's gun threw a travelling projectile. It is HITSCAN now
+// (audit G-004) — nothing the player fires exists as an object, and the ROM's own
+// arming test is the beam's — so the launch is driven by the real thing: aim at the
+// port and pull the trigger. Nothing about WHICH tune fires WHEN has changed.
 //
 // DESIGN (TEA's call, mirroring sw2-5 speech / sw3-5 music): a tune is a
 // first-class core GameEvent — the core decides WHICH tune and WHEN
@@ -50,11 +57,11 @@ import {
   towersForWave,
   EXHAUST_PORT_DISTANCE,
   PORT_APPROACH_WINDOW,
-  PROJECTILE_TTL,
   type GameState,
-  type Projectile,
 } from '../../src/core/state'
-import { NO_INPUT } from '../../src/core/input'
+import { TRENCH_EYE_MIN } from '../../src/core/trench-channel'
+import { NO_INPUT, type Input } from '../../src/core/input'
+import { aimAt, eyeOf, fireAt, release } from '../support/aim'
 import type { Vec3 } from '@arcade/shared/math3d'
 
 const DT = 1 / 60
@@ -73,9 +80,6 @@ const trench = (port: { pos: Vec3 } | null, over: Partial<GameState> = {}): Game
   ...over,
 })
 
-/** A player bolt parked at a position (stepGame reads pos/vel/ttl). */
-const bolt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, -1], ttl: PROJECTILE_TTL })
-
 /** The tune names cued this frame, in event order. */
 const tunesOf = (s: GameState): string[] =>
   s.events.filter((e: GameEvent) => e.type === 'tune').map((e) => e.tune)
@@ -87,11 +91,20 @@ it('fixture sanity: the far port spawn sits outside the approach window', () => 
 })
 
 describe("tune cue — the death knell fires when the torpedo ARMS, not when it lands (U-010, WSGUNS.MAC:1220 FRPTGN)", () => {
-  it('cues deathKnell on the frame a bolt reaches the far port and becomes the torpedo', () => {
-    // Port far down the trench — outside the window — with a bolt parked on it:
-    // this frame ARMS (FRPTGN, the launch) but cannot detonate (no window).
+  it('cues deathKnell on the frame the laser reaches the far port and launches the torpedo', () => {
+    // Port far down the trench — outside the window — and the pilot puts the crosshair on
+    // it and pulls: this frame ARMS (FRPTGN, the launch) but cannot detonate (no window).
+    // sw7-17: the arming used to be a bolt parked on the port. It is the BEAM that arms the
+    // torpedo now (WSLAZR.MAC's PT.LZF test), so the launch is a real shot — aimed from the
+    // eye the pilot actually flies (768 above the floor: ~17.7° down at this range, well
+    // inside the yoke's 30°), through the real resolve. Strictly stronger than the bolt.
     const far: Vec3 = [0, 0, -EXHAUST_PORT_DISTANCE]
-    const s1 = stepGame(trench(portAt(far), { projectiles: [bolt(far)] }), NO_INPUT, DT)
+    const s0 = trench(portAt(far))
+    // The shot is one the yoke can physically make — pinned, not asserted in prose: a
+    // launch fixture that needed an impossible crosshair would be the bolt's unbuildable
+    // state wearing a beam's clothes.
+    expect(aimAt(far, eyeOf(s0)).reachable).toBe(true)
+    const s1 = stepGame(s0, fireAt(s0, far), DT)
     expect(s1.portTorpedoArmed).toBe(true) // the launch actually happened
     expect(tunesOf(s1)).toContain('deathKnell')
     // The run has NOT resolved — no detonation, no finale, no run-clear.
@@ -101,23 +114,32 @@ describe("tune cue — the death knell fires when the torpedo ARMS, not when it 
 
   it('the knell is a ONE-SHOT: the armed torpedo does not re-knell on later frames', () => {
     const far: Vec3 = [0, 0, -EXHAUST_PORT_DISTANCE]
-    const s1 = stepGame(trench(portAt(far), { projectiles: [bolt(far)] }), NO_INPUT, DT)
+    const s0 = trench(portAt(far))
+    const shot = fireAt(s0, far)
+    const s1 = stepGame(s0, shot, DT)
     expect(tunesOf(s1)).toContain('deathKnell') // fired on the arming frame…
-    const s2 = stepGame(s1, NO_INPUT, DT)
+    // Trigger released, crosshair still on the port. One pull opens an 8-frame sweep
+    // (LZ.EDG), so the beam is STILL ON and still landing in the PT.LZF box this frame —
+    // which is what makes this the real latch test: the knell is silenced by PT.LZF, not
+    // merely by the laser having gone out.
+    const s2 = stepGame(s1, release(shot), DT)
+    expect(s2.laserEdge).toBeGreaterThan(0) // the sweep really is still live
     expect(s2.portTorpedoArmed).toBe(true) // still armed…
     expect(tunesOf(s2)).not.toContain('deathKnell') // …but silent (PT.LZF latch)
   })
 
   it('an ordinary trench shot that hits nothing is NOT a torpedo launch', () => {
-    // A bolt mid-trench, nowhere near the port: no arming, no knell. The ROM's
-    // knell belongs to FRPTGN (the proton torpedo), never to laser fire.
+    // A shot down the trench, aimed wide of the port (300 off-axis at the port's own
+    // range — a reachable yoke, and ~3x the 108 porthole radius away): no arming, no
+    // knell. The ROM's knell belongs to FRPTGN (the proton torpedo), never to laser fire.
+    // sw7-17: this used to park a bolt mid-trench, which under a hitscan laser cannot arm
+    // anything no matter what — it would now pass whatever the beam did. A real miss is
+    // what keeps the test discriminating.
     const far: Vec3 = [0, 0, -EXHAUST_PORT_DISTANCE]
-    const s1 = stepGame(
-      trench(portAt(far), { projectiles: [bolt([300, 0, -1200])] }),
-      NO_INPUT,
-      DT,
-    )
-    expect(s1.portTorpedoArmed).toBe(false)
+    const s0 = trench(portAt(far))
+    const s1 = stepGame(s0, fireAt(s0, [300, 0, -EXHAUST_PORT_DISTANCE]), DT)
+    expect(s1.laserEdge).toBeGreaterThan(0) // he really did shoot…
+    expect(s1.portTorpedoArmed).toBe(false) // …and really did miss
     expect(tunesOf(s1)).not.toContain('deathKnell')
   })
 })
@@ -135,12 +157,22 @@ describe('tune cue — the finale fires when the Death Star detonates (U-012, WS
   })
 
   it('arming inside the window fires BOTH, knell before finale (the ROM call order)', () => {
-    // The degenerate same-frame case: the bolt reaches the port after the port is
-    // already inside the window. Launch and detonation collapse onto one frame;
-    // both cues fire and the launch precedes the resolution, as WSGUNS.MAC:1220
-    // precedes WSMAIN.MAC:2179 in every real run.
-    const near: Vec3 = [0, 0, -300]
-    const s1 = stepGame(trench(portAt(near), { projectiles: [bolt(near)] }), NO_INPUT, DT)
+    // The collapsed case: the laser only reaches the port AFTER the port is already inside
+    // the window, so launch and detonation land on ONE frame. Both cues fire, and the
+    // launch precedes the resolution, as WSGUNS.MAC:1220 precedes WSMAIN.MAC:2179 in every
+    // real run.
+    //
+    // sw7-17: this used to park a bolt on a port at -300, which under a hitscan laser is
+    // not a shot at all — and it cannot simply become one, because a port at -300 sits
+    // 68.7° below a seated pilot and the yoke reaches 30°. The shot exists but it is a
+    // sliver: the port lies IN the floor and climbs out of reach as it closes, so the
+    // pilot must be flying the floor himself. At TRENCH_EYE_MIN (512, the ROM's minimum
+    // ground clearance) with the yoke hard down, the beam grazes the porthole exactly as
+    // it crosses the $800 gate — the last frame on which this shot is takeable at all.
+    const atGate: Vec3 = [0, 0, -PORT_APPROACH_WINDOW]
+    const HARD_DOWN: Input = { aimX: 0, aimY: -1, fire: true, aspect: 1 }
+    const s0 = trench(portAt(atGate), { trenchView: [0, TRENCH_EYE_MIN, 0] })
+    const s1 = stepGame(s0, HARD_DOWN, DT)
     const tunes = tunesOf(s1)
     expect(tunes).toContain('deathKnell')
     expect(tunes).toContain('finale')

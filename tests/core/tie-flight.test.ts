@@ -42,6 +42,7 @@ import {
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
+import { fireAt } from '../support/aim'
 import {
   normalize,
   sub,
@@ -256,11 +257,18 @@ describe('Story 9-2 — existing collision & motion contracts are unaffected (AC
   // Fully-typed minimal fixtures (the combat-kill-loop.test.ts `tieStill` idiom):
   // collision reads only .pos, but a complete Enemy keeps the suite type-clean.
   const tieAt = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
+  /** Dead ahead, outside COCKPIT_HIT_RADIUS — the beam's target, and the old bolt's spot. */
+  const AT: Vec3 = [0, 0, -100]
 
-  it('a bolt still destroys a TIE and scores under the flight model', () => {
+  it('the laser still destroys a TIE and scores under the flight model', () => {
+    // sw7-17: this used to hand-place a bolt on the TIE and step with the trigger up. The gun is
+    // HITSCAN now — it spawns nothing, so that fixture is unbuildable in play. The honest
+    // equivalent is the sentence the bolt was standing in for: AIM AT THE TIE AND PULL. `fireAt`
+    // goes through the real eye and the real aim, so this still asserts exactly what AC4 asks —
+    // that story 9-2's flight model did not break the kill loop.
     const base = initialState(1983)
-    const bolt = { pos: [0, 0, -100] as Vec3, vel: [0, 0, -1] as Vec3, ttl: 2 }
-    const s = stepGame({ ...base, enemies: [tieAt([0, 0, -100])], projectiles: [bolt] }, NO_INPUT, 0.001)
+    const s0: GameState = { ...base, enemies: [tieAt(AT)], spawnTimer: 999 }
+    const s = stepGame(s0, fireAt(s0, AT), 0.001)
     expect(s.enemies).toHaveLength(0)
     expect(s.score).toBe(base.score + TIE_SCORE)
   })

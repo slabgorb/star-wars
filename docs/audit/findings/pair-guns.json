@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1245,
+      "line": 1411,
       "verbatim": "  const decay = Math.pow(7 / 8, dt * TICK_HZ)"
     },
     "verdict": "CONFIRMED",
@@ -33,7 +33,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 250,
+      "line": 287,
       "verbatim": "export const MAX_FIREBALL_SLOTS = 6"
     }
   },
@@ -75,7 +75,8 @@
       "verbatim": "      vel: scale(aimDirection(aimX, aimY, input.aspect), PROJECTILE_SPEED),"
     },
     "recommendation": "wont_fix",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-17"
   },
   {
     "id": "G-005",
@@ -90,8 +91,8 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 814,
-      "verbatim": "    sweptCollides(port, sub(b.pos, scale(b.vel ?? ZERO, dt)), b.pos, PORT_HIT_RADIUS),"
+      "line": 868,
+      "verbatim": "      ? beamHit(beamOrigin, beamDir, portPos, PORT_HIT_RADIUS, TRENCH_FAR)"
     },
     "recommendation": "accept"
   },
@@ -150,7 +151,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 352,
+      "line": 432,
       "verbatim": "    if (collides(s.pos, ship, COCKPIT_HIT_RADIUS)) {"
     },
     "recommendation": "accept",
@@ -169,7 +170,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 344,
+      "line": 424,
       "verbatim": "    if (collides(e.pos, ship, COCKPIT_HIT_RADIUS)) {"
     },
     "recommendation": "accept",
@@ -189,7 +190,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 251,
+      "line": 311,
       "verbatim": "        pos: [...e.pos] as Vec3,"
     }
   },
@@ -211,6 +212,7 @@
     },
     "recommendation": "accept",
     "verdict": "CONFIRMED",
-    "refutation_corrections": "Strengthening (not a defect in the finding, which honestly scoped itself as 'lower-confidence / cannot pin the interval from WSGUNS/WSLAZR/TCSPLS alone'): the divergence is not merely an unpinned re-fire interval — the firing MODEL differs. Decoding VG.LON at WSINT.MAC:188-192 shows the ROM fires exactly one shot per trigger falling-edge with no auto-repeat (semi-auto), whereas ours auto-fires at 4/s while the button is held (level-triggered). So the accurate divergence is 'ROM edge-triggered semi-auto, 8-frame sweep per pull' vs 'ours level-triggered 0.25 s auto-fire'. This also means the 8-frame LZ.EDG value is the laser's on/collision DURATION per shot, a different quantity from a re-fire interval — do not port 8 frames as a cooldown."
+    "refutation_corrections": "Strengthening (not a defect in the finding, which honestly scoped itself as 'lower-confidence / cannot pin the interval from WSGUNS/WSLAZR/TCSPLS alone'): the divergence is not merely an unpinned re-fire interval — the firing MODEL differs. Decoding VG.LON at WSINT.MAC:188-192 shows the ROM fires exactly one shot per trigger falling-edge with no auto-repeat (semi-auto), whereas ours auto-fires at 4/s while the button is held (level-triggered). So the accurate divergence is 'ROM edge-triggered semi-auto, 8-frame sweep per pull' vs 'ours level-triggered 0.25 s auto-fire'. This also means the 8-frame LZ.EDG value is the laser's on/collision DURATION per shot, a different quantity from a re-fire interval — do not port 8 frames as a cooldown.",
+    "remediated_by": "sw7-17"
   }
 ]

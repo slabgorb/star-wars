@@ -50,6 +50,7 @@ import {
 import { mazeForWave } from '../../src/core/surfaceMazes'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
+import { aimAt, eyeOf, fireAt } from '../support/aim'
 import { dot, sub, type Vec3 } from '@arcade/shared/math3d'
 import * as RenderModule from '../../src/shell/render'
 
@@ -205,27 +206,65 @@ describe('Wave 2 — collisions, scoring & lives', () => {
   const bolt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, -1], ttl: PROJECTILE_TTL })
   const turretAt = (pos: Vec3): { pos: Vec3 } => ({ pos })
 
-  it('a player bolt striking a turret destroys it, is consumed, and scores', () => {
+  // == sw7-17: THE PLAYER'S SHOT IS A BEAM, NOT A BOLT ========================
+  //
+  // The two player-fire pins below used to park a projectile on (or beside) the turret and step
+  // with the trigger up. sw7-17 made the laser HITSCAN — the gun spawns nothing that flies — so
+  // that fixture can no longer occur in play, and a state carrying it says nothing about firing.
+  // The replacement is the sentence the bolt was standing in for: AIM AT IT AND PULL THE TRIGGER.
+  //
+  // The turret is seated at the pilot's own cruise height (`base.altitude`) rather than on the
+  // floor, for two reasons. First, geometry: the pilot cruises SKIM_ALTITUDE (128) up and the old
+  // site was only 100 units out, i.e. 52° below him — outside the 30° the 60° FOV allows, so the
+  // yoke physically cannot point at it and "the player shot it" is not a thing that can happen.
+  // Second, the throttle: on the surface the yoke's vertical axis also flies the ship, so a
+  // downward shot moves the ship while the shot is measured. Level with the eye, dead-on is
+  // purely lateral and the fixture's only moving part is the gun.
+  //
+  // The MISS pin is re-seated deeper as well, and that is load-bearing rather than tidying: aim
+  // is ANGULAR, so at the old 100-unit range even a full-deflection yoke sweeps less than 60
+  // units sideways — inside TURRET_HIT_RADIUS (200). At that range there is no such thing as a
+  // reachable miss, and the pin would have gone green while proving the opposite of its name.
+  const EYE_HIGH = surface().altitude
+
+  it('a player shot striking a turret destroys it, spawns no bolt, and scores', () => {
     const base = surface()
+    const site: Vec3 = [0, EYE_HIGH, -100]
     const s0 = {
       ...base,
-      turrets: [turretAt([0, 0, -100])],
-      projectiles: [bolt([0, 0, -100])],
+      turrets: [turretAt(site)],
+      fireCooldown: 0,
+      firePrev: false, // the trigger is edge-triggered: a pull only lands off a released trigger
     }
-    const s1 = stepGame(s0, NO_INPUT, 0.001)
+    const s1 = stepGame(s0, fireAt(s0, site), 0.001)
+    // The kill EVENT, not an emptied list — a turret also leaves `turrets` by scrolling past the
+    // cockpit, so the list alone cannot tell a kill from a fly-by.
+    expect(s1.events.some((e) => e.type === 'enemy-death' && e.enemyType === 'turret')).toBe(true)
     expect(s1.turrets ?? []).toHaveLength(0)
+    // What "is consumed" means for a beam: the gun leaves NOTHING in the air. The old bolt was
+    // removed on contact; the hitscan gun never creates one, which is the stronger claim.
     expect(s1.projectiles).toHaveLength(0)
     expect(s1.score).toBe(base.score + TURRET_SCORE)
   })
 
-  it('a player bolt that misses leaves the turret standing and the score untouched', () => {
+  it('a player shot that misses leaves the turret standing and the score untouched', () => {
     const base = surface()
+    const site: Vec3 = [0, EYE_HIGH, -4000]
     const s0 = {
       ...base,
-      turrets: [turretAt([0, 0, -100])],
-      projectiles: [bolt([9999, 0, -100])],
+      turrets: [turretAt(site)],
+      fireCooldown: 0,
+      firePrev: false,
     }
-    const s1 = stepGame(s0, NO_INPUT, 0.001)
+    // The trigger goes down with the crosshair on empty ground 2,000 units to the RIGHT of the
+    // turret — an aim the yoke really can reach (|aimX| = 0.87), so this is a miss the pilot
+    // could make, not an un-aimable one standing in for one.
+    const aside: Vec3 = [2000, EYE_HIGH, -4000]
+    const aim = aimAt(aside, eyeOf(s0))
+    expect(aim.reachable, `the yoke must be able to point here (${aim.aimX.toFixed(2)})`).toBe(true)
+
+    const s1 = stepGame(s0, fireAt(s0, aside), 0.001)
+    expect(s1.events.some((e) => e.type === 'enemy-death')).toBe(false)
     expect(s1.turrets ?? []).toHaveLength(1)
     expect(s1.score).toBe(base.score)
   })

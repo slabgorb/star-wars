@@ -64,19 +64,20 @@ import {
   TRENCH_SCROLL_SPEED,
   TRENCH_BONUS,
   towersForWave,
-  PROJECTILE_TTL,
   type GameState,
-  type Projectile,
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
 import type { Vec3 } from '@arcade/shared/math3d'
 import { TRENCH } from '../../src/core/models'
 import * as RenderModule from '../../src/shell/render'
-import { FIRE_AT_PORT } from '../support/aim'
+import { FIRE_AT_PORT, fireAt } from '../support/aim'
 
 // sw5-6: RE-SEATED — see tests/support/aim.ts. `aimY: 0` now points at empty sky, not the port.
 const FIRE: Input = FIRE_AT_PORT
+
+/** One real 60fps frame. */
+const FRAME = 1 / 60
 
 /** A live exhaust port at a world position — the hit-test reads `.pos`. */
 const portAt = (pos: Vec3): { pos: Vec3 } => ({ pos })
@@ -91,8 +92,31 @@ const trench = (
 /** A fresh surface run — the phase the trench is entered FROM. */
 const surface = (seed = 1983): GameState => ({ ...initialState(seed), phase: 'surface' })
 
-// stepGame reads a bolt's `.pos` for the hit-test (and vel/ttl to advance it).
-const bolt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, -1], ttl: PROJECTILE_TTL })
+/**
+ * SHOOT THE PORT AND FLY THE RUN OUT (RE-SEATED BY sw7-17 / R11b).
+ *
+ * These two AC2 tests used to say "the player shot the port" by hand-placing a bolt on top of it —
+ * `projectiles: [bolt([0,0,-300])]` — and stepping once with the trigger up. That fixture is now
+ * unbuildable in play: the laser is HITSCAN and the player's gun spawns NOTHING (audit G-004), so
+ * nothing the player fires ever exists as an object to place. The honest replacement is not a
+ * different fixture but a different sentence — AIM AT IT AND PULL THE TRIGGER — and it is strictly
+ * stronger than the bolt was: it goes through the real aim, the real ship point and the real
+ * resolve, so it fails if any of them break.
+ *
+ * It also has to fly, and that is the ROM's doing rather than ours. The beam ARMS the torpedo
+ * early — at the trench mouth, the only range from which a floor-mounted porthole is inside the
+ * yoke's cone at all (from the seat 768 above it, an in-window port is 43.8° down against a 30°
+ * cone) — and the machine RESOLVES it late, when the port reaches the $800 end wall. So the shot
+ * is one pull at -2,400 and then a coast; see the sw5-6 note in exhaust-port-challenge.test.ts.
+ *
+ * The trigger is released on every subsequent frame because one pull is one shot (G-012): holding
+ * it would fire nothing anyway, and NO_INPUT also keeps the yoke from flying the eye off its seat.
+ */
+function fireAndFlyOut(s0: GameState, maxFrames = 400): GameState {
+  let s = stepGame(s0, fireAt(s0, s0.exhaustPort!.pos), FRAME)
+  for (let i = 1; i < maxFrames && s.phase === 'trench'; i++) s = stepGame(s, NO_INPUT, FRAME)
+  return s
+}
 
 /** Step in small ticks until the phase leaves `from` (or give up after a few). */
 function crossFrom(s: GameState, from: string, input: Input = NO_INPUT): GameState {
@@ -145,16 +169,21 @@ describe('Wave 3 — the exhaust port scrolls toward the cockpit', () => {
 // --- AC2: targeting the port & the bonus ------------------------------------
 
 describe('Wave 3 — destroying the exhaust port', () => {
-  it('a player bolt on target destroys the port, is consumed, scores the bonus, and costs no shield', () => {
+  it('a player shot on target destroys the port, launches nothing, scores the bonus, and costs no shield', () => {
     // trenchShotsFired: 2 — this test is about TRENCH_BONUS alone; a fresh
     // enterPhase() state starts at 0, which the fidelity epic's task 4 "Use the
     // Force" clean-run tell (trenchShotsFired <= 1) would also score FORCE_BONUS
     // on top (see tests/core/force-bonus.test.ts for that case).
-    const base = trench(portAt([0, 0, -300]), { trenchShotsFired: 2 })
-    const s0: GameState = { ...base, projectiles: [bolt([0, 0, -300])] }
-    const s1 = stepGame(s0, NO_INPUT, 0.001)
+    //
+    // sw7-17: "is consumed" became "launches nothing", and it is a REAL assertion rather than a
+    // weaker one. The bolt this line used to watch die was the fiction; the beam never was an
+    // object, so the pilot pulls the trigger and `projectiles` — which now carries only the proton
+    // torpedo and whatever a fixture hands the sim — stays empty from muzzle to detonation. Delete
+    // the hitscan gun and put a travelling shot back, and this is the line that goes red.
+    const base = trench(portAt([0, 0, -EXHAUST_PORT_DISTANCE]), { trenchShotsFired: 2 })
+    const s1 = fireAndFlyOut(base)
     expect(s1.exhaustPort).toBeNull() // the port is destroyed
-    expect(s1.projectiles).toHaveLength(0) // the bolt is spent
+    expect(s1.projectiles).toHaveLength(0) // the gun spawned nothing to spend
     expect(s1.score).toBe(base.score + TRENCH_BONUS) // the bonus is awarded
     expect(s1.lives).toBe(base.lives) // destroying it is not a crash
   })
@@ -162,9 +191,12 @@ describe('Wave 3 — destroying the exhaust port', () => {
   it('destroying the port CLEARS the run and advances to the next wave', () => {
     // trenchShotsFired: 2 — see the note above; keeps this test about the wave
     // transition, not the "Use the Force" bonus.
-    const base = trench(portAt([0, 0, -300]), { wave: 1, score: 500, trenchShotsFired: 2 })
-    const s0: GameState = { ...base, projectiles: [bolt([0, 0, -300])] }
-    const s1 = stepGame(s0, NO_INPUT, 0.001)
+    const base = trench(portAt([0, 0, -EXHAUST_PORT_DISTANCE]), {
+      wave: 1,
+      score: 500,
+      trenchShotsFired: 2,
+    })
+    const s1 = fireAndFlyOut(base)
     expect(s1.wave).toBe(2) // run cleared — loop back harder
     expect(s1.phase).toBe('space') // the next wave opens in the space phase
     expect(s1.phaseKills).toBe(0) // fresh phase counter
@@ -172,10 +204,21 @@ describe('Wave 3 — destroying the exhaust port', () => {
     expect(s1.score).toBe(500 + TRENCH_BONUS)
   })
 
-  it('a bolt that misses leaves the port intact, the score untouched, and the run going', () => {
-    const base = trench(portAt([0, 0, -300]))
-    const s0: GameState = { ...base, projectiles: [bolt([9999, 0, -300])] }
-    const s1 = stepGame(s0, NO_INPUT, 0.001)
+  it('a shot that misses leaves the port intact, the score untouched, and the run going', () => {
+    // RE-SEATED BY sw7-17. This used to park a bolt at x=9,999 and step with the trigger UP, which
+    // under a hitscan gun asserts nothing at all: with no trigger pull there is no beam, so "the
+    // port survived" would hold however broken the hit test was. The miss is now a real pull of the
+    // trigger with the crosshair off the hole — the only way a player can miss.
+    //
+    // 9,999 lateral at this range is not aimable (the yoke would need |aimX| ≈ 7), so the wide shot
+    // is stated as a fraction of the range: half the port's distance out, an unmistakable miss that
+    // the yoke can still physically make. The sphere-tight near-miss band is
+    // swept-port-collision.test.ts's business.
+    const PORT_Z = -EXHAUST_PORT_DISTANCE
+    const WIDE = EXHAUST_PORT_DISTANCE / 2
+    const base = trench(portAt([0, 0, PORT_Z]))
+    const s1 = stepGame(base, fireAt(base, [WIDE, 0, PORT_Z]), FRAME)
+    expect(s1.portTorpedoArmed).toBe(false) // the laser never got close enuf
     expect(s1.exhaustPort).not.toBeNull() // still standing
     expect(s1.score).toBe(base.score) // a miss never scores
     expect(s1.phase).toBe('trench') // run continues

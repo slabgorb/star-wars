@@ -83,10 +83,10 @@ import {
   TOWER_FIRE_GRACE,
   type GameState,
   type Turret,
-  type Projectile,
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
+import { fireAt } from '../support/aim'
 import { dot, sub, type Vec3 } from '@arcade/shared/math3d'
 
 const DT = 0.02 // 12 world units of scroll per step at TURRET_SCROLL_SPEED 600
@@ -103,9 +103,6 @@ const ground = (pos: Vec3, kind: 'tower' | 'bunker' | 'bishop', age = 0): Turret
   age,
   kind,
 })
-
-/** A player bolt parked on the target (surface-bunkers.test.ts precedent). */
-const boltOn = (pos: Vec3): Projectile => ({ pos: [...pos] as Vec3, vel: [0, 0, 0] as Vec3, ttl: 1 })
 
 const CLIMB: Input = { aimX: 0, aimY: 1, fire: false } // +aimY = up (surface.test.ts convention)
 
@@ -281,9 +278,26 @@ describe('sw7-5 / D-020 — a standing TOWER dead ahead is a crash', () => {
     // ROM gates the bunker crash on TYP$DM ("CHECK COLLISION SINCE BLOWN
     // AWAY?", WSGRND:937-939); the clone removes killed objects outright, and
     // the crash test must read the LIVE field, not the maze data.
-    const s0 = towerAhead({ projectiles: [boltOn([0, 0, -300])] })
-    const first = stepGame(s0, NO_INPUT, DT)
-    expect(first.turrets).toHaveLength(0) // the bolt got it…
+    //
+    // sw7-17: the tower is destroyed by AIMING AT IT AND PULLING THE TRIGGER, not by parking a
+    // bolt on it — the player's laser is hitscan and spawns nothing that flies, so the old
+    // fixture cannot occur in play. The pull is DOWNWARD here (the tower stands on the floor and
+    // the pilot cruises SKIM_ALTITUDE above it) and that is fine: the beam resolves on its own
+    // frame, so the one frame of throttle the dip costs cannot reach the crash window this test
+    // measures. The rest of the pass then flies hands-off with the trigger released.
+    //
+    // The pull's ~0.39 s LZ.EDG sweep does keep the beam alive into that pass (~19 of the 40
+    // frames, now centred), which is harmless and deliberately not worked around: the only object
+    // on the stage is the one just killed, and `surfaceMazeLaid` stops a wave maze being laid
+    // over it — so there is nothing left for the sweep to find, which is the guard's whole point.
+    const TOWER_SITE: Vec3 = [0, 0, -300]
+    const s0 = towerAhead()
+    const first = stepGame(s0, fireAt(s0, TOWER_SITE), DT)
+    // The kill EVENT, not an emptied list: a tower also leaves `turrets` by scrolling past the
+    // cockpit, which is exactly the pass this test then flies — so the list alone would call a
+    // total miss a kill and the guard would go green having proved nothing.
+    expect(count(first.events.map((e) => e.type), 'enemy-death'), 'the beam got it…').toBe(1)
+    expect(first.turrets).toHaveLength(0)
     const { s, types } = fly(first, 40)
     expect(s.lives).toBe(s0.lives) // …so nothing is left to crash into
     expect(count(types, 'object-crash')).toBe(0)

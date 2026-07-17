@@ -42,6 +42,29 @@
 // Like the Wave 1/2 RED suites, this file references state fields and constants
 // the GREEN phase will add, so `tsc` is red until then while vitest runs and
 // reports the contract as failing. Once GREEN lands it typechecks with no casts.
+//
+// == sw7-17 FIXTURE MIGRATION (the kills, not the progression) ================
+//
+// Every "the player cleared the phase" fixture here used to park a bolt on top of its target
+// (`projectiles: [bolt(P)]`) and step with the trigger up. sw7-17 made the player's laser
+// HITSCAN: the gun spawns nothing, so that fixture is unbuildable in play and a state carrying it
+// proves nothing about a kill. The kills are now real trigger pulls (`fireAt` — aim at it, pull),
+// which is strictly stronger: they run through the real aim, the real ship point and the real
+// resolve. Nothing about the PROGRESSION contract — quotas, ordering, carry-forward, reset —
+// moved; `bolt` survives below because enemy fire is still a genuine travelling object.
+//
+// Two properties of the new gun shape the fixtures. ONE BEAM KILLS ONE OBJECT PER FRAME (ROM
+// CLSLZ keeps a single winner in CL.ADS) — which every kill here already was. And ONE PULL IS ONE
+// SWEEP: the trigger is edge-triggered semi-auto (a state needs `firePrev: false` /
+// `fireCooldown: 0` for a pull to land at all), and the pull opens an ~0.39 s LZ.EDG window
+// during which the beam stays on and RE-RESOLVES against the CURRENT aim every frame.
+//
+// That second one is why the multi-step helpers below can hold a single input across every step.
+// Holding it cannot open a second sweep — there is no rising edge — but it does NOT stop the gun:
+// the sweep is still burning, and a crosshair dragged across a second target inside that window
+// would kill it too. These fixtures are safe because their one target dies on the first frame and
+// the aim never moves, so the remaining sweep frames find nothing under the site. Do not read the
+// held input as "the gun is off after frame 1"; it isn't.
 
 import { describe, it, expect } from 'vitest'
 import {
@@ -49,6 +72,7 @@ import {
   TIE_SCORE,
   TURRET_SCORE,
   MIN_SKIM_ALTITUDE,
+  SKIM_ALTITUDE,
   PROJECTILE_TTL,
   SPACE_WAVE_QUOTA,
   towersForWave,
@@ -59,6 +83,7 @@ import {
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
+import { fireAt } from '../support/aim'
 import type { Vec3 } from '@arcade/shared/math3d'
 
 const FIRE: Input = { aimX: 0, aimY: 0, fire: true }
@@ -67,10 +92,28 @@ const space = (seed = 1983): GameState => initialState(seed)
 const surface = (seed = 1983): GameState => ({ ...initialState(seed), phase: 'surface' })
 const trench = (seed = 1983): GameState => ({ ...initialState(seed), phase: 'trench' })
 
-// stepGame reads `.pos` for hit-tests (and a bolt's vel/ttl); minimal literals.
+// stepGame reads `.pos` for hit-tests (and a bolt's vel/ttl); minimal literals. `bolt` is now
+// ENEMY ordnance only — the player's gun no longer produces one (sw7-17).
 const bolt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, -1], ttl: PROJECTILE_TTL })
 const tie = (pos: Vec3): Enemy => ({ pos } as Enemy)
 const turretAt = (pos: Vec3): { pos: Vec3 } => ({ pos })
+
+/** The lone TIE every space-kill fixture below shoots: dead ahead of the cockpit, which in space
+ *  IS the world origin, so a dead-on pull is the yoke at rest. A `tie()` stand-in carries no
+ *  velocity, so it holds station there while the shot is measured. */
+const TIE_SITE: Vec3 = [0, 0, -100]
+
+/**
+ * The surface targets' seat — the PILOT'S OWN CRUISE HEIGHT, not the floor (sw7-17).
+ *
+ * On the surface the pilot flies SKIM_ALTITUDE (128) above the floor, so a tower seated ON it
+ * 100 units out sits 52° below him — outside the 30° the 60° FOV allows, i.e. an aim the yoke
+ * physically cannot reach. And the yoke's vertical axis is ALSO the throttle, so a downward shot
+ * flies the ship while the kill is being measured. Level with the eye, dead-on is purely lateral,
+ * the yoke stays at rest, and the fixture's only moving part is the gun. Nothing in the quota or
+ * transition machinery reads a tower's height.
+ */
+const EYE_HIGH = SKIM_ALTITUDE
 
 /** Step in small ticks until the phase leaves `from` (or give up after a few). */
 function crossFrom(s: GameState, from: string, input: Input = NO_INPUT): GameState {
@@ -97,10 +140,11 @@ describe('Wave progression — phase-clear counter', () => {
   it('counts kills toward the current phase quota', () => {
     const s0: GameState = {
       ...space(),
-      enemies: [tie([0, 0, -100])],
-      projectiles: [bolt([0, 0, -100])],
+      enemies: [tie(TIE_SITE)],
+      fireCooldown: 0,
+      firePrev: false, // a pull only lands off a released trigger (sw7-17)
     }
-    const s1 = stepGame(s0, NO_INPUT, 0.001)
+    const s1 = stepGame(s0, fireAt(s0, TIE_SITE), 0.001)
     expect(s1.phaseKills).toBe(1)
   })
 })
@@ -126,11 +170,15 @@ describe('Wave progression — space clears to surface', () => {
       phaseKills: SPACE_WAVE_QUOTA - 1,
       score: 555,
       lives: 4,
-      enemies: [tie([0, 0, -100])],
-      projectiles: [bolt([0, 0, -100])],
+      enemies: [tie(TIE_SITE)],
       enemyShots: [],
+      fireCooldown: 0,
+      firePrev: false,
     }
-    const s1 = crossFrom(s0, 'space')
+    // One pull, handed to every step `crossFrom` takes. The lone TIE dies on the first frame and
+    // the aim never moves, so the rest of the sweep finds nothing under the site and this stays
+    // the single CLEARING kill it claims to be.
+    const s1 = crossFrom(s0, 'space', fireAt(s0, TIE_SITE))
     expect(s1.phase).toBe('surface')
     expect(s1.score).toBe(555 + TIE_SCORE) // the kill scored; nothing was reset
     expect(s1.lives).toBe(4) // no damage that frame — shields carry untouched
@@ -171,16 +219,18 @@ describe('Wave progression — surface clears to trench', () => {
   })
 
   it('the clearing kill scores (+ the 50k all-towers bonus) and carries score/lives forward', () => {
+    const site: Vec3 = [0, EYE_HIGH, -100]
     const s0: GameState = {
       ...surface(),
       phaseKills: towersForWave(1) - 1,
       score: 800,
       lives: 5,
-      turrets: [turretAt([0, 0, -100])],
-      projectiles: [bolt([0, 0, -100])],
+      turrets: [turretAt(site)],
       enemyShots: [],
+      fireCooldown: 0,
+      firePrev: false,
     }
-    const s1 = crossFrom(s0, 'surface')
+    const s1 = crossFrom(s0, 'surface', fireAt(s0, site))
     expect(s1.phase).toBe('trench')
     expect(s1.score).toBe(800 + TURRET_SCORE + SURFACE_CLEAR_BONUS)
     expect(s1.lives).toBe(5)
@@ -219,14 +269,18 @@ describe('Wave progression — ordering, determinism & trench safety', () => {
     const mk = (): GameState => ({
       ...space(7),
       phaseKills: SPACE_WAVE_QUOTA - 1,
-      enemies: [tie([0, 0, -100])],
-      projectiles: [bolt([0, 0, -100])],
+      enemies: [tie(TIE_SITE)],
+      fireCooldown: 0,
+      firePrev: false,
     })
+    // The clearing pull, held for the whole run. Both runs fly the identical input sequence, so
+    // any Math.random()/Date.now() in the crossing — or in the new gun — diverges them here.
+    const shot = fireAt(mk(), TIE_SITE)
     let a = mk()
     let b = mk()
     for (let i = 0; i < 6; i++) {
-      a = stepGame(a, NO_INPUT, 0.1)
-      b = stepGame(b, NO_INPUT, 0.1)
+      a = stepGame(a, shot, 0.1)
+      b = stepGame(b, shot, 0.1)
     }
     expect(a.phase).toBe('surface')
     expect(a).toEqual(b)

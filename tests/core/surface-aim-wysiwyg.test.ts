@@ -63,6 +63,20 @@
 //   * The yoke comes OFF CENTRE — see (b). Round 1 fired every shot with `aimY: 0`, which is
 //     the one input that hides the question, and that is why nothing caught the docstring.
 //
+// == ROUND 3 (2026-07-17) — WHAT sw7-17 TOOK AWAY =============================
+//
+// sw7-17 (R11b) made the player's laser a HITSCAN beam, so the gun no longer spawns a bolt and
+// `s.projectiles` is empty after a trigger frame. Every assertion here that read the muzzle off
+// a spawned bolt now reads `shipPoint` — the point the beam is cast from — which the core
+// exports. Sections (c) and (d) did not change at all and did not even go red: "what you aim at
+// is what you hit" is a behavioural claim, and hitscan keeps it.
+//
+// Section (b)'s 15-case altitude × yoke sweep is GONE, not migrated, and its header says why in
+// full: the aim-time-vs-flown distinction is no longer observable from the state, and no
+// behavioural fixture can recover it (the two points differ by 3.33-to-87 units against a
+// 200-unit hit radius). Rewriting it would have produced fifteen tests that cannot fail. That
+// loss is recorded as a Delivery Finding on sw7-17 rather than papered over here.
+//
 // THE STANDING RULE this file now holds itself to: a regression guard is only a guard if it
 // FAILS when you revert the fix. Every guard below has been checked by mutation, with ONE
 // documented exception that cannot be — see `surface-ship-point.test.ts`, where reverting
@@ -81,9 +95,14 @@
 // So every shot here is fired at |x| = 0, where the lateral lead error is exactly zero
 // and the ONLY thing that can move the bolt off the reticle is the altitude parallax.
 // These tests fail for R11a's reason or they do not fail at all.
+//
+// sw7-17 HAS since landed, so that lead error is gone and |x| = 0 is no longer load-bearing —
+// `hitscan-laser.test.ts` is where the off-axis shot is pinned now. This file keeps its shots
+// dead ahead anyway: they are R11a's guards, and they should keep failing for R11a's reason
+// alone rather than quietly depending on R11b's fix as well.
 
 import { describe, it, expect } from 'vitest'
-import { stepGame, enterPhase } from '../../src/core/sim'
+import { stepGame, enterPhase, shipPoint } from '../../src/core/sim'
 import {
   initialState,
   SKIM_ALTITUDE,
@@ -129,7 +148,8 @@ const surface = (over: Partial<GameState> = {}): GameState => ({
  * input under which altitude cannot change during the step — and therefore the one input
  * under which the frame's two ship points collapse onto each other. Round 1 fired every shot
  * this way and justified it as "the only way to fire at a known, unchanging altitude"; what
- * it actually did was hide the whole question. Section (b) takes the stick off centre.
+ * it actually did was hide the whole question. Section (b) is where that was taken apart —
+ * see its header for why sw7-17 could not keep the sweep it used to do that with.
  */
 const trigger = (over: Partial<Input> = {}): Input => ({
   aimX: 0,
@@ -145,91 +165,90 @@ const ALTITUDE_BAND = [
   ['the ceiling of the flight band', MAX_SKIM_ALTITUDE],
 ] as const
 
-/** Every altitude in the band × a yoke sweep spanning dive, level and climb. */
-const YOKE_SWEEP = [-1, -0.5, 0, 0.5, 1] as const
-const MUZZLE_SWEEP = ALTITUDE_BAND.flatMap(([label, alt]) =>
-  YOKE_SWEEP.map((aimY) => [label, alt, aimY] as [string, number, number]),
-)
-
 // ---------------------------------------------------------------------------
 // (a) The muzzle. The precise defect, pinned at every altitude in the band.
 // ---------------------------------------------------------------------------
 
-describe('sw7-16 — the surface muzzle IS the flying ship', () => {
-  it.each(ALTITUDE_BAND)('spawns the bolt at the ship point at %s (altitude %s)', (_label, alt) => {
-    const s = stepGame(surface({ altitude: alt }), trigger(), DT)
+describe('sw7-16 — the surface gun IS on the flying ship', () => {
+  // == HOW sw7-17 CHANGED THIS SECTION ========================================
+  //
+  // Every test here used to read the muzzle straight off the state — `s.projectiles[0].pos`,
+  // the bolt the trigger spawned. sw7-17 made the laser HITSCAN (audit G-004): the gun spawns
+  // nothing that flies, `s.projectiles` is empty after a trigger frame, and the muzzle is no
+  // longer an object. It is `shipPoint(state)` — the point the beam is cast from — which the
+  // core now exports.
+  //
+  // So these assert `shipPoint` instead of a bolt. They pin the same two things they always did:
+  // the gun's point READS the altitude (no remembered constant), and it IS the shell's camera eye.
 
-    expect(s.projectiles, 'the trigger must produce exactly one bolt').toHaveLength(1)
-    // The bolt is pushed AFTER the frame's `advance`, so its recorded position is the
-    // muzzle itself, untouched by a step of flight — an exact assertion is honest here.
-    // The design names one ship point, `[0, altitude, 0]`, with no forward offset (the
-    // trench's `trenchView` muzzle carries none either), so pin it exactly.
-    expect(s.projectiles[0].pos).toEqual([0, alt, 0])
+  it.each(ALTITUDE_BAND)('casts the beam from the ship point at %s (altitude %s)', (_label, alt) => {
+    // The design names one ship point, `[0, altitude, 0]`, with no forward offset (the trench's
+    // `trenchView` muzzle carries none either), so pin it exactly.
+    expect(shipPoint(surface({ altitude: alt }))).toEqual([0, alt, 0])
   })
 
-  it('rides the ship up and down — the muzzle is never a fixed height', () => {
+  it('rides the ship up and down — the gun is never at a fixed height', () => {
     // Guards the lazy fix: hard-coding SKIM_ALTITUDE (or any constant) satisfies the
-    // nominal case above while leaving the gun off the ship everywhere else. The muzzle
+    // nominal case above while leaving the gun off the ship everywhere else. The gun
     // must READ the altitude, not remember one.
-    const low = stepGame(surface({ altitude: MIN_SKIM_ALTITUDE }), trigger(), DT)
-    const high = stepGame(surface({ altitude: MAX_SKIM_ALTITUDE }), trigger(), DT)
+    const low = shipPoint(surface({ altitude: MIN_SKIM_ALTITUDE }))
+    const high = shipPoint(surface({ altitude: MAX_SKIM_ALTITUDE }))
 
-    expect(low.projectiles[0].pos[1]).toBe(MIN_SKIM_ALTITUDE)
-    expect(high.projectiles[0].pos[1]).toBe(MAX_SKIM_ALTITUDE)
-    expect(high.projectiles[0].pos[1]).toBeGreaterThan(low.projectiles[0].pos[1])
+    expect(low[1]).toBe(MIN_SKIM_ALTITUDE)
+    expect(high[1]).toBe(MAX_SKIM_ALTITUDE)
+    expect(high[1]).toBeGreaterThan(low[1])
   })
 
-  it('puts the muzzle exactly on the camera eye — "muzzle == camera eye on surface"', () => {
-    // The design's own acceptance sentence, and now a real cross-boundary assertion: `eyeOf`
+  it('puts the gun exactly on the camera eye — "muzzle == camera eye on surface"', () => {
+    // The design's own acceptance sentence, and a real cross-boundary assertion: `eyeOf`
     // reads the camera `render.ts cameraView` actually builds, so this fails if EITHER side
-    // drifts. Sight-line and bolt axis are coaxial only if these two points are one point.
+    // drifts. Sight-line and beam axis are coaxial only if these two points are one point.
     const s0 = surface({ altitude: 173 }) // an arbitrary in-band height, not a constant
-    const s = stepGame(s0, trigger(), DT)
 
-    expect(s.projectiles[0].pos).toEqual(eyeOf(s0))
+    expect(shipPoint(s0)).toEqual(eyeOf(s0))
   })
 })
 
 // ---------------------------------------------------------------------------
-// (b) The yoke comes off centre. The axis round 1 never tested.
+// (b) The two ship points in one frame. What the hitscan port cost this file.
 // ---------------------------------------------------------------------------
 
-describe('sw7-16 — the muzzle is the eye the pilot AIMED down', () => {
-  // Every shot in (a) is fired with `aimY: 0`, where the ship cannot change altitude during
-  // the step — so the ship at the START of the frame and the ship after the frame's flight
-  // are the same point, and the distinction this section exists to make is invisible. That
-  // is exactly why round 1 shipped a docstring that got the distinction wrong.
+describe('sw7-16 — the two ship points inside one frame', () => {
+  // == WHAT THIS SECTION USED TO PIN, AND WHY IT NO LONGER CAN =================
   //
   // Off centre, TWO ship points exist inside one frame, and they are different:
   //
-  //     shipPoint(state)       the ship at the START of the step   <- the muzzle
+  //     shipPoint(state)       the ship at the START of the step   <- the gun
   //     surfaceShip(altitude)  the ship after this frame's flight  <- fire target, hit-test
   //
-  // BOTH ARE RIGHT, and the muzzle's is not the lesser of the two. The shell steps and THEN
+  // BOTH ARE RIGHT, and the gun's is not the lesser of the two. The shell steps and THEN
   // renders (`main.ts`: `stepGame(state, input.sample(), dt)` at :146, `render(ctx, state, …)`
   // at :287), so the yoke position arriving in THIS step was chosen by a pilot looking at the
-  // frame drawn from THIS state's altitude. The eye he sighted down is the eye at the start
-  // of the step. His bolt must leave from there — from where he was aiming, not from where
-  // the frame's flight then carried him. The fire target and the hit-test resolve at the END
-  // of the frame, so they correctly use the flown point. The two answer different questions.
+  // frame drawn from THIS state's altitude. The eye he sighted down is the eye at the start of
+  // the step, and his shot must leave from there — not from where the frame's flight then
+  // carried him. The fire target and the hit-test resolve at the END of the frame, so they
+  // correctly use the flown point. The two answer different questions, and `sim.ts` still makes
+  // exactly that choice (`beamOrigin = shipPoint(state)`), and still says why, above the beam.
   //
-  // So these tests pin the muzzle to the eye of the INPUT state (`s0`), never the returned
-  // one. A well-meaning "fix" that re-seats the bolt on the flown ship reads tidier and is
-  // wrong: it would run the bolt off the pilot's sight-line by exactly the frame's climb.
+  // IT IS NO LONGER OBSERVABLE, AND THIS FILE WILL NOT PRETEND OTHERWISE. Round 2 pinned it by
+  // reading the bolt's spawn point off the state — `expect(s.projectiles[0].pos).toEqual(eyeOf(s0))`
+  // — across a 15-case altitude × yoke sweep. sw7-17 made the laser hitscan (audit G-004), so the
+  // gun leaves no object behind and nothing on the returned state records where the beam started.
+  //
+  // Nor can a behavioural fixture tell the two apart, and that is arithmetic, not laziness: the
+  // points differ by ONE frame of climb (ALTITUDE_RATE × dt = 3.33) and by at most 87 on the
+  // crash frame below, while TURRET_HIT_RADIUS is 200. A dead-on shot lands from EITHER origin at
+  // every altitude in the band; there is no surface target that a 3-to-87-unit origin shift can
+  // move outside its own hit sphere.
+  //
+  // So the 15-case sweep is GONE rather than rewritten. `shipPoint(s0)` does not read `aimY` at
+  // all, so a migrated sweep would be fifteen tests that cannot fail — the exact sin this file
+  // was rejected for once already. What survives is the FACT the sweep was built on, which is
+  // still true and still worth pinning. The lost guard is recorded as a Delivery Finding on
+  // sw7-17: it is a real cost of the hitscan port, not an oversight.
 
-  it.each(MUZZLE_SWEEP)(
-    'leaves from the aim-time eye at %s (altitude %s), yoke %s',
-    (_label, alt, aimY) => {
-      const s0 = surface({ altitude: alt })
-      const s = stepGame(s0, trigger({ aimY }), DT)
-
-      expect(s.projectiles, 'the trigger must produce exactly one bolt').toHaveLength(1)
-      expect(s.projectiles[0].pos).toEqual(eyeOf(s0))
-    },
-  )
-
-  it('leaves from the aim-time eye on a TERRAIN-CRASH frame — the 87-unit teleport', () => {
-    // THE CASE ROUND 1'S DOCSTRING GOT WRONG, and the reason `aimY: 0` was not a harmless
+  it('a TERRAIN-CRASH frame holds two ship points 87 apart — the teleport is real', () => {
+    // THE CASE ROUND 1'S DOCSTRING GOT WRONG, and the reason `aimY: 0` was never a harmless
     // convenience. Diving from just inside the floor of the band trips the crash bump, which
     // does not ease the ship up — it TELEPORTS it:
     //
@@ -237,8 +256,13 @@ describe('sw7-16 — the muzzle is the eye the pilot AIMED down', () => {
     //
     // so the frame's two ship points sit 87 apart (88 firing from exactly 40) — NOT the "one
     // frame of climb (<= ALTITUDE_RATE * dt)" = 3.33 the docstring claimed, and not "three
-    // orders under" anything. The pilot aimed from 41; his bolt leaves from 41. The teleport
-    // is the same frame's business, and it is not the gun's.
+    // orders under" anything. The pilot aimed from 41; his shot leaves from 41. The teleport is
+    // the same frame's business, and it is not the gun's.
+    //
+    // The gun half of that sentence is no longer assertable (see this section's header — the
+    // beam leaves no object to read a spawn point from). The DISTANCE half is, and it is the
+    // load-bearing fact: it is what makes "which ship point?" a real question rather than a
+    // rounding error, and it is what round 1's docstring got wrong by a factor of 26.
     const s0 = surface({ altitude: MIN_SKIM_ALTITUDE + 1 })
     const s = stepGame(s0, trigger({ aimY: -1 }), DT)
 
@@ -251,8 +275,6 @@ describe('sw7-16 — the muzzle is the eye the pilot AIMED down', () => {
       eyeOf(s)[1] - s0.altitude,
       'the frame really does hold two ship points ~87 apart — the docstring said 3.33',
     ).toBeCloseTo(87)
-
-    expect(s.projectiles[0].pos).toEqual(eyeOf(s0))
   })
 })
 
@@ -468,8 +490,9 @@ describe('sw7-16 — enemy fire tracks the flying ship', () => {
 describe('sw7-16 — the other phases do not move', () => {
   it('space still fires from the fixed cockpit at the origin', () => {
     // `altitude` is a live field in every phase — it rides in state through space. If the ship
-    // point is applied globally instead of per-phase, this bolt leaves from [0, 238, 0] and
-    // space's aim breaks the way the surface's is broken now.
+    // point is applied globally instead of per-phase, space's beam is cast from [0, 238, 0] and
+    // space's aim breaks the way the surface's is broken now. (Read through `shipPoint` rather
+    // than a spawned bolt since sw7-17: the hitscan gun leaves nothing behind to read.)
     const s0: GameState = {
       ...enterPhase(initialState(1983), 'space'),
       mode: 'playing',
@@ -477,10 +500,7 @@ describe('sw7-16 — the other phases do not move', () => {
       projectiles: [],
       fireCooldown: 0,
     }
-    const s = stepGame(s0, trigger(), DT)
-
-    expect(s.projectiles).toHaveLength(1)
-    expect(s.projectiles[0].pos).toEqual([0, 0, 0])
+    expect(shipPoint(s0)).toEqual([0, 0, 0])
   })
 
   it('space still takes cockpit hits at the origin', () => {
@@ -515,9 +535,6 @@ describe('sw7-16 — the other phases do not move', () => {
       projectiles: [],
       fireCooldown: 0,
     }
-    const s = stepGame(s0, trigger(), DT)
-
-    expect(s.projectiles).toHaveLength(1)
-    expect(s.projectiles[0].pos).toEqual([...s0.trenchView])
+    expect(shipPoint(s0)).toEqual([...s0.trenchView])
   })
 })

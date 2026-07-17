@@ -32,7 +32,7 @@
 import { describe, it, expect } from 'vitest'
 import type { GameEvent, SpeechLine } from '../../src/core/events'
 import { stepGame, enterPhase } from '../../src/core/sim'
-import { initialState, PROJECTILE_TTL, type GameState } from '../../src/core/state'
+import { initialState, type GameState } from '../../src/core/state'
 import { NO_INPUT } from '../../src/core/input'
 import { TRENCH_EYE_SEAT } from '../../src/core/trench-channel'
 
@@ -287,11 +287,18 @@ describe('SpeechEvent carries the trench SpeechLine ids (AC9 / union exhaustiven
 describe('a cue rides every return path — coexists with crash / port-kill events', () => {
   it('fires alongside the win cue when a trench line lands on the SAME frame as a port kill (clearRun path)', () => {
     // Wave 4 (even → "Let go Luke" @16, and a SPEAKING wave for "Great shot kid"),
-    // timer one game-frame short of 16, with a bolt parked on the port so this ONE step
-    // both crosses the @16 threshold AND destroys the port. The port kill runs clearRun
-    // -> enterPhase (the most complex return path); the cue, pushed at the TOP of
-    // stepTrench, must still ride the frame's events out. (trenchTimer is set 0.1 frames
-    // below 16 so a single game-frame advance — dt·20.508 ≈ 0.34 — crosses it this step.)
+    // timer one game-frame short of 16, with the port scrolled into the approach window and the
+    // proton torpedo already ARMED, so this ONE step both crosses the @16 threshold AND destroys
+    // the port. The port kill runs clearRun -> enterPhase (the most complex return path); the cue,
+    // pushed at the TOP of stepTrench, must still ride the frame's events out. (trenchTimer is set
+    // 0.1 frames below 16 so a single game-frame advance — dt·20.508 ≈ 0.34 — crosses it this step.)
+    //
+    // sw7-17 / R11b: the kill used to be staged with a bolt parked on the port. The player's gun is
+    // now a hitscan beam and spawns nothing (audit G-004), and an in-window port cannot be shot at
+    // all — from the seat 768 above the floor it is ~44° down, past the yoke's 30°. The ROM arms
+    // the torpedo early and resolves it at the wall (`LDA PT.LIV` at `SUBD #0800`), so the armed
+    // latch IS the staged kill. Nothing about the cue's return path changes; this is still the
+    // clearRun frame, reached the way a pilot reaches it.
     const trench = enterPhase(initialState(1983), 'trench')
     const p = trench.exhaustPort!.pos
     const port: typeof p = [p[0], p[1], -300] // seat it in the near-cockpit approach window
@@ -302,7 +309,7 @@ describe('a cue rides every return path — coexists with crash / port-kill even
       trenchTimer: F_AT16 - 0.1,
       trenchObstacles: [],
       exhaustPort: { pos: port },
-      projectiles: [{ pos: [port[0], port[1], port[2]], vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
+      portTorpedoArmed: true,
     }
     const lines = spokenLines(stepGame(s0, NO_INPUT, DT))
     expect(lines).toContain('letGoLuke') // the timer cue survived the port-hit return

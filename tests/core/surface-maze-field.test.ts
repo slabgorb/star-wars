@@ -25,9 +25,16 @@
 
 import { describe, it, expect } from 'vitest'
 import { mazeForWave } from '../../src/core/surfaceMazes'
-import { initialState, towersForWave, type GameState, type Turret } from '../../src/core/state'
+import {
+  initialState,
+  towersForWave,
+  SKIM_ALTITUDE,
+  type GameState,
+  type Turret,
+} from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
+import { fireAt } from '../support/aim'
 import type { Vec3 } from '@arcade/shared/math3d'
 
 const DT = 0.05
@@ -164,8 +171,17 @@ describe('sw4-3 — the surface field is authored, not randomly spawned', () => 
 // --- Bishops ride the tower path (kind union gains 'bishop') ------------------
 
 describe('sw4-3 — bishops ride the existing tower collision/quota path', () => {
-  const SITE: Vec3 = [0, 0, -800]
-  const bolt = (pos: Vec3) => ({ pos: [...pos] as Vec3, vel: [0, 0, 0] as Vec3, ttl: 1 })
+  /**
+   * The bishop probe, seated at the PILOT'S OWN CRUISE HEIGHT rather than on the floor (sw7-17).
+   *
+   * The old fixture said "the player shot it" by parking a bolt on top of it. sw7-17 made the
+   * player's laser HITSCAN — the gun spawns nothing — so that fixture cannot occur in play and
+   * proves nothing about firing; the honest replacement is to aim at it and pull the trigger
+   * (`fireAt`). Seating it level with the eye keeps that pull purely lateral: on the surface the
+   * yoke's vertical axis is ALSO the throttle, so aiming down at a floor-level object flies the
+   * ship mid-measurement. Height is inert to the claim — the quota reads `kind`, never `pos[1]`.
+   */
+  const SITE: Vec3 = [0, SKIM_ALTITUDE, -800]
 
   it('a bishop is shootable and DOES advance the tower quota (BISHOP increments .TWRS)', () => {
     // Requires Turret.kind to admit 'bishop' (new in sw4-3). A bishop, like a
@@ -175,12 +191,19 @@ describe('sw4-3 — bishops ride the existing tower collision/quota path', () =>
       ...initialState(1983),
       phase: 'surface',
       turrets: [bishop],
-      projectiles: [bolt(SITE)],
       enemyShots: [],
       phaseKills: 3,
+      fireCooldown: 0,
+      firePrev: false, // edge-triggered trigger: a pull only lands off a released one
     }
-    const s1 = stepGame(s0, NO_INPUT, DT)
-    expect(s1.turrets).toHaveLength(0) // destroyed via the tower hit-test
+    const s1 = stepGame(s0, fireAt(s0, SITE), DT)
+    // The 'enemy-death' EVENT, not an emptied `turrets` list: a ground object also leaves that
+    // list by scrolling past the cockpit, so the list would go green for a miss that was waited
+    // out. The event is emitted by the kill and by nothing else.
+    expect(
+      s1.events.some((e) => e.type === 'enemy-death' && e.enemyType === 'turret'),
+      'destroyed via the tower hit-test',
+    ).toBe(true)
     expect(s1.phaseKills).toBe(4) // and counted toward the quota
   })
 })

@@ -43,7 +43,6 @@ import {
   initialState,
   SPACE_WAVE_QUOTA,
   towersForWave,
-  PROJECTILE_TTL,
   type GameState,
 } from '../../src/core/state'
 import { NO_INPUT } from '../../src/core/input'
@@ -63,18 +62,23 @@ function trenchAtWave(seed: number, wave: number): GameState {
   return { ...enterPhase(initialState(seed), 'trench'), mode: 'playing', wave, trenchObstacles: [] }
 }
 
-/** Park a bolt on the exhaust port so the NEXT step destroys it — driving the
+/** A run ARMED AND AT THE WALL, so the NEXT step destroys the port — driving the
  *  trench->next-wave-space `clearRun` edge (mirrors speech-cues.test.ts). */
 function portKill(state: GameState): GameState {
   // sw3-15: a port kill now only resolves in the near-cockpit approach window,
-  // so seat the (dead-centre) port in-window rather than at its far spawn
-  // distance, then park a bolt on it (mirrors speech-cues / force-bonus).
+  // so seat the (dead-centre) port in-window rather than at its far spawn distance.
+  // sw7-17: the laser is HITSCAN, so the bolt that used to be parked on the port is
+  // gone — and a port 300 ahead of a pilot flying 768 above the floor sits 68.7° below
+  // him, past the 30° the yoke reaches, so it cannot become "shoot it this frame"
+  // either. A real run wins the way this fixture does: the torpedo latch closed far
+  // out (where the port IS reachable), resolving here at the ROM's $800 gate — sw5-6's
+  // ARM-early / RESOLVE-late split. See speech-cues.test.ts's twin.
   const p = state.exhaustPort!.pos
   const port: typeof p = [p[0], p[1], -300]
   return {
     ...state,
     exhaustPort: { pos: port },
-    projectiles: [{ pos: [port[0], port[1], port[2]], vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
+    portTorpedoArmed: true,
   }
 }
 

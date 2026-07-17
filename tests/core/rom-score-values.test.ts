@@ -31,7 +31,6 @@ import {
   TRENCH_BONUS,
   FIREBALL_SCORE,
   FORCE_BONUS,
-  PROJECTILE_TTL,
   ENEMY_SHOT_TTL,
   type GameState,
   type Projectile,
@@ -39,33 +38,55 @@ import {
 } from '../../src/core/state'
 import { stepGame, enterPhase } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
+import { fireAt } from '../support/aim'
 import { IDENTITY, type Vec3 } from '@arcade/shared/math3d'
 
 // --- Minimal fixtures (adapted from space-combat / shootable-fireballs /
 //     force-bonus). stepGame reads `.pos` for hit-tests; vel/ttl/kind/orient
 //     keep each entity a real typed value (no type-escape casts — lang-review
-//     TS #8). ---------------------------------------------------------------
+//     TS #8).
+//
+//     sw7-17: the player's `playerBolt` fixture is GONE from this file. The gun is
+//     hitscan — it spawns nothing — so "the player shot this" is now `fireAt(s, target)`,
+//     which aims from the state's real eye and pulls the trigger. `fireball` stays a
+//     Projectile: enemy fire really is a travelling object, in the ROM and in the sim.
+// --------------------------------------------------------------------------
 const wave = (seed = 1983): GameState => initialState(seed)
 const TICK = 0.001
 const DOWNRANGE: Vec3 = [0, 0, -400] // well outside the cockpit hit sphere
-const playerBolt = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, -1], ttl: PROJECTILE_TTL })
 const fireball = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, 1], ttl: ENEMY_SHOT_TTL })
 const tie = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
 
 /** A port kill lands only inside the narrow approach window (sw3-15: the ROM
  *  `$800` window near the end wall). `spawnPort` seeds the port far downrange at
  *  −EXHAUST_PORT_DISTANCE (z = −2,400), which is OUTSIDE that window, so — exactly
- *  as force-bonus.test.ts:28-36 does — we re-seat the port near the cockpit and
- *  put the bolt on it. (This re-seat escaped sw3-15 / #68, which fixed its other
- *  port-kill siblings but missed this transcription suite.) `trenchShotsFired`
- *  selects the payoff branch (0 = clean "Use the Force"; ≥2 = base bonus only). */
+ *  as force-bonus.test.ts:28-36 does — we re-seat the port near the cockpit.
+ *  (This re-seat escaped sw3-15 / #68, which fixed its other port-kill siblings but
+ *  missed this transcription suite.) `trenchShotsFired` selects the payoff branch
+ *  (0 = clean "Use the Force"; ≥2 = base bonus only).
+ *
+ *  sw7-17: this used to put a player BOLT on the in-window port. It cannot any more, and
+ *  not merely because the gun stopped spawning bolts — inside the $800 window the port
+ *  sits 43.8° below the pilot, past the 30° the FOV allows, so there is NO yoke position
+ *  that points at it (sim.ts:911-922). The ROM's own answer is that the shot is EARNED
+ *  EARLY, out where the port is still reachable, and RESOLVES LATE at the wall: the beam
+ *  sets the `portTorpedoArmed` latch (PT.LZF) and the torpedo cannot miss. So the armed
+ *  latch IS the honest stand-in for the old bolt-on-the-port, and it is a state a real run
+ *  reaches — `exhaust-port-challenge.test.ts:246-274` drives that whole arc through the
+ *  real beam, and `tune-cue.test.ts:130` seeds the latch exactly like this.
+ *
+ *  Seeding it (rather than re-flying the approach) is what keeps this suite about what it
+ *  is FOR: the VALUE on the payoff, not the geometry of the arming — the same reason it
+ *  re-seats the port instead of testing sw3-15's gate. No trigger is pulled here, so
+ *  `trenchShotsFired` stays exactly what the caller seeded and the clean/dirty branch is
+ *  selected as directly as before. */
 const IN_WINDOW_PORT: Vec3 = [0, 0, -300]
 function portKill(state: GameState): GameState {
   return {
     ...state,
     mode: 'playing',
     exhaustPort: { pos: [...IN_WINDOW_PORT] as Vec3 },
-    projectiles: [{ pos: [...IN_WINDOW_PORT] as Vec3, vel: [0, 0, -1], ttl: PROJECTILE_TTL }],
+    portTorpedoArmed: true,
   }
 }
 
@@ -119,24 +140,17 @@ describe('sw3-1 — resolved ROM score values (transcription contract)', () => {
   // --- End-to-end: the literal value must actually reach the score readout ----
   it('killing a TIE adds exactly 1,000 to the score', () => {
     const base = wave()
-    const s0: GameState = {
-      ...base,
-      enemies: [tie([0, 0, -100])],
-      projectiles: [playerBolt([0, 0, -100])],
-    }
-    const s1 = stepGame(s0, NO_INPUT, TICK)
+    const at: Vec3 = [0, 0, -100]
+    const s0: GameState = { ...base, enemies: [tie(at)], spawnTimer: 1e9 }
+    const s1 = stepGame(s0, fireAt(s0, at), TICK)
     expect(s1.enemies).toHaveLength(0) // the TIE actually died (not a vacuous pin)
     expect(s1.score - base.score).toBe(1000)
   })
 
   it('shooting a fireball adds exactly 33 to the score', () => {
     const base = wave()
-    const s0: GameState = {
-      ...base,
-      enemyShots: [fireball(DOWNRANGE)],
-      projectiles: [playerBolt(DOWNRANGE)],
-    }
-    const s1 = stepGame(s0, NO_INPUT, TICK)
+    const s0: GameState = { ...base, enemyShots: [fireball(DOWNRANGE)], spawnTimer: 1e9 }
+    const s1 = stepGame(s0, fireAt(s0, DOWNRANGE), TICK)
     expect(s1.enemyShots).toHaveLength(0) // the fireball actually died
     expect(s1.score - base.score).toBe(33)
   })
