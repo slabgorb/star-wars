@@ -109,7 +109,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 621,
+      "line": 587,
       "verbatim": "  ctx.strokeStyle = '#ffdd66'"
     },
     "recommendation": "fix",
@@ -144,7 +144,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 901,
+      "line": 867,
       "verbatim": "const DEATH_STAR_BOOM_SECONDS = 2.5"
     },
     "recommendation": "accept",

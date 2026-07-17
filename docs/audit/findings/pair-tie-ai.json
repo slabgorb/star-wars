@@ -114,7 +114,7 @@
     },
     "ours": {
       "file": "src/core/gameRules.ts",
-      "line": 240,
+      "line": 182,
       "verbatim": "const FIRE_CONCURRENCY: readonly number[] = [1, 1, 2, 3, 4, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]"
     }
   },
@@ -229,7 +229,7 @@
     },
     "ours": {
       "file": "src/core/gameRules.ts",
-      "line": 217,
+      "line": 159,
       "verbatim": "const RAMP_PER_WAVE = 0.15"
     },
     "recommendation": "accept",

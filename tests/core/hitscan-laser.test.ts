@@ -84,10 +84,10 @@
 //       that takes list order — or the farthest — fails. Given time to fly, today's bolt does
 //       reach the near tower first and is spent on it, so this is not a regression guard.
 //   (d) RED for reason (a). Its real job is forward too, and it is the sharpest trap in the
-//       story: the nearest-object-under-the-reticle machinery ALREADY EXISTS (`lockedEnemy` /
-//       `isLocked`, gameRules.ts:110-137) and is exactly CLSLZ — except it measures from the
-//       WORLD ORIGIN (`length(e.pos)`, and a `transform(perspective…, pos)` that assumes the
-//       camera is at the origin) and is space-only. True in space, false on the surface. Reused
+//       story: the nearest-object-under-the-reticle machinery the old lock-on ring used
+//       (`lockedEnemy` / `isLocked`, removed in sw7-21) was exactly CLSLZ — except it measured
+//       from the WORLD ORIGIN (`length(e.pos)`, and a `transform(perspective…, pos)` that assumed
+//       the camera at the origin) and was space-only. True in space, false on the surface. Reused
 //       unchanged the beam resolves from the floor `altitude` below the pilot, and R11a's
 //       parallax walks straight back in under a new name.
 //   (e) GREEN TODAY and must stay green — the one true regression guard in the file.
@@ -332,10 +332,10 @@ describe('sw7-17 — the beam is cast from the ship point, not the world origin'
     // eye. So this is not a regression guard; it is a FORWARD guard, and it is the sharpest one
     // in the file: R11b must put the RESOLVE on the eye too — the ray is cast from the ship point.
     //
-    // The trap is concrete and close at hand: `lockedEnemy`/`isLocked` (gameRules.ts:110-137)
-    // already answer "nearest object under the reticle", which is exactly CLSLZ — but they
-    // measure from the WORLD ORIGIN (`length(e.pos)`, and a raw `transform(perspective…, pos)`
-    // that assumes the camera is at the origin). True in space, false on the surface. Reused
+    // The trap is concrete: `lockedEnemy`/`isLocked` (the old lock-on ring's selector, removed in
+    // sw7-21) answered "nearest object under the reticle", which is exactly CLSLZ — but they
+    // measured from the WORLD ORIGIN (`length(e.pos)`, and a raw `transform(perspective…, pos)`
+    // that assumed the camera at the origin). True in space, false on the surface. Reused
     // unchanged, the beam would resolve from the floor `altitude` below the pilot and R11a's
     // parallax comes straight back.
     //
