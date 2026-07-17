@@ -76,6 +76,7 @@ import { describe, it, expect } from 'vitest'
 import {
   initialState,
   TRENCH_BONUS,
+  SHIELD_BONUS_PER_UNIT,
   TRENCH_SCROLL_SPEED,
   PORT_HIT_RADIUS,
   COCKPIT_HIT_RADIUS,
@@ -183,7 +184,8 @@ describe('sw2-4 — destroying the port emits a Death-Star-destroyed cue', () =>
     expect(s1.exhaustPort).toBeNull() // destroyed
     expect(s1.phase).toBe('space') // warped to the next wave
     expect(s1.wave).toBe(5)
-    expect(s1.score).toBe(500 + TRENCH_BONUS) // the bonus still lands
+    // sw7-4/S-013: the win also banks 5,000 x surviving shields (s1.lives).
+    expect(s1.score).toBe(500 + TRENCH_BONUS + SHIELD_BONUS_PER_UNIT * s1.lives) // the bonus still lands
     // Han's winning-shot line still fires on the port kill (sw2-5, wave-gated by sw7-2)
     // — the new explosion cue rides ALONGSIDE it, not instead of it.
     expect(s1.events).toContainEqual({ type: 'speech', line: 'greatShotKidThatWasOneInAMillion' })

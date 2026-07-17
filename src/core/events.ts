@@ -118,6 +118,17 @@ export interface TowerBonusEvent {
   amount: number
 }
 
+// The per-surviving-shield wave bonus banked at a won run (sw7-4 / S-013). The ROM
+// `SCRSHLD` (WSGAS.MAC:375-391) adds `TSCSHL` = 5,000 once per remaining shield unit,
+// unconditionally, in the end-of-wave VEWNXT sequence. `amount` is the total
+// (5,000 × shields) for the SFX/HUD layer; `shields` is the surviving count the
+// "BONUS FOR REMAINING ENERGY / 5,000 X N" banner (MS.BRE) displays.
+export interface ShieldBonusEvent {
+  type: 'shield-bonus'
+  amount: number
+  shields: number
+}
+
 // The winning shot — a player torpedo destroyed the exhaust port and the Death
 // Star blows (sw2-4). Positioned like `enemy-death` / `fireball-destroyed` so the
 // shell can stage the explosion AT the port's world spot; `pos` is the port's
@@ -237,6 +248,7 @@ export type GameEvent =
   | TrenchObstacleDestroyedEvent
   | ForceBonusEvent
   | TowerBonusEvent
+  | ShieldBonusEvent
   | DeathStarDestroyedEvent
   | ExhaustPortMissedEvent
   | SpeechEvent

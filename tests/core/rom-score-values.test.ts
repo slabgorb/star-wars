@@ -31,6 +31,7 @@ import {
   TRENCH_BONUS,
   FIREBALL_SCORE,
   forceBonusForWave,
+  SHIELD_BONUS_PER_UNIT,
   ENEMY_SHOT_TTL,
   type GameState,
   type Projectile,
@@ -157,17 +158,20 @@ describe('sw3-1 — resolved ROM score values (transcription contract)', () => {
     expect(s1.score - base.score).toBe(33)
   })
 
-  it('a non-clean exhaust-port kill scores exactly 25,000 (base bonus, no Force)', () => {
+  // sw7-4/S-013: a won run now ALSO banks 5,000 x surviving shields, so we subtract
+  // that term to keep pinning the ROM port/Force VALUES (25,000 / 5,000) in isolation.
+  // s1.lives is the surviving-shield count the per-shield bonus was computed from.
+  it('a non-clean exhaust-port kill scores exactly 25,000 in port bonus (no Force)', () => {
     const s0 = { ...portKill(trenchPortInWindow()), trenchShotsFired: 3 }
     const s1 = stepGame(s0, NO_INPUT, 1 / 60)
-    expect(s1.score).toBe(25000)
+    expect(s1.score - SHIELD_BONUS_PER_UNIT * s1.lives).toBe(25000)
   })
 
-  it('a clean exhaust-port kill scores 25,000 + 5,000 Force = 30,000', () => {
+  it('a clean exhaust-port kill scores 25,000 port + 5,000 Force = 30,000', () => {
     // Confirms the new 25k port value composes correctly with the untouched
     // Force bonus — it must not fold into or replace the Force branch.
     const s0 = { ...portKill(trenchPortInWindow()), trenchShotsFired: 0 }
     const s1 = stepGame(s0, NO_INPUT, 1 / 60)
-    expect(s1.score).toBe(30000)
+    expect(s1.score - SHIELD_BONUS_PER_UNIT * s1.lives).toBe(30000)
   })
 })

@@ -14,7 +14,8 @@ import {
   SPACE_WAVE_QUOTA,
   STARTING_LIVES,
   PORT_AHEAD_RANGE,
-  FORCE_BONUS,
+  forceBonusForWave,
+  SHIELD_BONUS_PER_UNIT,
   TIE_WING_LIFE_SECONDS,
   TIE_GLOBE_LIFE_SECONDS,
   TIE_DEATH_SPREAD,
@@ -861,6 +862,12 @@ function drawHudHeader(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
 // on-screen timing for it, so this is a tuned UX choice.
 const FORCE_BANNER_SECONDS = 3
 
+// How long the reward banners (per-shield "BONUS FOR REMAINING ENERGY" and the
+// all-towers "50,000 FOR SHOOTING ALL TOWERS") dwell after they are banked (sw7-4).
+// A tuned UX dwell like FORCE_BANNER_SECONDS — the ROM shows them in its between-wave
+// beats, which our sim has no distinct screen for.
+const REWARD_BANNER_SECONDS = 3
+
 // How long the Death-Star explosion beat (flash + "DESTROYED" banner) plays after
 // a port kill, and how long the "MISSED" banner shows after a slipped-past port
 // (sw2-4). Tuned UX dwell times like FORCE_BANNER_SECONDS — no ROM timing exists.
@@ -891,7 +898,27 @@ function drawTrenchBanners(ctx: CanvasRenderingContext2D, state: GameState, w: n
     // (docs/star-wars-1983-source-findings.md:655); the plain "USE THE FORCE"
     // string listed earlier in the same item is a shorter ROM string-table
     // fragment, not the full banner text.
-    glowText(ctx, `${FORCE_BONUS.toLocaleString('en-US')} FOR USING THE FORCE`, w / 2, h * 0.16, BANNER_TEXT_PX, 'center', '#dddddd', 12)
+    // sw7-4 / S-012: the banner shows the WAVE-scaled amount (TSCFRC), not a flat 5,000.
+    glowText(ctx, `${forceBonusForWave(state.wave).toLocaleString('en-US')} FOR USING THE FORCE`, w / 2, h * 0.16, BANNER_TEXT_PX, 'center', '#dddddd', 12)
+  }
+  // The per-surviving-shield reward banner (sw7-4 / S-013): MS.BRE "BONUS FOR
+  // REMAINING ENERGY" over "5,000  X <shields>" (TCMES.MAC:611-612), banked at a won
+  // run and riding the warp on `shieldBonusAwardedAt` (re-stamped by clearRun).
+  if (
+    state.shieldBonusAwardedAt !== null &&
+    state.t - state.shieldBonusAwardedAt <= REWARD_BANNER_SECONDS
+  ) {
+    glowText(ctx, 'BONUS FOR REMAINING ENERGY', w / 2, h * 0.28, BANNER_TEXT_PX, 'center', '#dddddd', 12)
+    glowText(ctx, `${SHIELD_BONUS_PER_UNIT.toLocaleString('en-US')} X ${state.lives}`, w / 2, h * 0.34, BANNER_TEXT_PX, 'center', '#dddddd', 12)
+  }
+  // The all-towers reward banner (sw7-4 / H-021): MS.RWD "50,000 FOR SHOOTING ALL
+  // TOWERS" (TCMES.MAC:609, ROM:E039), stamped on the surface->trench drop and shown
+  // through the trench run on `towerBonusAwardedAt`.
+  if (
+    state.towerBonusAwardedAt !== null &&
+    state.t - state.towerBonusAwardedAt <= REWARD_BANNER_SECONDS
+  ) {
+    glowText(ctx, '50,000 FOR SHOOTING ALL TOWERS', w / 2, h * 0.22, BANNER_TEXT_PX, 'center', '#dddddd', 12)
   }
   // The winning shot's payoff (sw2-4): a bold "DEATH STAR DESTROYED" callout that
   // rides across the warp into the next wave's space phase (deathStarDestroyedAt
