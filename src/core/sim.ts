@@ -58,13 +58,14 @@ import {
   TRENCH_BONUS,
   PORT_HIT_RADIUS,
   PORT_APPROACH_WINDOW,
-  FORCE_BONUS,
+  forceBonusForWave,
+  SHIELD_BONUS_PER_UNIT,
+  POST_HIT_SHIELD_WINDOW,
   TIE_SWOOP_BIAS,
   TIE_BANK_ANGLE,
   TIE_NEAR_BOUND,
   TIE_EXIT_RANGE,
   TIE_PEEL_SWEEP,
-  EXTRA_LIFE_THRESHOLDS,
   BONUS_FLASH_MAX,
   BONUS_FLASH_DECAY,
 } from './state'
@@ -437,7 +438,8 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     return true
   })
 
-  const lives = Math.max(0, state.lives - damage)
+  const spaceHit = loseShield(state.lives, state.shieldHitAt, damage, t) // S-016 window
+  const lives = spaceHit.lives
   pushFarewell(events, lives) // fatal hit → the end-of-game farewell (sw7-8, U-017)
 
   return finalizeScore(
@@ -450,6 +452,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       aimY,
       score,
       lives,
+      shieldHitAt: spaceHit.shieldHitAt,
       gameOver: lives <= 0,
       mode: lives <= 0 ? 'gameover' : state.mode,
       phaseKills: state.phaseKills + killedTie.size,
@@ -470,31 +473,29 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
 }
 
 /**
- * Fold the frame's SCORE change into its lives + HUD flash (sw3-6). Runs once at
- * every active-play return, so it catches score from any phase (TIE/fireball,
- * turrets, trench obstacles, the exhaust-port + Force bonus, the cleared-all-towers
- * bonus) uniformly:
+ * Fold the frame's SCORE change into its HUD flash (sw3-6). Runs once at every
+ * active-play return, so it catches score from any phase (TIE/fireball, turrets,
+ * trench obstacles, the exhaust-port + Force bonus, the cleared-all-towers bonus)
+ * uniformly:
  *
- * - Awards one bonus shield per EXTRA_LIFE_THRESHOLDS entry (400,000 / 800,000)
- *   the first time the score reaches it — a loop over prev-vs-new score, so a
- *   single frame's delta can cross both and grant both (do NOT ×10 the thresholds).
  * - Arms `bonusFlash` to full on any score change, else decays it toward 0 — the
  *   ROM `byte_4B2C` "score changed, redraw HUD" flash. Clamped at 0 so it lands
  *   exactly on rest, never negative.
+ *
+ * (sw7-4 / S-015 removed the score-threshold extra-shield award that used to live
+ * here — the ROM has no such grant; see EXTRA_LIFE_THRESHOLDS' removal in state.ts.)
  *
  * `prev` is the frame's input state (its `score`/`bonusFlash` are the pre-step
  * values); `next` is the fully-stepped state whose `score` is final.
  */
 export function finalizeScore(prev: GameState, next: GameState): GameState {
+  // sw7-4 / S-015: the ROM has NO score-threshold extra shield, so this funnel no
+  // longer touches `lives` — it only drives the byte_4B2C score-change flash.
   const scoreChanged = next.score !== prev.score
-  let lives = next.lives
-  for (const threshold of EXTRA_LIFE_THRESHOLDS) {
-    if (prev.score < threshold && next.score >= threshold) lives += 1
-  }
   const bonusFlash = scoreChanged
     ? BONUS_FLASH_MAX
     : Math.max(0, prev.bonusFlash - BONUS_FLASH_DECAY)
-  return { ...next, lives, bonusFlash }
+  return { ...next, bonusFlash }
 }
 
 /**
@@ -721,7 +722,8 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     return true
   })
 
-  const lives = Math.max(0, state.lives - damage)
+  const surfaceHit = loseShield(state.lives, state.shieldHitAt, damage, t) // S-016 window
+  const lives = surfaceHit.lives
   pushFarewell(events, lives) // fatal hit → the end-of-game farewell (sw7-8, U-017)
 
   return {
@@ -732,6 +734,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     aimY,
     score,
     lives,
+    shieldHitAt: surfaceHit.shieldHitAt,
     altitude,
     // The ground grid rides the SAME flow as the turrets (story 11-5) — both
     // advance by TURRET_SCROLL_SPEED·dt — so they rush past the cockpit together.
@@ -918,20 +921,22 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     if (pos[2] > 0) continue // scrolled past the cockpit — despawn
     survivors.push({ kind: o.kind, pos })
   }
+  const catwalkHit = crashedCatwalk ? loseShield(base.lives, base.shieldHitAt, 1, t) : null // S-016 window
   const afterObstacles: GameState = {
     ...base,
     score: base.score + obstacleScore,
     trenchObstacles: survivors,
-    ...(crashedCatwalk
+    ...(catwalkHit
       ? {
-          lives: Math.max(0, base.lives - 1),
-          gameOver: base.lives - 1 <= 0,
-          mode: base.lives - 1 <= 0 ? ('gameover' as const) : base.mode,
+          lives: catwalkHit.lives,
+          shieldHitAt: catwalkHit.shieldHitAt,
+          gameOver: catwalkHit.lives <= 0,
+          mode: catwalkHit.lives <= 0 ? ('gameover' as const) : base.mode,
         }
       : {}),
   }
   // A fatal catwalk crash is a death like any other (sw7-8, U-017).
-  if (crashedCatwalk) pushFarewell(events, base.lives - 1)
+  if (catwalkHit) pushFarewell(events, catwalkHit.lives)
 
   // No active port → safe hold (no score, no damage; the empty channel still scrolls).
   if (state.exhaustPort === null) return afterObstacles
@@ -1010,8 +1015,13 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     // itself — awards FORCE_BONUS on top of TRENCH_BONUS (fidelity epic, task 4;
     // findings ## Exhaust port & run outcome, the type-4 marker's one-shot latch).
     const clean = afterObstacles.trenchShotsFired <= 1 // only the killing torpedo
-    const bonus = TRENCH_BONUS + (clean ? FORCE_BONUS : 0)
-    if (clean) events.push({ type: 'force-bonus', amount: FORCE_BONUS })
+    // sw7-4: the Force bonus is WAVE-SCALED (S-012) and clean-gated; the per-shield
+    // bonus banks 5,000 x surviving shields (S-013) on ANY win, unconditionally.
+    const forceBonus = clean ? forceBonusForWave(state.wave) : 0
+    const shieldBonus = SHIELD_BONUS_PER_UNIT * afterObstacles.lives
+    const bonus = TRENCH_BONUS + forceBonus + shieldBonus
+    if (clean) events.push({ type: 'force-bonus', amount: forceBonus })
+    events.push({ type: 'shield-bonus', amount: shieldBonus, shields: afterObstacles.lives })
     // Han's line on the winning shot — the ROM (WSMAIN.MAC:1919) reserves it for the
     // same 0-based gate as the Imperial March: GM.WAV >= 3 AND GM.WAV odd, i.e. human
     // waves {4,6,8,...}; every other wave explodes silent (sw7-2, U-006). The gate is
@@ -1047,12 +1057,16 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
       // space that `clearRun` triggers this same frame (sw2-4). Unlike the Force
       // bonus, this fires on ANY port kill, clean or not.
       deathStarDestroyedAt: t,
+      // The per-shield reward banner (S-013) rides the warp the same way — banked
+      // on any win, so its banner shows into the next wave's space phase.
+      shieldBonusAwardedAt: t,
     })
   }
 
   // --- The port reaching the cockpit un-destroyed is a crash: costs a shield --
   if (collides(port, COCKPIT, COCKPIT_HIT_RADIUS)) {
-    const lives = Math.max(0, afterObstacles.lives - 1)
+    const portHit = loseShield(afterObstacles.lives, afterObstacles.shieldHitAt, 1, t) // S-016 window
+    const lives = portHit.lives
     // The run is LOST — the port slipped past un-destroyed. A distinct miss cue
     // (sw2-4) so the shell can say "YOU MISSED", separate from the crash tell.
     events.push({ type: 'exhaust-port-missed' })
@@ -1068,6 +1082,7 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     return {
       ...afterObstacles,
       lives,
+      shieldHitAt: portHit.shieldHitAt,
       gameOver: lives <= 0,
       mode: lives <= 0 ? 'gameover' : afterObstacles.mode,
       exhaustPort: spawnPort(), // another pass down the trench
@@ -1196,6 +1211,26 @@ const ENTER_PHASE_SPEECH: Partial<Record<Phase, readonly SpeechLine[]>> = {
   trench: ['useTheForceLuke'], // "Use the Force, Luke"
 }
 
+/** The post-hit gauge-redraw window (sw7-4 / S-016): fold a frame's raw shield
+ * damage into AT MOST ONE lost shield per POST_HIT_SHIELD_WINDOW — a hit landing
+ * while the gauge is still animating the previous loss is dropped, not stacked
+ * (ROM GS.GLW/GS.HIT debounce, WSGLOW.MAC:58-64 `BG1GLW`). The shared funnel every
+ * shield-loss site routes through, so the cap holds across sources (two fireballs,
+ * a TIE + a fireball, a crash right after a hit). Returns the post-hit lives and
+ * the updated `shieldHitAt` stamp; `rawDamage <= 0` is a no-op. */
+function loseShield(
+  lives: number,
+  shieldHitAt: number | null,
+  rawDamage: number,
+  t: number,
+): { lives: number; shieldHitAt: number | null } {
+  if (rawDamage <= 0) return { lives, shieldHitAt }
+  if (shieldHitAt !== null && t - shieldHitAt < POST_HIT_SHIELD_WINDOW) {
+    return { lives, shieldHitAt } // inside the redraw cycle — the hit is dropped
+  }
+  return { lives: Math.max(0, lives - 1), shieldHitAt: t }
+}
+
 /** The end-of-game farewell (sw7-8, U-017): PHIEGM speaks SPKREM then SPKFOA on
  * EVERY loss (WSMAIN.MAC:2143-2144), BEFORE the high-score fork — and SPKFOA is
  * not a 24th phrase but the TFOA sequence table `.BYTE 15.,16.,0FF`
@@ -1270,7 +1305,14 @@ function progress(s: GameState): GameState {
   // shot must bank nothing — nor may the 0-tower bunker wave gift the bonus.
   if (s.phase === 'surface' && allTowersKilled(s)) {
     events.push({ type: 'tower-bonus', amount: SURFACE_CLEAR_BONUS })
-    return { ...advanced, score: advanced.score + SURFACE_CLEAR_BONUS, events }
+    // Stamp the all-towers reward (H-021) so its "50,000 FOR SHOOTING ALL TOWERS"
+    // banner (MS.RWD) shows through the trench run that `advanced` opens.
+    return {
+      ...advanced,
+      score: advanced.score + SURFACE_CLEAR_BONUS,
+      towerBonusAwardedAt: s.t,
+      events,
+    }
   }
   return { ...advanced, events }
 }
@@ -1315,6 +1357,17 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     // survives the wave transition, and a fresh trench never opens mid-"missed".
     deathStarDestroyedAt: null,
     exhaustPortMissedAt: null,
+    // The reward banners reset on phase entry too; `clearRun` re-stamps
+    // shieldBonusAwardedAt (per-shield) so it survives the warp, and progress()
+    // stamps towerBonusAwardedAt on the surface->trench drop.
+    shieldBonusAwardedAt: null,
+    towerBonusAwardedAt: null,
+    // NOTE (sw7-4 R2, Reviewer): shieldHitAt is DELIBERATELY carried through `...s`,
+    // NOT reset here — the ROM shield gauge (GS.GLW/GS.HIT) is ONE continuous
+    // mechanism across a whole run (space->surface->trench), so the post-hit window
+    // (S-016) must survive a wave-internal phase change. Resetting it let a hit on a
+    // phase-clear frame escape the debounce. `t` is monotonic, so an old stamp
+    // simply expires; no explicit reset is needed even at a new wave.
     enemyShots: [],
     altitude: phase === 'surface' ? SKIM_ALTITUDE : s.altitude,
     // Reset the surface scroll on every phase entry so a fresh (or jumped) surface
@@ -1366,6 +1419,7 @@ function clearRun(s: GameState): GameState {
     spawnCount: 0,
     forceBonusAwardedAt: s.forceBonusAwardedAt,
     deathStarDestroyedAt: s.deathStarDestroyedAt,
+    shieldBonusAwardedAt: s.shieldBonusAwardedAt,
   }
 }
 

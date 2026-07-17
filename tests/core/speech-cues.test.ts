@@ -32,7 +32,7 @@ import {
   initialState,
   SPACE_WAVE_QUOTA,
   towersForWave,
-  FORCE_BONUS,
+  forceBonusForWave,
   type GameState,
 } from '../../src/core/state'
 import { NO_INPUT } from '../../src/core/input'
@@ -162,8 +162,9 @@ describe('speech cue — the exhaust-port kill (AC2)', () => {
       type: 'speech',
       line: 'greatShotKidThatWasOneInAMillion',
     })
-    // The clean-run Force bonus rides the same frame (existing behaviour, unbroken).
-    expect(out.events).toContainEqual({ type: 'force-bonus', amount: FORCE_BONUS })
+    // The clean-run Force bonus rides the same frame. sw7-4/S-012 made it wave-scaled;
+    // this fixture is wave 4 -> forceBonusForWave(4).
+    expect(out.events).toContainEqual({ type: 'force-bonus', amount: forceBonusForWave(4) })
   })
 
   it("cues 'Great shot kid...' on a DIRTY port kill too — the line is the winning shot, not the Force bonus", () => {

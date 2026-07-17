@@ -135,13 +135,13 @@ export interface TrenchObstacle {
 
 /** Shields the player starts a run with; a hit costs one. */
 export const STARTING_LIVES = 6
-/** Cumulative-score thresholds that each award one bonus shield/life, the first
- *  time the score reaches them (sw3-6). ROM: the extra-life text `a40000`/`a80000`
- *  (docs/star-wars-1983-source-findings.md ~442-449) = **400,000 / 800,000**. The
- *  doc's load-bearing cross-note warns against reading these as 4M/8M or 250k/500k —
- *  "do NOT ×10". Each fires once; a single score delta that vaults past both grants
- *  both (see `awardExtraLives` in sim.ts). */
-export const EXTRA_LIFE_THRESHOLDS: readonly number[] = [400_000, 800_000]
+// sw7-4 / S-015 removed the 400,000 / 800,000 "extra shield" thresholds: the ROM
+// has NO score-threshold life/shield grant (the 2026-07-15 audit's refuter did the
+// exhaustive BCD hunt). Those numbers are the Death-Star-SELECTION start-bonus
+// DISPLAY strings (TSCBN1..4 = 200k/400k/600k/800k, WSGAS.MAC:527-530; banner
+// MS.BON "DEATH STAR BONUS EARNED"), which the clone misread as a recurring ladder.
+// The genuine selection bonus is a separate, unmodelled feature (see the sw7-4
+// session Delivery Findings).
 /** The bonus/extra-life HUD flash (`bonusFlash`) re-arms to this on any score
  *  change, then decays by BONUS_FLASH_DECAY per tick toward 0 — the ROM `byte_4B2C`
  *  "score changed, redraw HUD" counter (`lda #$FF` on every score change; `sub_761D`
@@ -563,14 +563,35 @@ export const PORT_APPROACH_WINDOW = 800
  * part — **arm early, resolve late** — not a constant that does not survive the crossing. Logged
  * as a deviation.
  */
-/** Awarded on top of TRENCH_BONUS for a port kill with no prior trench shots —
- *  the arcade's "USE THE FORCE" bonus (findings ## Exhaust port & run outcome:
- *  the type-4 segment's one-shot `byte_4B36` latch fires `sub_97E3`, the
- *  Use-the-Force scoring trigger). findings ## Scoring tables: `byte_983B` is
- *  wave-indexed (5,000 / 10,000 / 25,000 / 50,000 for waves 1-4); we are not yet
- *  wave-scaled, so this pins the wave-1 base (`0,$50,0` → 5,000) — see docs
- *  Open follow-ups #11. */
-export const FORCE_BONUS = 5000
+/** The "USE THE FORCE" clean-run bonus, WAVE-SCALED (sw7-4 / S-012). ROM table
+ *  `TSCFRC` (WSGAS.MAC:509-513), five entries of packed BCD read as decimal
+ *  digit-pairs: `00,50,00`→5,000 / `01,00,00`→10,000 / `02,50,00`→25,000 /
+ *  `05,00,00`→50,000 / `10,00,00`→100,000 (";LEVEL 5 AND ABOVE"). Indexed 0-based
+ *  by `GM.WAV` (= our `wave - 1`) and CLAMPED to the last entry for wave >= 5
+ *  (`GETFRP` `IFHS`, WSGAS.MAC:404-416 — ";HIGHER LEVELS USE MAX SCORE"). */
+export const FORCE_BONUS_BY_WAVE: readonly number[] = [5000, 10000, 25000, 50000, 100000]
+
+/** The clean-run Force bonus for a (1-based) wave — `TSCFRC` clamped: waves past
+ *  the table's last row all award the max (100,000). `state.wave` climbs without a
+ *  cap (clearRun), so the clamp is load-bearing, not defensive. */
+export function forceBonusForWave(wave: number): number {
+  const i = Math.max(0, Math.min(wave - 1, FORCE_BONUS_BY_WAVE.length - 1))
+  return FORCE_BONUS_BY_WAVE[i]
+}
+
+/** Points per SURVIVING shield unit, banked once at the end of a won run
+ *  (sw7-4 / S-013). ROM `TSCSHL` (WSGAS.MAC:519) `.BYTE 00,50,00` = 5,000 (BCD),
+ *  added once per remaining shield by `SCRSHLD` (WSGAS.MAC:375-391). Awarded on ANY
+ *  win — NOT clean-gated, unlike the Force bonus. */
+export const SHIELD_BONUS_PER_UNIT = 5000
+
+/** Post-hit shield-loss window (sw7-4 / S-016): at most ONE shield is lost per
+ *  gauge-redraw cycle — a hit that lands while the gauge is still animating the
+ *  previous loss is dropped, not stacked (ROM GS.GLW/GS.HIT debounce,
+ *  WSGLOW.MAC:58-64 `BG1GLW` / WSGAS.MAC:63-82 `DO1GAS`). The ROM cycle length is
+ *  data-dependent (GS.VTP/VUP/VBS off the shield count, ~200 ms–1 s+ at the 20 Hz
+ *  game frame), so this duration is an authentic-FEEL tunable, not a ROM constant. */
+export const POST_HIT_SHIELD_WINDOW = 0.5
 /** Port distance (world units, −Z) at which the EXHAUST PORT AHEAD banner shows.
  *  findings ## HUD & framing / Open follow-ups #7 confirm "EXHAUST PORT AHEAD"
  *  as an authentic HUD string, but no ROM-recovered distance pins WHEN it first
@@ -749,6 +770,21 @@ export interface GameState {
    * shell can show a "you missed" tell distinct from a generic crash (sw2-4);
    * pairs with the `exhaust-port-missed` GameEvent. Reset on every phase entry. */
   exhaustPortMissedAt: number | null
+  /** Sim time (`t`) the per-surviving-shield bonus (sw7-4 / S-013) was banked at a
+   * won run, or `null`. Stamped on ANY port kill; `clearRun` re-stamps it so the
+   * "BONUS FOR REMAINING ENERGY" banner survives the warp into the next space wave.
+   * Reset to `null` on every phase entry. */
+  shieldBonusAwardedAt: number | null
+  /** Sim time (`t`) the all-towers reward (sw7-4 / H-021) was banked, or `null`.
+   * Stamped on the surface->trench drop when every tower was cleared, so the
+   * "50,000 FOR SHOOTING ALL TOWERS" banner (MS.RWD) shows through the trench run.
+   * Reset to `null` on every phase entry. */
+  towerBonusAwardedAt: number | null
+  /** Sim time (`t`) the last shield was lost, or `null` if none lost recently — the
+   * post-hit gauge-redraw window (sw7-4 / S-016). While `t - shieldHitAt <
+   * POST_HIT_SHIELD_WINDOW`, further hits cost no shield (ROM GS.GLW debounce).
+   * Reset to `null` on every phase entry. */
+  shieldHitAt: number | null
   /** Enemy fireballs currently in flight. */
   enemyShots: Projectile[]
   /** True once the last shield is lost — the wave is over. */
@@ -826,6 +862,9 @@ export function initialState(seed = 1983): GameState {
     forceBonusAwardedAt: null,
     deathStarDestroyedAt: null,
     exhaustPortMissedAt: null,
+    shieldBonusAwardedAt: null,
+    towerBonusAwardedAt: null,
+    shieldHitAt: null,
     enemyShots: [],
     gameOver: false,
     entry: null,

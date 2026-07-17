@@ -63,6 +63,7 @@ import {
   EXHAUST_PORT_DISTANCE,
   TRENCH_SCROLL_SPEED,
   TRENCH_BONUS,
+  SHIELD_BONUS_PER_UNIT,
   towersForWave,
   type GameState,
 } from '../../src/core/state'
@@ -184,7 +185,8 @@ describe('Wave 3 — destroying the exhaust port', () => {
     const s1 = fireAndFlyOut(base)
     expect(s1.exhaustPort).toBeNull() // the port is destroyed
     expect(s1.projectiles).toHaveLength(0) // the gun spawned nothing to spend
-    expect(s1.score).toBe(base.score + TRENCH_BONUS) // the bonus is awarded
+    // sw7-4/S-013: the win also banks 5,000 x surviving shields (s1.lives, unchanged here).
+    expect(s1.score).toBe(base.score + TRENCH_BONUS + SHIELD_BONUS_PER_UNIT * s1.lives) // the bonus is awarded
     expect(s1.lives).toBe(base.lives) // destroying it is not a crash
   })
 
@@ -201,7 +203,8 @@ describe('Wave 3 — destroying the exhaust port', () => {
     expect(s1.phase).toBe('space') // the next wave opens in the space phase
     expect(s1.phaseKills).toBe(0) // fresh phase counter
     expect(s1.exhaustPort).toBeNull() // no stale target carried into the next wave
-    expect(s1.score).toBe(500 + TRENCH_BONUS)
+    // sw7-4/S-013: the win also banks 5,000 x surviving shields (s1.lives).
+    expect(s1.score).toBe(500 + TRENCH_BONUS + SHIELD_BONUS_PER_UNIT * s1.lives)
   })
 
   it('a shot that misses leaves the port intact, the score untouched, and the run going', () => {

@@ -297,7 +297,8 @@ describe('event -> sound wiring in main.ts (AC4)', () => {
   it('handles every audio-bearing event type in the pump', () => {
     // Every event the pump maps to an `audio.play(...)` sample. Kept exhaustive:
     // 'fireball-destroyed'/'trench-obstacle-destroyed'/'force-bonus' were added by
-    // earlier stories and 'death-star-destroyed'/'exhaust-port-missed' by sw2-4 —
+    // earlier stories, 'death-star-destroyed'/'exhaust-port-missed' by sw2-4,
+    // 'tower-bonus' by sw3-3, and 'shield-bonus' by sw7-4 (both fanfare-reused) —
     // all belong here (the pure list of audio.play events; 'speech' routes through
     // its own generic speak() arm, asserted separately below).
     for (const type of [
@@ -311,6 +312,8 @@ describe('event -> sound wiring in main.ts (AC4)', () => {
       'fireball-destroyed',
       'trench-obstacle-destroyed',
       'force-bonus',
+      'tower-bonus',
+      'shield-bonus',
       'death-star-destroyed',
       'exhaust-port-missed',
     ]) {
