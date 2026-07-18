@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 261,
+      "line": 268,
       "verbatim": "export const TIE_SPAWN_DISTANCE = 0x7c00 // 31744 — WSCPU STARTING LOCATIONS depth word"
     }
   },
@@ -63,7 +63,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 219,
+      "line": 226,
       "verbatim": "export const WAVE_SIZE = 3"
     }
   },
@@ -97,7 +97,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 401,
+      "line": 408,
       "verbatim": "export const TIE_NEAR_BOUND = 0x800 // 2048 — WSCPU \"not too close\" fire/peel floor"
     }
   },
@@ -248,7 +248,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 270,
+      "line": 277,
       "verbatim": "export const ENEMY_SPEED = 10000"
     },
     "recommendation": "accept",
@@ -336,7 +336,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 733,
+      "line": 740,
       "verbatim": "export const SPACE_WAVE_QUOTA = 6"
     },
     "recommendation": "accept",

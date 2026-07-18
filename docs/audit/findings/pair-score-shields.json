@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 184,
+      "line": 191,
       "verbatim": "export const TIE_SCORE = 1000"
     }
   },
@@ -47,7 +47,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 195,
+      "line": 202,
       "verbatim": "export const FIREBALL_SCORE = 33"
     }
   },
@@ -64,7 +64,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 436,
+      "line": 443,
       "verbatim": "export const TURRET_SCORE = 200"
     }
   },
@@ -132,7 +132,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 599,
+      "line": 606,
       "verbatim": "export const TRENCH_BONUS = 25000"
     }
   },
@@ -149,7 +149,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 755,
+      "line": 762,
       "verbatim": "export const SURFACE_CLEAR_BONUS = 50000"
     }
   },
@@ -166,7 +166,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 165,
+      "line": 172,
       "verbatim": "export const STARTING_LIVES = 6"
     }
   },

@@ -33,7 +33,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 315,
+      "line": 322,
       "verbatim": "export const MAX_FIREBALL_SLOTS = 6"
     }
   },

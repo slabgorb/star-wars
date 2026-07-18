@@ -77,6 +77,13 @@ export interface Enemy {
    * omit it (treated as 0). A sim scoring gate, NOT a render field; the visual
    * roll/glow is the deferred A-018. (sw7-13) */
   glow?: number
+  /** True on any frame this TIE's gun fired — the ROM's C$AG status bit
+   * ("ALIEN HAS FIRED A GUN", WSCPU.MAC:33,658). Read by `computeStatus`
+   * (tie-status.ts) to feed the choreography VM's status word; a later task
+   * in the TIE-VM-wiring plan (sw7, docs 4c93855) sets it from the fire step.
+   * Optional — freshly spawned TIEs and every existing fixture omit it
+   * (treated as false via `?? false`). */
+  firedGun?: boolean
 }
 
 /** A TIE caught mid-death: it has been shot and is drawn as its exploded wing

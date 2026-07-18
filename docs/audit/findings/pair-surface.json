@@ -216,7 +216,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 432,
+      "line": 439,
       "verbatim": "export const SKIM_ALTITUDE = 128"
     },
     "verdict": "CONFIRMED",
