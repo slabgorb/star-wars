@@ -1813,14 +1813,17 @@ export function shipPoint(s: GameState): Vec3 {
  *
  * ⚠ SPACE ONLY — this is the TIE flight model's homing target, where the ship really is the
  * origin. It is NOT the surface's ship: `stepSurface` aims its fire with `surfaceShip(altitude)`
- * instead. Retargeting this helper would break space the way the surface was broken before sw7-16
- * — caught via `moveEnemy` by `tests/core/tie-peel-away.test.ts` (story 9-3).
+ * instead. Retargeting this helper would break space the way the surface was broken before sw7-16.
  *
- * That guard covers `moveEnemy` ONLY. The other caller, `spawnTie`, is unguarded by any test in
- * the repo — deliberately noted rather than papered over: its `dir` is vestigial, because
- * `moveEnemy` re-derives the heading from `toCockpit(e.pos)` every frame and reads only the
- * MAGNITUDE of `vel`, so a wrong spawn direction is overwritten on the first move and is
- * observable for one frame. Do not add a test to chase it; do not trust it to hold a decision. */
+ * Both `moveEnemy` and `tests/core/tie-peel-away.test.ts` (story 9-3) — the guard that used to
+ * catch a regression here — are gone (sw7 Task 4: VM-driven flight retired the invented
+ * swoop/weave `moveEnemy` for space; see `docs/superpowers/specs/
+ * 2026-07-18-star-wars-tie-vm-fire-wiring-design.md` §5). This module's remaining caller is
+ * `aimOrient`, which `applyManeuver` uses for the VM's `AIM_PLAYER`/`AIM_AHEAD` steer-toward-target
+ * rotation — exercised by `tests/core/tie-vm-flight.test.ts`. (`tie-status.ts`'s `computeStatus`
+ * derives `C_AS`/`C_PN` from an equivalent inline `normalize(sub(COCKPIT, e.pos))`, not a call to
+ * this function — same math, separate copy; see `tests/core/tie-status.test.ts`.) `spawnTie`'s use
+ * of `toCockpit` for the initial `dir` remains unguarded by any test in the repo, as before. */
 function toCockpit(pos: Vec3): Vec3 {
   return normalize(sub(COCKPIT, pos))
 }

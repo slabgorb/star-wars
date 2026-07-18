@@ -63,6 +63,25 @@ hosts discreteness without a fixed-step core by **splitting decisions from motio
   The remainder carries, so *N* seconds of total `dt` always yields the same frame
   count regardless of render fps — the dt-independence property, preserved.
 
+  **Scope of that guarantee (review finding, Task 4).** "Preserved" means exactly
+  two things, no more: (1) **frame count is dt-independent** — any chunking of the
+  same total `dt` produces the same `frame` (pinned by
+  `tests/core/space-frame-accumulator.test.ts`); and (2) **same-`dt` replay is
+  bit-identical** — two runs driven at one fixed `dt` produce byte-identical state,
+  because the decision loop and the per-`stepGame` spawn/removal mutation replay in
+  the same lockstep every time (pinned by `tests/core/space-determinism.test.ts`).
+  It does **not** mean full cross-`dt` discrete-STATE independence: `computeStatus`
+  draws two RNG ints per live TIE *inside* the accumulator's per-decision-tick loop,
+  but spawns/removals mutate the enemy population only once per `stepGame` call,
+  *after* the loop exits. Chunking the same total `dt` into a different number of
+  `stepGame` calls changes how spawn/removal points interleave with decision ticks,
+  which can change how many TIEs draw from the shared seeded RNG stream at a given
+  tick — a different draw count diverges the stream, and downstream state, across
+  dt chunkings. This is accepted, not a defect: the shell (`@arcade/shared/loop`,
+  via `createLoop`) is a fixed-timestep loop that always calls `stepGame` with
+  `dt = 1/60` (`main.ts`), so cross-dt chunking is never exercised in play — only
+  guarantee (2), same-dt determinism, is load-bearing, and it holds.
+
 - **Decisions are discrete (≈20 Hz); motion is continuous.** A decision tick chooses
   *which* `twist`/`move` bits are active and *for how many frames* (the VM), and runs
   the fire gate against `frame`. The *selected* bits are then applied as **continuous
@@ -153,7 +172,11 @@ from the firing TIE aimed at the cockpit and home via the existing `homeShots` d
 Pure, dt-independent, fixed-seed unit tests against `stepGame(state, input, dt)`:
 
 - **Accumulator invariant** — same total `dt` chunked coarse vs. fine → identical
-  `frame` and state (the swept-port-collision discipline for the space counter).
+  `frame` count (the swept-port-collision discipline for the space counter). Full
+  *state* is deliberately not asserted here — see the scope note above.
+- **Same-dt determinism** — the guarantee §3 actually relies on: two runs at one
+  fixed `dt` produce bit-identical state, spawns and all
+  (`tests/core/space-determinism.test.ts`; see §3's scope note above).
 - **Status word** — geometry → bits (player in/out of cone toggles `C_AS`; range
   bands toggle `C_PN`; `C_R1/R2` reproduce under a fixed seed).
 - **Flight** — a TIE on a known script hits the expected trajectory; invariant

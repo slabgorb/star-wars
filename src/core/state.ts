@@ -88,10 +88,11 @@ export interface Enemy {
   /** This fighter's own choreography VM (sw7-11 `tie-vm.ts`) — the ROM's per-alien
    * A$CHPC/A$CHRT/A$CHTM/A$CHTW/A$CHMV/A$CHCN record. `spawnTie` seats it from the
    * wave's spawn-plan entry (sw7-12 `tie-waves.ts` `choreoPc`) so each TIE runs the
-   * authentic script for its slot. Task 3 of the TIE-VM-wiring plan (sw7, docs
-   * 4c93855) only SEATS this field — `moveEnemy` still drives flight/motion;
-   * ticking the VM each frame and steering from its twist/move bits is a later
-   * task. Optional — hand-placed fixtures that only exercise motion/hit-tests
+   * authentic script for its slot. Task 4 of the TIE-VM-wiring plan (sw7, docs
+   * 4c93855) wired this up: `stepGame`'s decision-tick loop ticks each seated VM
+   * (`tickChoreo`) and `applyManeuver` steers/thrusts from its live twist/move
+   * bits every frame — the invented swoop/weave `moveEnemy` is retired for space.
+   * Optional — hand-placed fixtures that only exercise motion/hit-tests
    * omit it (no VM to tick, no choreography-driven behaviour). */
   vm?: ChoreoVm
 }
@@ -279,11 +280,16 @@ export const TIE_SPAWN_DISTANCE = 0x7c00 // 31744 — WSCPU STARTING LOCATIONS d
 /** TIE approach speed (units/second). PROVISIONAL (sw4-1, spec §A): the cabinet
  * advances the range by $200/tick, but that per-tick delta is NOT pinned to a
  * source-true units/second figure (docs/tie-flight-ai-model.md porting caveat).
- * This is applied as a units/second rate — moveEnemy (sim.ts) steps pos by
- * ENEMY_SPEED × dt — so it is frame-rate independent of TICK_HZ. It is tuned
- * to the spec's design target — a playable ~2.5–4 s spawn→near-bound transit across
- * the restored world: (31744 − 2048) / 10000 ≈ 3.0 s. Retune in playtest; the 8-6
- * difficulty ramp still rides this as the wave-1 base. */
+ * This was applied as a units/second rate — the retired `moveEnemy` (sim.ts)
+ * stepped pos by ENEMY_SPEED × dt — so it was frame-rate independent of TICK_HZ.
+ * sw7 Task 4 retired `moveEnemy` for space: flight is now VM-driven (`applyManeuver`
+ * thrusts at the §5.3 `TIE_THRUST_RATE`/`TIE_THRUST_RATE_SLOW` rates, gated by the
+ * VM's FWD/FWD2 bits), so ENEMY_SPEED no longer drives ongoing motion — `spawnTie`
+ * still threads it through as `speed` to seed the initial (now-vestigial, unread)
+ * `Enemy.vel`. Kept at its tuned value pending a follow-up that either retires it
+ * or re-derives an equivalent approach-speed target from the VM rates. The design
+ * target below (spawn→near-bound transit time) is stale for the same reason;
+ * retune in playtest. The 8-6 difficulty ramp still rides this as the wave-1 base. */
 export const ENEMY_SPEED = 10000
 /** Cabinet game-frame rate (Hz) — the shared basis for every ROM per-game-frame
  *  rate ported from the 1983 source, which counts in game frames (fireball life
