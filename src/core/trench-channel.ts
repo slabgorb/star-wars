@@ -92,8 +92,9 @@ export const TRENCH_FAR = 0x7000 // 28672
 
 /** Lateral half-travel of the eye about the centreline. ROM: `$1FF` (WSMAIN.MAC `S1MVBS`).
  *  Note this is strictly INSIDE the walls: ±511 in a ±1024 trench leaves 513 units of side
- *  clearance, so the cabinet's pilot can never crash into a wall — wall furniture is
- *  shoot-only, and only the channel-spanning catwalk can physically block him. */
+ *  clearance, so the cabinet's pilot can never CRASH a wall. Wall furniture is shoot-only —
+ *  except the force-field "catwalk" (TD$WFF, B-012), which is SIDE-GATED: it blocks only the
+ *  half-channel on the wall it is mounted on, at its height slot (see FORCE_FIELD_* below). */
 export const TRENCH_VIEW_HALF_W = 0x1ff // 511
 /** The eye's lowest height above the trench floor — the ROM's minimum ground clearance.
  *  `$1000 − $E00`. The surface phase enforces the same number (WSMAIN.MAC `GD$MNT == 200`):
@@ -109,6 +110,28 @@ export const TRENCH_EYE_SEAT = TRENCH_WALL_H - (0xe00 - 0x100) // 768
  *  ~0.4s and cross the full vertical band in ~2.8s — snappy enough to dodge a catwalk
  *  mid-crossing. No symbolic ROM rate recovered; PROVISIONAL. */
 export const TRENCH_VIEW_RATE = 1200
+
+// --- The wall force field ("catwalk") collision — WSPANL.MAC:186-215 (B-012) --
+//
+// The ROM "catwalk" is a WALL FORCE FIELD (TD$WFF), not a channel-spanning bar. Its
+// contact (WSPANL) fires only when the pilot is on the field's wall SIDE, within a
+// vertical band about the field's height, AND within the field's first half of depth —
+// then it GRAZES: glow + crash sound + roll, costing NO shield (the shield accounting
+// rides WSGLOW, score-shields scope). In our frame lateral = eye x, height = eye y,
+// depth = the obstacle z. A field is mounted on the LEFT wall when its x < 0, the RIGHT
+// when x > 0; the graze fires for a same-side pilot only, so the dodge is the opposite
+// wall or a different height slot.
+
+/** Half-height of a force field's vertical hit band about its seated height. ROM: `$200`
+ *  — the hit spans `[M.Z0 − $200, M.Z0 + $200]` (fieldTop = M.Z0+$200, hit within `$400`
+ *  below it). A pilot more than this above/below the field's height flies clear of it. */
+export const FORCE_FIELD_BAND_HALF = 0x200 // 512
+
+/** How near (in −z) a force field must scroll before its graze can fire — the ROM's "first
+ *  `$400` of the field's depth" (`SUBD #400 ;HALF OF FF DEPTH, MORE THAN MAX SPEED`). Wide
+ *  enough to catch the field on the frame it crosses the cockpit at the ROM scroll speed
+ *  (B-008), so a field can't leap the plane between two frames un-grazed. */
+export const FORCE_FIELD_DEPTH = 0x400 // 1024
 
 /**
  * A long walled trench channel on the y=0 floor, scrolled toward the cockpit by
