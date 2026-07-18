@@ -69,11 +69,13 @@ import {
   forceBonusForWave,
   SHIELD_BONUS_PER_UNIT,
   POST_HIT_SHIELD_WINDOW,
-  TIE_SWOOP_BIAS,
-  TIE_BANK_ANGLE,
+  TIE_ROLL_RATE,
+  TIE_YAW_RATE,
+  TIE_PITCH_RATE,
+  TIE_THRUST_RATE,
+  TIE_THRUST_RATE_SLOW,
   TIE_NEAR_BOUND,
   TIE_EXIT_RANGE,
-  TIE_PEEL_SWEEP,
   BONUS_FLASH_MAX,
   BONUS_FLASH_DECAY,
 } from './state'
@@ -85,14 +87,17 @@ import {
   sub,
   normalize,
   length,
-  cross,
   multiply,
+  rotationX,
+  rotationY,
   rotationZ,
   lookRotation,
+  IDENTITY,
   type Vec3,
+  type Mat4,
 } from '@arcade/shared/math3d'
 import { aimDirection, beamHit, collides, waveParams } from './gameRules'
-import { createRng, nextFloat, nextInt, type Rng } from '@arcade/shared/rng'
+import { createRng, nextInt, type Rng } from '@arcade/shared/rng'
 import { stepNameEntry } from '@arcade/shared/name-entry'
 import {
   spawnTrenchObstacles,
@@ -112,12 +117,18 @@ import {
   FORCE_FIELD_DEPTH,
 } from './trench-channel'
 import { waveSpawnPlan, choreoPc } from './tie-waves'
-import { initVm } from './tie-vm'
+import { initVm, tickChoreo, program, Twist, Move } from './tie-vm'
+import { computeStatus } from './tie-status'
 
 const COCKPIT: Vec3 = [0, 0, 0]
 const ZERO: Vec3 = [0, 0, 0]
-/** World up — the reference the level "right" axis a TIE banks around is built from. */
-const UP: Vec3 = [0, 1, 0]
+
+/** Max space decision ticks a single `stepGame` runs before it DROPS the excess
+ *  accumulated game-frames (Task 2 review clamp). Bounds the per-TIE VM + fire work
+ *  a huge `dt` (tab-away / pause) can burst in one step; motion still integrates
+ *  the real `dt`, only the discrete decision cadence is capped. 4 frames ≈ 195 ms
+ *  at TICK_HZ — well above any real render step, so normal play never clamps. */
+export const MAX_CATCHUP_FRAMES = 4
 
 export function stepGame(state: GameState, input: Input, dt: number): GameState {
   const t = state.t + dt
@@ -278,31 +289,49 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // untouched — this only scales how hard the space phase plays.
   const params = waveParams(state.wave)
 
-  // --- Discrete-tick timebase (sw7, docs 4c93855, task 2) --------------------
-  // The continuous sim runs on `dt`; the TIE choreography VM and the authentic
-  // fire cadence a later task in this plan wires up run on discrete GAME FRAMES
-  // at TICK_HZ instead (WSINT.MAC:145-149 GMTIMR ÷12; WSMAIN.MAC:271 WAITFRAME —
-  // the mainline's once-per-game-frame gate). `frameAcc` carries whatever
-  // fractional game-frame the last step didn't consume, so chunking the same
-  // total dt into coarse or fine render steps advances `frame` identically
-  // (dt-independence, tests/core/space-frame-accumulator.test.ts). The
-  // decision-tick body is EMPTY this task — it only advances the counters; a
-  // later task hangs computeStatus/the VM off this loop.
+  // --- Discrete-tick timebase (sw7, docs 4c93855, tasks 2 & 4) ---------------
+  // Design §3 — split DECISIONS (discrete, at TICK_HZ) from MOTION (continuous).
+  // The continuous sim runs on `dt`; the TIE choreography VM runs on discrete GAME
+  // FRAMES at TICK_HZ (WSINT.MAC:145-149 GMTIMR ÷12; WSMAIN.MAC:271 WAITFRAME — the
+  // mainline's once-per-game-frame gate). `frameAcc` carries the fractional
+  // game-frame the last step didn't consume, so chunking the same total dt into
+  // coarse or fine render steps advances `frame` identically (dt-independence,
+  // tests/core/space-frame-accumulator.test.ts).
+  //
+  // Each DECISION TICK advances every live TIE's VM one frame: `computeStatus`
+  // reads the fighter's live geometry into the A$CHST word (consuming RNG per TIE —
+  // the map preserves the enemies' array order so the draw sequence is
+  // deterministic), then `tickChoreo` steps the bytecode and updates which
+  // twist/move bits are active. Fighters WITHOUT a seated VM (hand-built fixtures)
+  // are left untouched — no choreography to run.
   const tickPeriod = 1 / TICK_HZ
   let frame = state.frame
   let frameAcc = state.frameAcc + dt
-  while (frameAcc >= tickPeriod) {
-    // decision tick — empty for now (wired by a later task in the plan)
+  let tickedEnemies = state.enemies
+  let catchup = 0
+  while (frameAcc >= tickPeriod && catchup < MAX_CATCHUP_FRAMES) {
+    tickedEnemies = tickedEnemies.map((e) =>
+      e.vm ? { ...e, vm: tickChoreo(e.vm, program, computeStatus(e, state, rng)) } : e,
+    )
     frame++
     frameAcc -= tickPeriod
+    catchup++
   }
+  // Catch-up clamp (Task 2 review): a huge `dt` after a tab-away / pause must not
+  // burst a thousand frames of per-TIE VM + fire work in ONE step. We run at most
+  // MAX_CATCHUP_FRAMES decision ticks above, then DROP the excess accumulated time
+  // (clamp the remainder to < tickPeriod) rather than banking it. Motion below
+  // still integrates the real `dt`, so the ship/fireballs stay smooth; only the
+  // discrete decision cadence is bounded.
+  if (frameAcc >= tickPeriod) frameAcc = frameAcc % tickPeriod
 
-  // --- TIEs: advance, drop any that have peeled away, then spawn -----------
-  // A TIE that has completed its pass and receded past the exit range has left
-  // the play volume; dropping it here (before the spawn check) frees its slot so a
-  // fresh fighter can take its place (story 9-3, AC#1).
-  const movedEnemies = state.enemies
-    .map((e) => moveEnemy(e, dt))
+  // --- TIEs: fly the VM-chosen maneuver, then spawn ------------------------
+  // MOTION (design §3): `applyManeuver` integrates the CURRENTLY-active twist/move
+  // bits by `dt` as the §5.3 continuous rates — the VM now DRIVES flight, retiring
+  // the invented swoop/weave `moveEnemy` (story 9-2). A fighter without a VM holds
+  // station (twist/move = 0): the combat-kill-loop fixtures rely on that.
+  const movedEnemies = tickedEnemies
+    .map((e) => applyManeuver(e, e.vm?.twist ?? 0, e.vm?.move ?? 0, dt))
     // Decay Darth's post-hit glow (the A$GLW window); plain TIEs never carry it.
     .map((e) => (e.glow ? { ...e, glow: Math.max(0, e.glow - dt) } : e))
     .filter((e) => !(e.peeling && length(e.pos) > TIE_EXIT_RANGE))
@@ -1600,62 +1629,78 @@ function homeShots(shots: readonly Projectile[], dt: number): Projectile[] {
 }
 
 /**
- * Advance a TIE one step. Two phases (story 9-3 adds the second):
+ * The homing rotation, extracted from the retired `moveEnemy` (story 9-2) and
+ * gated by the VM's `AIM_PLAYER`/`AIM_AHEAD` bits (design §5): re-point the TIE's
+ * nose (model +Z) straight at the cockpit. This is `moveEnemy`'s homing law with
+ * the invented swoop bias/bank removed (those constants are retired) — a re-point
+ * toward the target, NOT a fixed rate. The ROM's exact Math-Box `$67` steer law
+ * (§5.2c) is a deferred refinement (design §9); AIM_AHEAD ("aim in front of the
+ * player") has no lead point modeled here and aims at the cockpit too.
  *
- *  - APPROACH (story 9-2, docs/tie-flight-ai-model.md §5): the TIE thrusts along a
- *    HEADING that blends homing-toward-the-player with its own lateral swoop bias,
- *    tracing a banking arc rather than a beeline at the cockpit.
- *  - PEEL-AWAY (story 9-3, §7): once an un-killed fighter closes to TIE_NEAR_BOUND
- *    with room to veer, it completes its pass and thrusts OUTWARD instead — flying
- *    past the cockpit and receding out of the play volume rather than ramming and
- *    ballooning to a full-frame wall (the Image-1 defect). A near-dead-center TIE
- *    (lateral offset inside the cockpit hit sphere) has nothing to veer around and
- *    keeps homing, so a genuine collision still costs a shield (AC#3).
- *
- * Its SPEED is preserved as the heading turns — the difficulty ramp rides |vel|
- * (story 8-6), and a stationary stand-in (|vel| = 0, the combat-kill-loop
- * fixtures) stays put. Pure: every heading and roll derives only from the TIE's
- * position and its seeded bias/peel latch — no time, no randomness here.
+ * SPACE ONLY — the cockpit is the origin here (see `toCockpit`).
  */
-function moveEnemy(e: Enemy, dt: number): Enemy {
-  const speed = length(e.vel ?? ZERO)
-  // A motionless stand-in holds station, still facing the cockpit.
-  if (speed === 0) return { ...e, orient: lookRotation(toCockpit(e.pos)) }
+function aimOrient(e: Enemy): Mat4 {
+  return lookRotation(toCockpit(e.pos))
+}
 
-  // Distance from the cockpit, and how far off its forward centerline (the −Z view
-  // axis) the TIE sits — its room to veer past. Latch the peel once begun (`??`,
-  // not `||`: an approaching TIE omits the flag, so the falsy default is correct);
-  // otherwise begin it when an un-killed TIE reaches the near-bound off-centerline.
-  const dist = length(e.pos)
-  const lateralOffset = Math.hypot(e.pos[0], e.pos[1])
-  const peeling = e.peeling ?? (dist <= TIE_NEAR_BOUND && lateralOffset >= COCKPIT_HIT_RADIUS)
+/**
+ * Integrate one continuous `dt` of the CURRENTLY-active choreography maneuver into
+ * a TIE's orientation and position (sw7, docs 4c93855, task 4 — the MOTION half of
+ * design §3's decision/motion split). The decision tick (stepGame, at TICK_HZ)
+ * chooses which `twist`/`move` bits are active and for how many frames (the VM);
+ * this applies them as the §5.3 continuous RATES, so a maneuver held for its
+ * N-frame `.CT` count turns exactly `N × per-frame delta` at any render dt — the
+ * same "ROM frames → seconds via TICK_HZ" idiom the durations use, and the
+ * invariant tests/core/tie-vm-flight.test.ts pins.
+ *
+ * ROM order (§5, `sub_8BE1`): ROTATE the orientation first (roll/pitch/yaw +
+ * homing), THEN rebuild velocity from the rotated basis and integrate position —
+ * `sub_8D9D` builds velocity from the just-rotated matrix, which is exactly what
+ * curves the path. Roll/yaw/pitch post-multiply so each turns about the TIE's OWN
+ * (local) axis; `AIM_*` re-points the nose via `aimOrient` (a re-point, not a rate).
+ *
+ * Pure: orient/pos derive only from the inputs — no time beyond `dt`, no randomness.
+ */
+export function applyManeuver(e: Enemy, twist: number, move: number, dt: number): Enemy {
+  // Minimal collision fixtures build a TIE as `{ pos } as Enemy` (no orient) —
+  // the retired `moveEnemy` PRODUCED orient and never read it, so tolerate that
+  // here too by defaulting to IDENTITY rather than crashing on `orient[2]`.
+  let orient = e.orient ?? IDENTITY
 
-  if (peeling) {
-    // Thrust OUTWARD (away from the cockpit) with a tangential sweep, so the TIE
-    // banks off to the side as it leaves rather than reversing straight back. The
-    // outward component keeps |pos| growing every frame, so a peeling fighter never
-    // re-enters the near-bound (it stays bounded away — AC#2) and eventually
-    // crosses TIE_EXIT_RANGE, where stepGame frees its slot (AC#1).
-    const outward = normalize(e.pos)
-    const sweepAxis = normalize(cross(outward, UP)) // a level "side" axis to peel along
-    const side = Math.sign(e.bank ?? 0) || 1 // continue the established bank; default +1
-    const heading = normalize(add(outward, scale(sweepAxis, side * TIE_PEEL_SWEEP)))
-    const vel = scale(heading, speed)
-    const pos = add(e.pos, scale(vel, dt))
-    const orient = multiply(lookRotation(heading), rotationZ(TIE_BANK_ANGLE * side))
-    return { ...e, pos, vel, orient, peeling: true }
-  }
+  // Homing (AIM_PLAYER 0x80 / AIM_AHEAD 0x40): steer the nose toward the cockpit.
+  if (twist & (Twist.AIM_PLAYER | Twist.AIM_AHEAD)) orient = aimOrient(e)
 
-  // Approach: home toward the cockpit along the banking swoop arc.
-  const toCk = toCockpit(e.pos)
-  const lateral = normalize(cross(toCk, UP)) // a level "right" axis at the cockpit
-  const bias = e.bank ?? 0
-  const heading = normalize(add(toCk, scale(lateral, bias))) // homing + swoop
-  const vel = scale(heading, speed) // direction turns; magnitude is preserved
-  const pos = add(e.pos, scale(vel, dt))
-  // Bank into the turn: roll the look-along-heading frame about its own nose (+Z).
-  const orient = multiply(lookRotation(heading), rotationZ(TIE_BANK_ANGLE * Math.sign(bias)))
-  return { ...e, pos, vel, orient }
+  // Roll about the nose (+Z), yaw about the local up (+Y), pitch about the local
+  // right (+X) — the §5.3 fixed per-frame deltas as rad/s, integrated by dt.
+  // ROLL_L is negative (CCW about the nose), ROLL_R positive; likewise L/U vs R/D.
+  if (twist & Twist.ROLL_L) orient = multiply(orient, rotationZ(-TIE_ROLL_RATE * dt))
+  if (twist & Twist.ROLL_R) orient = multiply(orient, rotationZ(TIE_ROLL_RATE * dt))
+  if (twist & Twist.YAW_L) orient = multiply(orient, rotationY(-TIE_YAW_RATE * dt))
+  if (twist & Twist.YAW_R) orient = multiply(orient, rotationY(TIE_YAW_RATE * dt))
+  if (twist & Twist.PITCH_U) orient = multiply(orient, rotationX(-TIE_PITCH_RATE * dt))
+  if (twist & Twist.PITCH_D) orient = multiply(orient, rotationX(TIE_PITCH_RATE * dt))
+
+  // Thrust along the freshly-rotated basis (§5 step 3): FWD along the nose (local
+  // +Z), UP/DOWN along the local up (+Y). The `2` bits are the fast ÷32 basis
+  // (TIE_THRUST_RATE), the plain bits the slow ÷64 (TIE_THRUST_RATE_SLOW).
+  const forward: Vec3 = [orient[2], orient[6], orient[10]]
+  const up: Vec3 = [orient[1], orient[5], orient[9]]
+  let pos = e.pos
+  const fwdRate = move & Move.FWD2 ? TIE_THRUST_RATE : move & Move.FWD ? TIE_THRUST_RATE_SLOW : 0
+  if (fwdRate) pos = add(pos, scale(forward, fwdRate * dt))
+  const upRate =
+    move & Move.UP2
+      ? TIE_THRUST_RATE
+      : move & Move.UP
+        ? TIE_THRUST_RATE_SLOW
+        : move & Move.DOWN2
+          ? -TIE_THRUST_RATE
+          : move & Move.DOWN
+            ? -TIE_THRUST_RATE_SLOW
+            : 0
+  if (upRate) pos = add(pos, scale(up, upRate * dt))
+
+  return { ...e, orient, pos }
 }
 
 /**
@@ -1687,16 +1732,15 @@ const SPAWN_LATERALS: ReadonlyArray<readonly [number, number]> = [
 ]
 
 /** A fresh TIE spawned far down −Z at the authentic depth, aimed at the cockpit at
- * the wave's approach speed (gameRules.waveParams), with a seeded swoop direction so
- * each fighter banks into its own arc on the way in (story 9-2). The LATERAL comes
- * from the ROM TBG table walked in order by `spawnIndex` (sw4-1, spec §A) — no
- * longer a continuous RNG spread — so every fighter appears on one of the authentic
- * {0, ±1024, ±2048} starting slots. The RNG still seeds only the swoop bank. */
-export function spawnTie(rng: Rng, speed: number, spawnIndex: number, spaceWave: number): Enemy {
+ * the wave's approach speed (gameRules.waveParams). The LATERAL comes from the ROM
+ * TBG table walked in order by `spawnIndex` (sw4-1, spec §A) — so every fighter
+ * appears on one of the authentic {0, ±1024, ±2048} starting slots. Task 4 (sw7
+ * TIE-VM wiring) retired the invented swoop `bank` (moveEnemy is gone; the VM
+ * governs the approach), so `spawnTie` no longer seeds it and draws no RNG. */
+export function spawnTie(_rng: Rng, speed: number, spawnIndex: number, spaceWave: number): Enemy {
   const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]
   const pos: Vec3 = [x, y, -TIE_SPAWN_DISTANCE]
   const dir = toCockpit(pos)
-  const bank = (nextFloat(rng) < 0.5 ? 1 : -1) * TIE_SWOOP_BIAS
   // The wave's TSPWAV plan (sw7-12) says which slot is Darth: the RTH shape spawns
   // kind 'darth', every other slot a plain TIE. Past the plan's end (a long wave that
   // keeps refilling its slots) fall back to a mook.
@@ -1705,12 +1749,12 @@ export function spawnTie(rng: Rng, speed: number, spawnIndex: number, spaceWave:
   const kind = shape === 'RTH' ? 'darth' : 'tie'
   // Task 3 (sw7 TIE-VM wiring, docs 4c93855): SEAT this fighter's own choreography
   // VM from the SAME plan entry — `entry.choreography` is the `.WV` triple's TCH
-  // ref (e.g. '1A1', '2D3'), resolved to a VM program index by `choreoPc`. Flight
-  // is not yet driven from it (`moveEnemy` still owns motion this task) — only
-  // seated. Past the plan's end (no entry) default to the first mook script,
-  // '1A1' (TCH1A1) — the same fallback the `?? 'TIE'` shape above uses.
+  // ref (e.g. '1A1', '2D3'), resolved to a VM program index by `choreoPc`. Task 4
+  // now DRIVES flight from it (applyManeuver). Past the plan's end (no entry)
+  // default to the first mook script, '1A1' (TCH1A1) — the same fallback the
+  // `?? 'TIE'` shape above uses.
   const vm = initVm(choreoPc(entry?.choreography ?? '1A1'))
-  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), bank, vm, firedGun: false }
+  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), vm, firedGun: false }
 }
 
 /**

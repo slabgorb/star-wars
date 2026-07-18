@@ -29,7 +29,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1673,
+      "line": 1718,
       "verbatim": "const ROM_LATERAL_UNIT = 0x400 // 1024 — the ×$400 STARTING-LOCATION lateral step"
     }
   },
@@ -46,7 +46,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1684,
+      "line": 1729,
       "verbatim": "  [-2 * ROM_LATERAL_UNIT, 0], // 1D1"
     }
   },
@@ -80,7 +80,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 418,
+      "line": 447,
       "verbatim": "        killedTie.add(hitTie)"
     }
   },
@@ -97,7 +97,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 418,
+      "line": 429,
       "verbatim": "export const TIE_NEAR_BOUND = 0x800 // 2048 — WSCPU \"not too close\" fire/peel floor"
     }
   },
@@ -131,8 +131,8 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1713,
-      "verbatim": "  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), bank, vm, firedGun: false }"
+      "line": 1757,
+      "verbatim": "  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), vm, firedGun: false }"
     }
   },
   {
@@ -170,7 +170,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 455,
+      "line": 484,
       "verbatim": "  const liveEnemies = standingEnemies.filter((e) => {"
     },
     "recommendation": "fix",
@@ -195,7 +195,8 @@
       "verbatim": "  const peeling = e.peeling ?? (dist <= TIE_NEAR_BOUND && lateralOffset >= COCKPIT_HIT_RADIUS)"
     },
     "recommendation": "accept",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-tie-vm-flight"
   },
   {
     "id": "A-012",
@@ -210,7 +211,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 339,
+      "line": 368,
       "verbatim": "    if (inPassWindow && cooldown <= 0 && enemyShots.length < params.maxConcurrentShots) {"
     },
     "recommendation": "accept",
@@ -267,7 +268,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1696,
+      "line": 1741,
       "verbatim": "  const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]"
     },
     "recommendation": "accept",
@@ -336,7 +337,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 750,
+      "line": 759,
       "verbatim": "export const SPACE_WAVE_QUOTA = 6"
     },
     "recommendation": "accept",

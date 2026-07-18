@@ -13,9 +13,10 @@
 // src/core it exercises is held to.
 
 import { createRng, type Rng } from '@arcade/shared/rng'
-import { lookRotation, normalize, scale, sub, IDENTITY, type Vec3, type Mat4 } from '@arcade/shared/math3d'
-import { initialState, TIE_SPAWN_DISTANCE, ENEMY_SPEED, type GameState, type Enemy } from '../../../src/core/state'
-import { spawnTie } from '../../../src/core/sim'
+import { lookRotation, normalize, scale, sub, dot, length, IDENTITY, type Vec3, type Mat4 } from '@arcade/shared/math3d'
+import { initialState, TIE_SPAWN_DISTANCE, ENEMY_SPEED, TICK_HZ, type GameState, type Enemy } from '../../../src/core/state'
+import { spawnTie, applyManeuver, stepGame } from '../../../src/core/sim'
+import { Twist, Move, type ChoreoVm } from '../../../src/core/tie-vm'
 import { NO_INPUT } from '../../../src/core/input'
 
 const COCKPIT: Vec3 = [0, 0, 0]
@@ -73,3 +74,88 @@ export function spawnTieForTest(opts: { wave: number; slot: number; speed?: numb
   const rng = rngSeed(opts.seed ?? 1983)
   return spawnTie(rng, opts.speed ?? ENEMY_SPEED, opts.slot, opts.wave)
 }
+
+// --- Task 4: VM-driven flight helpers ---------------------------------------
+//
+// The invariant these prove is the design §3 split: the VM chooses WHICH
+// twist/move bits are active (a discrete decision), and `applyManeuver` integrates
+// them as continuous §5.3 rates by `dt`. A maneuver held for N game frames must
+// turn `N × per-frame delta` at ANY render dt — dt-independence.
+
+/** Maneuver names → the `Twist` bit they drive, for `runScript`. */
+const TWIST_BY_NAME: Record<string, number> = {
+  ROLL_L: Twist.ROLL_L,
+  ROLL_R: Twist.ROLL_R,
+  YAW_L: Twist.YAW_L,
+  YAW_R: Twist.YAW_R,
+  PITCH_U: Twist.PITCH_U,
+  PITCH_D: Twist.PITCH_D,
+  AIM_PLAYER: Twist.AIM_PLAYER,
+  AIM_AHEAD: Twist.AIM_AHEAD,
+}
+
+/** Integrate a single named twist maneuver held for `frames` GAME FRAMES, in
+ *  render steps of `dt` seconds, straight through `applyManeuver` (the motion
+ *  half of the split, isolated from the VM). Total integrated time is exactly
+ *  `frames / TICK_HZ` regardless of `dt` (a final partial step consumes the
+ *  remainder), so the accumulated rotation is dt-independent by construction. */
+export function runScript(maneuver: string, frames: number, dt: number, start: Partial<Enemy> = {}): Enemy {
+  const bit = TWIST_BY_NAME[maneuver]
+  if (bit === undefined) throw new Error(`runScript: unknown maneuver ${maneuver}`)
+  let e = makeTie({ orient: IDENTITY, vel: [0, 0, 0], ...start })
+  let remaining = frames / TICK_HZ
+  // `1e-12` swallows FP dust so the loop doesn't take a spurious sliver step.
+  while (remaining > 1e-12) {
+    const step = Math.min(dt, remaining)
+    e = applyManeuver(e, bit, 0, step)
+    remaining -= step
+  }
+  return e
+}
+
+/** The accumulated bank (roll about the nose), in radians, of a TIE that started
+ *  from IDENTITY and only rolled: a pure Z-rotation, so the angle reads straight
+ *  off the matrix as `atan2(m[4], m[0])`. Returned unsigned — the invariant is
+ *  about MAGNITUDE (ROLL_L is negative, ROLL_R positive). */
+export function accumulatedBank(e: Enemy): number {
+  return Math.abs(Math.atan2(e.orient[4], e.orient[0]))
+}
+
+/** A space state carrying exactly one TIE at `offset` whose VM holds `maneuver`
+ *  active for a long run (no `.CUNTIL` gate, high `waitFrames`), so a few
+ *  `stepManyFrames` keep the same bits active while motion integrates. Spawner and
+ *  fire clocks are parked so the lone TIE is the only thing that moves. */
+export function tieRunning(maneuver: string, offset: Vec3, seed = 1983): GameState {
+  const bit = TWIST_BY_NAME[maneuver]
+  if (bit === undefined) throw new Error(`tieRunning: unknown maneuver ${maneuver}`)
+  const vm: ChoreoVm = { pc: 0, savedPc: -1, waitFrames: 1000, twist: bit, move: 0, untilMask: 0 }
+  const tie = makeTie({ pos: offset, orient: IDENTITY, vel: [0, 0, 0], vm })
+  return {
+    ...initialState(seed),
+    enemies: [tie],
+    spawnTimer: 1e9,
+    enemyFireCooldown: 1e9,
+  }
+}
+
+/** The angle (radians) between the (single) TIE's nose and the direction from it
+ *  to the cockpit — its aiming error. Returns the state too so callers can chain
+ *  a `stepManyFrames` off `before.state`. */
+export function noseErrorToCockpit(state: GameState): { state: GameState; err: number } {
+  const e = state.enemies[0]
+  const nose: Vec3 = [e.orient[2], e.orient[6], e.orient[10]]
+  const toCk = normalize(sub(COCKPIT, e.pos))
+  const n = normalize(nose)
+  const c = Math.max(-1, Math.min(1, dot(n, toCk) / (length(n) || 1)))
+  return { state, err: Math.acos(c) }
+}
+
+/** Run `stepGame` for `n` whole game frames (dt = 1/TICK_HZ each — one decision
+ *  tick + one motion step per call), with no input. */
+export function stepManyFrames(state: GameState, n: number): GameState {
+  let s = state
+  for (let i = 0; i < n; i++) s = stepGame(s, NO_INPUT, 1 / TICK_HZ)
+  return s
+}
+
+export { Twist, Move }

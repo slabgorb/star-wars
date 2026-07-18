@@ -190,7 +190,13 @@ describe('sw4-1 §A — TIEs spawn on the far plane with the TBG lateral table',
   it('the wave actually spawns a healthy sample of fighters', () => {
     // Guards the observation itself: if spawning were broken the coverage checks
     // below would pass vacuously on an empty set.
-    expect(spawns.length).toBeGreaterThanOrEqual(15)
+    // sw7 task-4 re-baseline (15 → 10): VM-driven TIEs now LOITER (design §7 —
+    // slots free only when a fighter is shot or rams) instead of the old fast
+    // home→peel→exit cycle, so fewer slots turn over per unit time under NO_INPUT.
+    // 10 is exactly the sample the D-group coverage test below needs (spawnCount
+    // walks the 12-slot table in order; index 9 = the first ±2048 slot), so the
+    // guard stays non-vacuous. Deterministic from seed 4041.
+    expect(spawns.length).toBeGreaterThanOrEqual(10)
   })
 
   it('every fresh TIE spawns on the far plane at depth 31744', () => {

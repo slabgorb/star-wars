@@ -376,24 +376,35 @@ export const COCKPIT_HIT_RADIUS = 80
  */
 export const CATWALK_HIT_RADIUS = 240
 
-// --- Wave 1 — TIE flight model (story 9-2) ----------------------------------
+// --- Wave 1 — TIE choreography maneuver RATES (sw7, docs 4c93855, task 4) ----
 //
-// The RE'd cabinet TIE does not fly dead-straight at the cockpit: it thrusts
-// along its own heading while banking + steering toward the player, tracing a
-// swooping arc (docs/tie-flight-ai-model.md §5). We port the confirmed
-// kinematics at a CONSTANT approach speed (|vel| is preserved as the heading
-// turns, so the 8-6 difficulty ramp still rides spawn speed); the full
-// accelerate-from-rest + per-fighter script VM (§5.1/§5.3) is deferred. These are
-// authentic-FEEL tuning values — the disassembly's rates are per cabinet-tick and
-// not yet pinned to our dt (model §5.3 caveat) — single-sourced here for easy
-// correction, like the rest of the Wave-1 constants.
+// The choreography VM (tie-vm.ts) emits per-game-frame `twist` (roll/yaw/pitch)
+// and `move` (thrust) BITS; docs/tie-flight-ai-model.md §5.3 pins each bit's
+// authentic per-GAME-FRAME delta. `applyManeuver` (sim.ts) integrates whichever
+// bits are ACTIVE by `dt` as continuous RATES, so a maneuver held for its N-frame
+// `.CT` count turns exactly `N × per-frame delta` at any render dt — the same
+// "ROM per-frame count → seconds via TICK_HZ" idiom the durations use
+// (ENEMY_SHOT_TTL = 64/TICK_HZ, DARTH_GLOW_SECONDS = 0x1f/TICK_HZ). This RETIRES
+// the invented swoop/weave feel-constants (TIE_SWOOP_BIAS/TIE_BANK_ANGLE, story
+// 9-2): the rates below are source-pinned, not tuned. §5.3's porting caveat
+// (don't apply °/frame at an arbitrary fps) is discharged by × TICK_HZ.
 
-/** Lateral bias blended into a TIE's homing heading, as a fraction of its forward
- * approach. 0 = the old beeline; >0 curves the path into a banking swoop arc. */
-export const TIE_SWOOP_BIAS = 0.5
-/** Roll angle (radians) a TIE holds while banking into its swoop (~34°), so the
- * orientation leans into the turn rather than sitting level (extends story 8-13). */
-export const TIE_BANK_ANGLE = 0.6
+/** Roll rate (rad/s) for a `ROLL_L`/`ROLL_R` twist bit — §5.3's ROLL-BURST
+ *  `Sine=$1640/$4000` ≈ 20.3°/frame (ROM:8C03), ported to rad/s via × TICK_HZ. */
+export const TIE_ROLL_RATE = ((20.3 * Math.PI) / 180) * TICK_HZ
+/** Yaw rate (rad/s) for a `YAW_L`/`YAW_R` twist bit — §5.3's scripted-turn
+ *  `sin $4FF/$4000` ≈ 4.48°/frame (`word_89A8[#$14]`), × TICK_HZ. */
+export const TIE_YAW_RATE = ((4.48 * Math.PI) / 180) * TICK_HZ
+/** Pitch rate (rad/s) for a `PITCH_U`/`PITCH_D` twist bit — the SAME §5.3
+ *  4.48°/frame scripted-turn step as yaw (`word_89A8[#$14]`), × TICK_HZ. */
+export const TIE_PITCH_RATE = ((4.48 * Math.PI) / 180) * TICK_HZ
+/** Fast thrust rate (units/s) for the `FWD2`/`UP2`/`DOWN2` move bits — §5.3's
+ *  thrust basis scaled ÷32 = `$200` (512) per game frame (`sub_8D9D`+`sub_8AB6`),
+ *  × TICK_HZ. Frame-true like SURFACE_SEED_SPEED (`$100 × TICK_HZ`). */
+export const TIE_THRUST_RATE = 0x200 * TICK_HZ
+/** Slow thrust rate (units/s) for the `FWD`/`UP`/`DOWN` move bits — §5.3's thrust
+ *  basis scaled ÷64 = `$100` (256) per game frame (`sub_8D9D`+`sub_8AB6`), × TICK_HZ. */
+export const TIE_THRUST_RATE_SLOW = 0x100 * TICK_HZ
 
 // --- Wave 1 — TIE peel-away / fly-past lifecycle (story 9-3) -----------------
 //
@@ -424,11 +435,9 @@ export const TIE_NEAR_BOUND = 0x800 // 2048 — WSCPU "not too close" fire/peel 
  * Rescaled to the restored world (sw4-1): ~8000, comfortably above the 2048 near
  * bound and well inside the 31744 spawn depth. Tuning latitude (spec §A). */
 export const TIE_EXIT_RANGE = 8000
-
-/** How hard a peeling TIE sweeps sideways as it departs — the tangential blend
- * against the straight-outward radial. 0 = straight back out; 1 ≈ a 45° peel-off
- * to the side (the banking fly-past look). */
-export const TIE_PEEL_SWEEP = 1
+// TIE_PEEL_SWEEP (the departing tangential sweep) was retired with `moveEnemy` in
+// the sw7 VM-flight wiring (task 4): the choreography VM now governs the approach,
+// so the invented peel-away sweep no longer exists.
 
 // --- Wave 2 surface constants -----------------------------------------------
 //
