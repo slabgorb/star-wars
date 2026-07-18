@@ -728,9 +728,10 @@ export interface GameState {
   /** Player height above the y=0 surface (Wave 2 terrain skim). */
   altitude: number
   /** How far the Death Star surface ground grid has scrolled toward the cockpit
-   * (Wave 2, story 11-5). Advanced by TURRET_SCROLL_SPEED — the SAME flow that
-   * scrolls the turrets — so the grid and turrets rush past together; read `mod
-   * GRID_Z` by the surfaceGrid generator and reset to 0 on every phase entry. */
+   * (Wave 2, story 11-5). Advanced by the ACCELERATING `surfaceScrollSpeed`·dt
+   * (sw7-18 / D-022) — the SAME flow that scrolls the turrets — so the grid and
+   * turrets rush past together; read `mod GRID_Z` by the surfaceGrid generator and
+   * reset to 0 on every phase entry. Also drives `gdSeq` (= floor / SURFACE_SEQ_SPAN). */
   surfaceScrollZ: number
   /** The live ACCELERATING surface scroll rate (units/second), sw7-18 / D-022.
    * Seeded to SURFACE_SEED_SPEED on surface entry, ramped by SURFACE_ACCEL·dt each

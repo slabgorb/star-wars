@@ -257,7 +257,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1452,
+      "line": 1460,
       "verbatim": "  return { pos: [0, 0, -Math.min(trenchPortDistance(baseWave, rng), TRENCH_FAR)] }"
     }
   },

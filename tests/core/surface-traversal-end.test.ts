@@ -191,6 +191,24 @@ describe('sw7-18 / D-019 — the all-towers bonus banks once, mid-phase, decoupl
     expect(events.some((e) => e.type === 'tower-bonus')).toBe(false)
   })
 
+  it('the 50k banner STAMP survives the surface→trench edge (Reviewer R-1)', () => {
+    // The stamp is banked MID-SURFACE now (D-019). enterPhase nulls towerBonusAwardedAt
+    // on every entry, so without an explicit carry the surface→trench edge would DISCARD
+    // it — cutting the "50,000 FOR SHOOTING ALL TOWERS" banner short in the trench, unlike
+    // the sibling reward stamps clearRun carries. Seat the surface at its traversal end so
+    // the stamp lands close to the edge, then assert it rides across.
+    const start: GameState = {
+      ...freshSurface(wave),
+      phaseKills: quota,
+      towerBonusAwardedAt: null,
+      gdSeq: 4, // one pass short — the next steps bank the bonus, THEN cross into the trench
+      surfaceScrollZ: 4 * 0x8000 + (0x8000 - 1),
+    }
+    const { s } = flyUntilTrench(start)
+    expect(s.phase).toBe('trench')
+    expect(s.towerBonusAwardedAt).not.toBeNull() // the banner stamp rode across the edge
+  })
+
   it('the bunkers-only wave (0 towers) never gifts the bonus', () => {
     // BUNK has no towers, so allTowersKilled can never hold — no free 50k, ever.
     const start = { ...freshSurface(2), score: 0 } // wave 2 = BUNK

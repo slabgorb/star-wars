@@ -1354,6 +1354,14 @@ function progress(s: GameState): GameState {
   // NOTE (sw7-18 / D-019): the 50,000 "cleared all towers" bonus is NO LONGER banked
   // here. It is decoupled from the phase clear and banks MID-PHASE in `stepSurface`
   // the frame the last tower falls (the ROM's Q.ATP is set independently of GD.SEQ).
+  // But `enterPhase` nulls `towerBonusAwardedAt` on every entry, so the surface->trench
+  // edge would otherwise DISCARD a stamp banked earlier in the same surface — cutting the
+  // "50,000 FOR SHOOTING ALL TOWERS" banner short in the trench (render.ts), unlike the
+  // sibling reward stamps that `clearRun` carries across the wave boundary. Carry it here,
+  // ONLY when leaving the surface (a fresh surface has no bonus to preserve).
+  if (s.phase === 'surface') {
+    return { ...advanced, towerBonusAwardedAt: s.towerBonusAwardedAt, events }
+  }
   return { ...advanced, events }
 }
 

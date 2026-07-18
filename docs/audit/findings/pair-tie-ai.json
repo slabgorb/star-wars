@@ -29,7 +29,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1605,
+      "line": 1613,
       "verbatim": "const ROM_LATERAL_UNIT = 0x400 // 1024 — the ×$400 STARTING-LOCATION lateral step"
     }
   },
@@ -46,7 +46,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1616,
+      "line": 1624,
       "verbatim": "  [-2 * ROM_LATERAL_UNIT, 0], // 1D1"
     }
   },
@@ -131,7 +131,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1637,
+      "line": 1645,
       "verbatim": "  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), bank }"
     }
   },
@@ -191,7 +191,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1563,
+      "line": 1571,
       "verbatim": "  const peeling = e.peeling ?? (dist <= TIE_NEAR_BOUND && lateralOffset >= COCKPIT_HIT_RADIUS)"
     },
     "recommendation": "accept",
@@ -267,7 +267,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1628,
+      "line": 1636,
       "verbatim": "  const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]"
     },
     "recommendation": "accept",
