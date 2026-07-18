@@ -136,6 +136,23 @@ describe('TIE fire cadence — §6 frame-mask + PRNG gate', () => {
 
   it('MUTATION: perturbing the mask changes fire timing', () => {
     // Guards vacuous tests — swapping mask 0x0F→0x03 must move the fire-frame set.
+    //
+    // NOTE (sw7 Task 5 review, Minor cleanup): the two arms also differ in
+    // maxConcurrentShots (wave 1's TGPROB row is guns=1; the mask-0x03 row it maps
+    // to via FIRE_MASK.indexOf is guns=6) — an *additional* channel through which a
+    // mask-ignoring bug could still make the frame sets diverge and pass this test
+    // for the wrong reason. It is NOT fixable by picking different wave arms: every
+    // TGPROB row that shares a `maxConcurrentShots` value also shares its `mask`
+    // *unless* its `fireThreshold` also changes (mask and guns climb together in
+    // the ported 16-row table — see gameRules.ts FIRE_CONCURRENCY vs state.ts
+    // FIRE_MASK/FIRE_THRESHOLD), so no pair of rows holds both cap AND threshold
+    // constant while varying only mask. True isolation would need `waveParams` to
+    // accept a cap/threshold override or a test-only mock of gameRules — out of
+    // scope for this cleanup. The mask semantics ARE pinned directly and
+    // unconfounded by 'never fires on a frame where (frame & mask) != 0' above
+    // (every observed fire, across however many frames, satisfies the mask with no
+    // comparison against a second arm), so this mutation test stays a non-vacuity
+    // guard, not the sole guarantee.
     expect(collectFireFrames(oneInSightsTie({ wave: 1 }), 200)).not.toEqual(
       collectFireFrames(oneInSightsTie({ wave: 1, maskOverride: 0x03 }), 200),
     )
