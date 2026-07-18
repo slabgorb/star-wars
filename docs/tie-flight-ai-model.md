@@ -199,12 +199,20 @@ own matrix (`sub_89C8/89D3/89DE`, "Space wave roll/pitch/yaw"). *(CONFIRMED)*
 | Spawn depth | `XT = $7C00` (≈ 1.94) | ROM:9028+ |
 | Spawn lateral | `{0, ±$0400, ±$0800}` (≈ 0, ±0.06, ±0.125) | ROM:9028+ |
 
-> **Porting caveat (9-2):** the `°/frame` rates are *per cabinet game-tick*, not
-> per wall-clock second. The cabinet's update runs at a fixed tick (vector-frame
-> rate), which we have **not** pinned here — do **not** apply "20.3°/frame" at an
-> arbitrary 60 fps. Port these as per-*sim-step* deltas and tune the step rate to
-> match the cabinet's feel, or re-express them as rates/second once the tick rate
-> is confirmed.
+> **Porting note (9-2, updated):** the `°/frame` rates above are *per cabinet
+> game-tick*, and the tick **is pinned**: `TICK_HZ = 246.094 / 12 ≈ 20.508 Hz`
+> (audit **T-007**, from `WSINT.MAC:147` `LDA #11. ;12.*4.2MS==>50. MS, 20 PER
+> SECOND` — GMTIMR reloads 11+1 = 12 IRQs/game-frame; IRQ = 12.096 MHz / 4096 /
+> 12). Do **not** apply "20.3°/frame" once per wall-clock frame at an arbitrary
+> 60 fps — port each rate as `°/frame × TICK_HZ` to get **degrees/second**, the
+> same dt-independent-seconds idiom the core already uses elsewhere (e.g.
+> `ENEMY_SHOT_TTL = 64/TICK_HZ`). This is now **live**: `state.ts`'s
+> `TIE_ROLL_RATE`/`TIE_YAW_RATE`/`TIE_PITCH_RATE`/`TIE_THRUST_RATE(_SLOW)`
+> convert these constants exactly this way, and `applyManeuver` (`sim.ts`)
+> applies them continuously each frame from the choreography VM's current
+> twist/move bits — see the sw7 TIE-VM/fire design, §3 (discreteness inside the
+> seconds core) and §5 (TIE flight — wiring the VM):
+> `docs/superpowers/specs/2026-07-18-star-wars-tie-vm-fire-wiring-design.md`.
 
 ---
 
