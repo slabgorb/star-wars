@@ -33,7 +33,7 @@ import { initialState, TRENCH_SCROLL_SPEED, type GameState } from '../../src/cor
 import { stepGame, enterPhase } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
 import { createRng } from '@arcade/shared/rng'
-import { TRENCH_EYE_SEAT } from '../../src/core/trench-channel'
+import { TRENCH_EYE_SEAT, TRENCH_HALF_W } from '../../src/core/trench-channel'
 import type { Vec3 } from '@arcade/shared/math3d'
 import { eyeOf, fireAt } from '../support/aim'
 
@@ -156,21 +156,20 @@ describe('trench obstacles — shooting & scoring', () => {
     expect(s1.portTorpedoArmed, 'the beam went straight through it to the port').toBe(true)
   })
 
-  it('cockpit contact with a CATWALK costs a shield and emits terrain-crash', () => {
+  it('a wall force-field catwalk GRAZES on contact — emits terrain-crash, costs NO shield (B-012)', () => {
     const s = enterPhase(initialState(), 'trench')
     const lives0 = s.lives
-    // Parked ON the cockpit. sw5-6 re-framed the eye: `trenchView` is now a height ABOVE
-    // the y=0 trench floor, seated at TRENCH_EYE_SEAT — so "at the cockpit" is the seat,
-    // not the origin. (Staged at y=0 this catwalk would sit on the FLOOR, 768 below the
-    // pilot, and correctly miss him.) The intent — contact crashes — is unchanged.
+    // A LEFT-wall force field at the seat height. The hands-off pilot rides centre — the ROM's
+    // left side (`IFLE ;?ON LEFT SIDE?`) — so the field grazes him. sw5-6's height framing is
+    // unchanged: trenchView is a height above the y=0 floor, seated at TRENCH_EYE_SEAT.
     const s1 = stepGame(
-      { ...s, mode: 'playing', trenchObstacles: [{ kind: 'catwalk', pos: [0, TRENCH_EYE_SEAT, -1] }] },
+      { ...s, mode: 'playing', trenchObstacles: [{ kind: 'catwalk', pos: [-TRENCH_HALF_W, TRENCH_EYE_SEAT, -1] }] },
       NO_INPUT,
       1 / 60,
     )
-    expect(s1.lives).toBe(lives0 - 1)
-    expect(s1.events).toContainEqual({ type: 'terrain-crash' })
-    expect(s1.trenchObstacles.length).toBe(0) // crashed through it
+    expect(s1.lives).toBe(lives0) // a graze costs NO shield (was −1; B-012 moved the shield to WSGLOW scope)
+    expect(s1.events).toContainEqual({ type: 'terrain-crash' }) // the AUDCR graze sound still fires
+    expect(s1.trenchObstacles.length).toBe(0) // flew through the field
   })
 
   it('OBSTACLE_HIT_RADIUS and both scores are positive (table sanity)', () => {

@@ -80,7 +80,7 @@
     },
     "ours": {
       "file": "src/core/trench-channel.ts",
-      "line": 97,
+      "line": 98,
       "verbatim": "export const TRENCH_VIEW_HALF_W = 0x1ff // 511"
     }
   },
@@ -97,7 +97,7 @@
     },
     "ours": {
       "file": "src/core/trench-channel.ts",
-      "line": 101,
+      "line": 102,
       "verbatim": "export const TRENCH_EYE_MIN = TRENCH_WALL_H - 0xe00 // 512"
     }
   },
@@ -114,7 +114,7 @@
     },
     "ours": {
       "file": "src/core/trench-channel.ts",
-      "line": 107,
+      "line": 108,
       "verbatim": "export const TRENCH_EYE_SEAT = TRENCH_WALL_H - (0xe00 - 0x100) // 768"
     }
   },
@@ -225,7 +225,8 @@
     "recommendation": "fix",
     "size": "l",
     "verdict": "CONFIRMED",
-    "refutation_corrections": "Overlap note (not a defect): B-012 and B-010 describe the SAME wedge/panel grid from two angles — B-010 the encoding, B-012 one panel type's collision behaviour. The finding itself states 'reconciling requires porting the wall-slot panel grid (B-010)', so a single rewrite fixes both. Distinct claims, both TRUE; not a duplicate filing."
+    "refutation_corrections": "Overlap note (not a defect): B-012 and B-010 describe the SAME wedge/panel grid from two angles — B-010 the encoding, B-012 one panel type's collision behaviour. The finding itself states 'reconciling requires porting the wall-slot panel grid (B-010)', so a single rewrite fixes both. Distinct claims, both TRUE; not a duplicate filing.",
+    "remediated_by": "sw7-19"
   },
   {
     "id": "B-013",
@@ -257,7 +258,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1516,
+      "line": 1498,
       "verbatim": "  return { pos: [0, 0, -Math.min(trenchPortDistance(baseWave, rng), TRENCH_FAR)] }"
     }
   },
@@ -292,7 +293,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1128,
+      "line": 1110,
       "verbatim": "  const detonates = armed && inApproachWindow"
     }
   },
@@ -324,7 +325,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1194,
+      "line": 1176,
       "verbatim": "  if (reachedCockpit) {"
     },
     "recommendation": "accept",
@@ -343,7 +344,7 @@
     },
     "ours": {
       "file": "src/core/trench-channel.ts",
-      "line": 146,
+      "line": 169,
       "verbatim": "    const fl = vertices.push([-TRENCH_HALF_W, 0, z]) - 1"
     },
     "recommendation": "accept",

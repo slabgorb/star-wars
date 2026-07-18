@@ -36,7 +36,6 @@ import {
   TIE_HIT_RADIUS,
   TIE_DEATH_SECONDS,
   COCKPIT_HIT_RADIUS,
-  CATWALK_HIT_RADIUS,
   SKIM_ALTITUDE,
   MIN_SKIM_ALTITUDE,
   MAX_SKIM_ALTITUDE,
@@ -109,6 +108,8 @@ import {
   TRENCH_EYE_MAX,
   TRENCH_EYE_SEAT,
   TRENCH_FAR,
+  FORCE_FIELD_BAND_HALF,
+  FORCE_FIELD_DEPTH,
 } from './trench-channel'
 import { waveSpawnPlan } from './tie-waves'
 
@@ -998,38 +999,30 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
 
   let obstacleScore = 0
   const survivors: TrenchObstacle[] = []
-  let crashedCatwalk = false
   for (let oi = 0; oi < state.trenchObstacles.length; oi++) {
     const o = state.trenchObstacles[oi]
     const pos: Vec3 = [o.pos[0], o.pos[1], o.pos[2] + TRENCH_SCROLL_SPEED * dt]
     if (o.kind === 'catwalk') {
-      // Hazard check FIRST, before the despawn cutoff below: a catwalk starting
-      // right at the cockpit's doorstep can scroll past z=0 in the same step
-      // that carries it through the cockpit's hit sphere, and the crash must
-      // still register rather than being silently despawned. Uses
-      // CATWALK_HIT_RADIUS, not COCKPIT_HIT_RADIUS: the catwalk hangs above the pilot, well
-      // outside an 80-unit cockpit sphere, so the crash was dead code (story 14-7).
-      // Tests against the pilotable `trenchView` — the SHIP — not a fixed cockpit point (sw3-2,
-      // re-anchored by sw5-6): a hands-off pilot rides at TRENCH_EYE_SEAT and the catwalk is
-      // seated within one hit radius of it, so it still bites; a dive to TRENCH_EYE_MIN opens
-      // more than a hit radius of clearance beneath it, so it stays dodgeable. Both bounds are
-      // asserted behaviourally in tests/core/trench-viewpoint.test.ts.
-      // At the ROM scroll speed a catwalk seated near the cockpit advances ~768
-      // units per frame (B-008) and can leap clean over the hit sphere between two
-      // frames — a catwalk at z=-1 lands at +261 in one step, well past the 240
-      // radius. So the sphere (which still catches a catwalk that lands inside it on
-      // approach) is backed by a CROSSING test: once the catwalk reaches or passes
-      // the cockpit plane (z >= 0) still within a hit radius LATERALLY and
-      // VERTICALLY of the ship, it has struck. dt-independent, and a full dive
-      // (trenchView at TRENCH_EYE_MIN, > a hit radius below the catwalk) still opens
-      // clean under it — the dodge is unchanged.
-      const spanCrash = collides(pos, trenchView, CATWALK_HIT_RADIUS)
-      const crossCrash =
-        pos[2] >= 0 && Math.hypot(pos[0] - trenchView[0], pos[1] - trenchView[1]) <= CATWALK_HIT_RADIUS
-      if (spanCrash || crossCrash) {
-        crashedCatwalk = true
-        events.push({ type: 'terrain-crash' })
-        continue // crashed through it — removed
+      // The catwalk is a wall FORCE FIELD (TD$WFF, WSPANL.MAC:186-215, B-012), not a
+      // channel-spanning bar. The graze fires FIRST, before the despawn cutoff below,
+      // so a field that leaps the cockpit plane in one scroll step (B-008) still
+      // registers rather than being silently despawned. Three gates, then a GRAZE:
+      //   • SIDE  — the pilot is on the field's wall side (o.pos[0] sign vs the eye x;
+      //     `IFLE ;?ON LEFT SIDE?`). A single-wall field is dodged by flying the OTHER
+      //     wall; a divider with fields on both walls must be dodged vertically.
+      //   • BAND  — the eye is within the field's vertical hit band about its height
+      //     slot (`?FORCE FIELD ABOVE PLAYER? / ?BUT NOT TOO FAR?`); dive/climb clear.
+      //   • DEPTH — the field is within its first half-depth of the cockpit.
+      // A hit GLOWS + sounds + rolls the ship (AUDCR → 'terrain-crash') and costs NO
+      // shield — the shield accounting rides WSGLOW (score-shields scope), and the ship
+      // glow/roll are the deferred A-018 visual, so the only cue modelled here is the
+      // crash sound.
+      const onFieldSide = o.pos[0] < 0 ? trenchView[0] <= 0 : trenchView[0] >= 0
+      const inBand = Math.abs(trenchView[1] - o.pos[1]) <= FORCE_FIELD_BAND_HALF
+      const inDepth = pos[2] >= -FORCE_FIELD_DEPTH && pos[2] <= FORCE_FIELD_DEPTH
+      if (onFieldSide && inBand && inDepth) {
+        events.push({ type: 'terrain-crash' }) // AUDCR — the graze crash sound, no shield
+        continue // flew through the force field — spent
       }
     } else if (oi === beamObstacle && obstacleTakesTheBeam) {
       obstacleScore += o.kind === 'turret' ? TRENCH_TURRET_SCORE : TRENCH_SQUARE_SCORE
@@ -1039,22 +1032,11 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     if (pos[2] > 0) continue // scrolled past the cockpit — despawn
     survivors.push({ kind: o.kind, pos })
   }
-  const catwalkHit = crashedCatwalk ? loseShield(base.lives, base.shieldHitAt, 1, t) : null // S-016 window
   const afterObstacles: GameState = {
     ...base,
     score: base.score + obstacleScore,
     trenchObstacles: survivors,
-    ...(catwalkHit
-      ? {
-          lives: catwalkHit.lives,
-          shieldHitAt: catwalkHit.shieldHitAt,
-          gameOver: catwalkHit.lives <= 0,
-          mode: catwalkHit.lives <= 0 ? ('gameover' as const) : base.mode,
-        }
-      : {}),
   }
-  // A fatal catwalk crash is a death like any other (sw7-8, U-017).
-  if (catwalkHit) pushFarewell(events, catwalkHit.lives)
 
   // No active port → safe hold (no score, no damage; the empty channel still scrolls).
   if (state.exhaustPort === null) return afterObstacles
