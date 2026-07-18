@@ -535,6 +535,43 @@ export const SURFACE_BUNKER: Model3D = {
 }
 
 /**
+ * A ground-explosion debris CHUNK (story sw7-14 / X-005): a small tumbling
+ * octahedron that stands in for a blown-off piece of tower/bunker. Authored in
+ * WORLD units (drawn at the piece's world position with no ground scale/orient,
+ * unlike the standing SURFACE_* objects) so the three pieces read as distinct
+ * fragments arcing up from the kill. Shape is our own — the ROM draws the object's
+ * own picture (TP$BKx / TP$TWx), an eyeball nicety beyond X-005's six pinned ACs. */
+export const GROUND_DEBRIS_CHUNK: Model3D = {
+  name: 'Ground Debris Chunk',
+  vertices: [
+    [0, 20, 0], [0, -20, 0], // vertical spindle
+    [18, 0, 0], [-18, 0, 0], // lateral points
+    [0, 0, 18], [0, 0, -18], // fore/aft points
+  ],
+  edges: [
+    [0, 2], [0, 3], [0, 4], [0, 5], // top apex to the equator
+    [1, 2], [1, 3], [1, 4], [1, 5], // bottom apex to the equator
+    [2, 4], [4, 3], [3, 5], [5, 2], // the equatorial ring
+  ],
+}
+
+/**
+ * The debris GROUND SHADOW (story sw7-14 / X-005): the ROM draws each piece a
+ * scaled shadow on the floor, WHITE for towers (VWTWN, WSXPLD.MAC:691) and RED for
+ * bunkers (VWBKN, :695), positioned on the ground under the piece (`M.Z0 = 0`). A
+ * flat diamond lying in the y=0 plane; the shell seats it at the piece's x/z and
+ * the perspective scales it with distance. */
+export const GROUND_DEBRIS_SHADOW: Model3D = {
+  name: 'Ground Debris Shadow',
+  vertices: [
+    [28, 0, 0], [0, 0, 28], [-28, 0, 0], [0, 0, -28], // a diamond on the floor
+  ],
+  edges: [
+    [0, 1], [1, 2], [2, 3], [3, 0],
+  ],
+}
+
+/**
  * The trench floor, straight off the ROM wall panel `.WP WPN` (WSOBJ.MAC:560-571,
  * `.S=8`): two concentric squares lying flat in y=0 — outer ±256/±192 (0-3), inner
  * ±128/±64 (4-7). `.WGD WPN` (WSOBJ.MAC:1803-1813) strokes ONLY those two rings —

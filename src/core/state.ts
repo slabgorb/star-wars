@@ -90,6 +90,27 @@ export interface DyingTie {
   age: number
 }
 
+/** A blown-apart piece of a surface tower/bunker (story sw7-14, ROM finding X-005:
+ *  BGTWXP/BGBKXP, WSXPLD.MAC). Unlike DyingTie — a render-only cue whose fly-apart
+ *  the shell fakes from `age` — this is a REAL ballistic entity (finding X-004): the
+ *  sim carries its 3D velocity and integrates it each frame (upward launch, gravity,
+ *  floor-freeze), exactly as the ROM's DOXPLD moves XP$Cx / XP$Mx. The shell only draws
+ *  it (a tumbling chunk + a scaled ground shadow, coloured by `kind`). */
+export interface GroundDebris {
+  /** World-space position of the piece. `pos[1]` is HEIGHT above the y=0 floor (the
+   * ROM's XP$CZ; its up-axis is Z, ours is Y), clamped to ≥ 0 by the floor-freeze. */
+  pos: Vec3
+  /** World-space velocity (units/second). `vel[1]` is the vertical launch, cut down
+   * GROUND_DEBRIS_GRAVITY·dt each frame (the ROM's XP$MZ / `SUBD #50.*4`). */
+  vel: Vec3
+  /** Seconds since the piece was spawned; the sim drops it once it passes
+   * GROUND_DEBRIS_LIFE_SECONDS (the ROM's XP$TMR countdown from 0x20 frames). */
+  age: number
+  /** Which shadow the shell paints: red for a bunker (VWBKN), white for a tower
+   * (VWTWN). A kindless (legacy) turret bursts as a tower — see the spawn in sim.ts. */
+  kind: 'tower' | 'bunker'
+}
+
 /** A ground object standing on the Death Star surface (Wave 2). World space.
  *  Mirrors the ROM's one-table design (WSGRND.MAC mazes: TOWER/BISHOP/BUNKER
  *  entries share one list, discriminated by a picture-type byte). */
@@ -514,6 +535,35 @@ export const SURFACE_END_SEQ = 5
  * traversal, still below the cap. The tune fires the frame the pace first crosses it. */
 export const SURFACE_FINISH_GROUND_SPEED = 0x1e0 * TICK_HZ
 
+// --- Wave 2 ground-debris explosion (sw7-14 / X-005) ------------------------
+//
+// The ROM's tower/bunker destruction (BGTWXP :317 / BGBKXP :305, WSXPLD.MAC,
+// `.RADIX 16`): three explosion pieces, each launched UPWARD and pulled back by
+// gravity, freezing at the floor, living 0x20 game-frames. Every ROM per-frame
+// figure ports through the sw7-1 timebase exactly like the surface-scroll rates
+// above: a per-frame VELOCITY × TICK_HZ, a per-frame² ACCELERATION × TICK_HZ², a
+// life in frames ÷ TICK_HZ.
+
+/** Debris lifetime: `LDA #20 / STA XP$TMR` (WSXPLD.MAC:330) — hex 0x20 = 32 game
+ *  frames, 32 / 20.508 ≈ 1.560 s. Frame-true, like TIE_WING_LIFE_SECONDS. */
+export const GROUND_DEBRIS_LIFE_SECONDS = 0x20 / TICK_HZ
+/** Gravity on the vertical velocity: `SUBD #50.*4 ;FORCE OF GRAVITY` (WSXPLD.MAC:559)
+ *  — `50.` is DECIMAL (trailing period), so 50 × 4 = 200 u/frame² subtracted once per
+ *  game frame. As a continuous rate that is 200 × TICK_HZ² ≈ 84,113 u/s². */
+export const GROUND_DEBRIS_GRAVITY = 200 * TICK_HZ * TICK_HZ
+/** Upward launch speed (units/second). The ROM loads TMPVZ (the type-3 low byte,
+ *  `#…+2` tower / `#…+3` bunker) and `JSR LSLD2 ;*4` → a per-frame vertical velocity
+ *  of 4 × 0x200 = 0x800 = 2048 (tower) or 4 × 0x300 = 0x0C00 = 3072 (bunker), i.e. the
+ *  "728. TO 1024. ×4" band the comment cites. Ported × TICK_HZ. The ROM also varies it
+ *  by the P.RND1 low byte; we launch at the fixed base (the spread is a logged, unpinned
+ *  fidelity nicety), so the burst stays deterministic from the seed. */
+export const GROUND_DEBRIS_LAUNCH_TOWER = 0x800 * TICK_HZ
+export const GROUND_DEBRIS_LAUNCH_BUNKER = 0xc00 * TICK_HZ
+/** Lateral fan (units/second) that splits the three pieces left / centre / right —
+ *  the ROM's `ADDA #-3F ;GO LEFT` / `ADDA #3F ;GO RIGHT` offsets on XP$MY (its lateral
+ *  axis is Y; ours is X). A modest fraction of the launch so they arc apart, not up a line. */
+export const GROUND_DEBRIS_SPREAD = 0x180 * TICK_HZ
+
 // --- Wave 3 trench constants ------------------------------------------------
 //
 // Authentic-FEEL, single-sourced here exactly as the Wave 1/2 constants are:
@@ -809,6 +859,10 @@ export interface GameState {
   /** TIEs destroyed this frame or recently, playing their exploded-fragment death
    * cue (story sw3-8). Each ages by dt and is dropped past TIE_DEATH_SECONDS. */
   dyingTies: DyingTie[]
+  /** Blown-apart tower/bunker pieces mid-flight (Wave 2, story sw7-14 / X-005). Each
+   * carries a real 3D velocity the sim integrates (launch, gravity, floor-freeze) and
+   * is dropped past GROUND_DEBRIS_LIFE_SECONDS; wiped on phase entry like dyingTies. */
+  groundDebris: GroundDebris[]
   /** Laser turrets standing on the surface (Wave 2). */
   turrets: Turret[]
   /** The trench run's target (Wave 3): the exhaust port scrolling toward the
@@ -936,6 +990,7 @@ export function initialState(seed = 1983): GameState {
     laserOn: false,
     enemies: [],
     dyingTies: [],
+    groundDebris: [],
     turrets: [],
     exhaustPort: null,
     trenchObstacles: [],
