@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 427,
+      "line": 440,
       "verbatim": "        drawWireframe(ctx, TIE_WING_FRAG_1, at(-ws, 0, 0), proj, w, h, wc)"
     },
     "verdict": "CONFIRMED",
@@ -76,7 +76,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 425,
+      "line": 438,
       "verbatim": "        const ws = wf * TIE_DEATH_SPREAD"
     },
     "recommendation": "accept"
@@ -94,7 +94,8 @@
     },
     "ours": null,
     "recommendation": "fix",
-    "size": "l"
+    "size": "l",
+    "remediated_by": "sw7-14"
   },
   {
     "id": "X-006",
@@ -109,7 +110,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 588,
+      "line": 601,
       "verbatim": "  ctx.strokeStyle = '#ffdd66'"
     },
     "recommendation": "fix",
@@ -144,7 +145,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 874,
+      "line": 887,
       "verbatim": "const DEATH_STAR_BOOM_SECONDS = 2.5"
     },
     "recommendation": "accept",
@@ -167,7 +168,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 411,
+      "line": 416,
       "verbatim": "  const dyingTies: DyingTie[] = ["
     },
     "recommendation": "accept"

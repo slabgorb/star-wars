@@ -114,7 +114,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 629,
+      "line": 666,
       "verbatim": "export const EXHAUST_PORT: Model3D = {"
     }
   },
@@ -131,7 +131,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 626,
+      "line": 639,
       "verbatim": "const FIREBALL_FRAMES: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = ["
     }
   },
@@ -148,7 +148,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 818,
+      "line": 855,
       "verbatim": "export const MODELS: readonly Model3D[] = ["
     }
   },
@@ -165,7 +165,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 734,
+      "line": 771,
       "verbatim": "export function buildDeathStar(): Model3D {"
     },
     "recommendation": "fix",
@@ -186,7 +186,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 659,
+      "line": 696,
       "verbatim": "export const TRENCH_TURRET: Model3D = {"
     },
     "recommendation": "fix",
@@ -206,7 +206,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 703,
+      "line": 740,
       "verbatim": "export const TRENCH_CATWALK: Model3D = {"
     },
     "recommendation": "fix",
@@ -247,7 +247,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 222,
+      "line": 224,
       "verbatim": "const PORT_GLOW = GLOW_FOR['Exhaust Port'] // exhaust-port target amber (shared)"
     },
     "recommendation": "wont_fix",

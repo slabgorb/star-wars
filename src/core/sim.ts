@@ -15,7 +15,7 @@
 
 import { initialState } from './state'
 import { mazeForWave } from './surfaceMazes'
-import type { GameState, Projectile, Enemy, Turret, Phase, TrenchObstacle, DyingTie } from './state'
+import type { GameState, Projectile, Enemy, Turret, Phase, TrenchObstacle, DyingTie, GroundDebris } from './state'
 import {
   FIRE_INTERVAL,
   LASER_SWEEP_SECONDS,
@@ -51,6 +51,11 @@ import {
   SURFACE_SEQ_SPAN,
   SURFACE_END_SEQ,
   SURFACE_FINISH_GROUND_SPEED,
+  GROUND_DEBRIS_LIFE_SECONDS,
+  GROUND_DEBRIS_GRAVITY,
+  GROUND_DEBRIS_LAUNCH_TOWER,
+  GROUND_DEBRIS_LAUNCH_BUNKER,
+  GROUND_DEBRIS_SPREAD,
   TURRET_SCORE,
   TURRET_HIT_RADIUS,
   TOWER_HEIGHT,
@@ -583,6 +588,48 @@ interface StepCommon {
 }
 
 /**
+ * The three ground-debris pieces a destroyed tower/bunker throws off (sw7-14 /
+ * X-005, ROM BGTWXP/BGBKXP). Each launches straight up at the kind's base velocity
+ * with a left / centre / right lateral fan, from the object's kill position. A
+ * kindless (legacy) turret bursts as a tower — the `?? 'tower'` back-compat contract
+ * (sw3-11). Deterministic (no RNG), so a seed replays the burst exactly.
+ */
+function spawnGroundDebris(pos: Vec3, kind: Turret['kind']): GroundDebris[] {
+  const debrisKind: GroundDebris['kind'] = kind === 'bunker' ? 'bunker' : 'tower'
+  const launch = debrisKind === 'bunker' ? GROUND_DEBRIS_LAUNCH_BUNKER : GROUND_DEBRIS_LAUNCH_TOWER
+  const fan = [-GROUND_DEBRIS_SPREAD, 0, GROUND_DEBRIS_SPREAD] // left / centre / right
+  return fan.map((lateral): GroundDebris => ({
+    pos: [pos[0], pos[1], pos[2]],
+    vel: [lateral, launch, 0],
+    age: 0,
+    kind: debrisKind,
+  }))
+}
+
+/**
+ * Advance the ground debris one frame (sw7-14 / X-005, ROM DOXPLD move + gravity):
+ * carry each piece by its velocity (and the world scroll), cut the vertical velocity
+ * by gravity, freeze the height at the floor, and drop pieces past their life. The
+ * spawn appends fresh pieces AFTER this, so a just-launched piece keeps its pristine
+ * launch velocity for the frame it is born.
+ */
+function advanceGroundDebris(debris: GroundDebris[], dt: number, scrollSpeed: number): GroundDebris[] {
+  const next: GroundDebris[] = []
+  for (const p of debris) {
+    const age = p.age + dt
+    if (age >= GROUND_DEBRIS_LIFE_SECONDS) continue // XP$TMR ran out — dropped
+    // Integrate height with the CURRENT vertical velocity, then freeze at the floor
+    // (WSXPLD.MAC :550-555: ADDD XP$MZ / IFLT / LDD #0 ;FREEZE AT GROUND LEVEL).
+    const y = Math.max(0, p.pos[1] + p.vel[1] * dt)
+    const pos: Vec3 = [p.pos[0] + p.vel[0] * dt, y, p.pos[2] + p.vel[2] * dt + scrollSpeed * dt]
+    // Then gravity cuts the vertical velocity (:559 SUBD #50.*4 = 200 u/frame²).
+    const vel: Vec3 = [p.vel[0], p.vel[1] - GROUND_DEBRIS_GRAVITY * dt, p.vel[2]]
+    next.push({ ...p, pos, vel, age })
+  }
+  return next
+}
+
+/**
  * Wave 2 — Death Star surface. The ship skims the y=0 floor (the yoke flies it
  * up/down, and dipping too low scrapes a shield); laser turrets scroll in from
  * ahead, lob bolts at the cockpit, and fall to the player's fire.
@@ -627,6 +674,10 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
   const surfaceScrollZ = state.surfaceScrollZ + scrollSpeed * dt
   // GD.SEQ: how many full $8000 forward passes have completed (WSMAIN.MAC:2537-2545).
   const gdSeq = Math.floor(surfaceScrollZ / SURFACE_SEQ_SPAN)
+
+  // Ground debris from earlier kills flies its ballistic arc (sw7-14 / X-005); a kill
+  // below appends three fresh pieces to this list. Rides the SAME scroll as the field.
+  const groundDebris = advanceGroundDebris(state.groundDebris, dt, scrollSpeed)
 
   // The PMREB "FINISH GROUND WITH REBEL" rider (sw7-18): the ROM fires it at
   // PH.TIM == 14 pseudo-seconds — game-frame 224, where the per-frame speed has
@@ -735,6 +786,8 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
       score += TURRET_SCORE
       if (turrets[hit].kind !== 'bunker') towerKills++
       events.push({ type: 'enemy-death', enemyType: 'turret', pos: [...turrets[hit].pos] as Vec3 })
+      // X-005: the destroyed object throws off three ballistic debris pieces.
+      groundDebris.push(...spawnGroundDebris(turrets[hit].pos, turrets[hit].kind))
     }
   }
   const standingTurrets = turrets.filter((_, i) => !killed.has(i))
@@ -794,6 +847,7 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     laserOn,
     firePrev,
     turrets: standingTurrets,
+    groundDebris,
     enemyShots: liveShots,
     fireCooldown,
     // The surface no longer runs a turret spawn timer (sw4-3 replaced the random
@@ -1381,8 +1435,10 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     phase,
     phaseKills: 0,
     enemies: [],
-    // A leftover death cue never crosses into the next phase (story sw3-8).
+    // A leftover death cue never crosses into the next phase (story sw3-8) — the
+    // ground debris cloud (sw7-14) is wiped the same way, so none rains into the trench.
     dyingTies: [],
+    groundDebris: [],
     turrets: [],
     // The trench opens with its target downrange at the chain-derived BS.PLC
     // (B-009); other phases carry no port. Seeded per-run like the obstacles below.
