@@ -132,7 +132,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 601,
+      "line": 599,
       "verbatim": "export const TRENCH_BONUS = 25000"
     }
   },
@@ -149,7 +149,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 757,
+      "line": 755,
       "verbatim": "export const SURFACE_CLEAR_BONUS = 50000"
     }
   },

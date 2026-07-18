@@ -544,8 +544,6 @@ export const SURFACE_FINISH_GROUND_SPEED = 0x1e0 * TICK_HZ
 // above: a per-frame VELOCITY × TICK_HZ, a per-frame² ACCELERATION × TICK_HZ², a
 // life in frames ÷ TICK_HZ.
 
-/** Pieces spawned per ground-object kill — the three `NXTFRE` calls in BGTWXP/BGBKXP. */
-export const GROUND_DEBRIS_PIECES = 3
 /** Debris lifetime: `LDA #20 / STA XP$TMR` (WSXPLD.MAC:330) — hex 0x20 = 32 game
  *  frames, 32 / 20.508 ≈ 1.560 s. Frame-true, like TIE_WING_LIFE_SECONDS. */
 export const GROUND_DEBRIS_LIFE_SECONDS = 0x20 / TICK_HZ

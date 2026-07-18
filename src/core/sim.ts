@@ -613,7 +613,7 @@ function spawnGroundDebris(pos: Vec3, kind: Turret['kind']): GroundDebris[] {
  * spawn appends fresh pieces AFTER this, so a just-launched piece keeps its pristine
  * launch velocity for the frame it is born.
  */
-function advanceGroundDebris(debris: GroundDebris[], dt: number, scrollSpeed: number): GroundDebris[] {
+function advanceGroundDebris(debris: readonly GroundDebris[], dt: number, scrollSpeed: number): GroundDebris[] {
   const next: GroundDebris[] = []
   for (const p of debris) {
     const age = p.age + dt

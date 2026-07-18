@@ -240,7 +240,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 648,
+      "line": 646,
       "verbatim": "export const PORT_APPROACH_WINDOW = 800"
     }
   },
@@ -274,7 +274,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 639,
+      "line": 637,
       "verbatim": "export const PORT_HIT_RADIUS = 108"
     },
     "recommendation": "accept"
