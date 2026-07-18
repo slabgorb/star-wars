@@ -42,10 +42,20 @@ import { stepGame, enterPhase } from '../../src/core/sim'
 import {
   initialState,
   SPACE_WAVE_QUOTA,
-  towersForWave,
+  SURFACE_END_SEQ,
+  SURFACE_SEQ_SPAN,
   type GameState,
 } from '../../src/core/state'
 import { NO_INPUT } from '../../src/core/input'
+
+/** A surface state whose traversal is complete (gdSeq >= 5), so the NEXT step
+ *  crosses the surface→trench edge (sw7-18 / D-019 — the ROM ends the ground
+ *  phase by traversal, not by an all-towers count). gdSeq and surfaceScrollZ are
+ *  set consistently so the gate reads the same whether Dev stores or derives gdSeq. */
+const traversalComplete: Partial<GameState> = {
+  gdSeq: SURFACE_END_SEQ,
+  surfaceScrollZ: SURFACE_END_SEQ * SURFACE_SEQ_SPAN + 1,
+}
 
 const DT = 1 / 60
 
@@ -270,16 +280,13 @@ describe('no run-two-silent regression — a later wave still cues its edges (AC
   })
 
   it('a second run (wave 2) still swaps to the trench theme entering the trench', () => {
-    // Re-seated by sw4-3: wave 2's authored maze is BUNK — bunkers only, ZERO towers
-    // — so there is no tower quota to meet and `phaseKills: towersForWave(2)` (= 0)
-    // no longer crosses the surface->trench edge (it used to insta-clear the phase on
-    // entry and gift a free 50,000; that was the bug). Wave 2 leaves the surface the
-    // authentic way: scroll-COMPLETION, once its finite field has swept past. Seat the
-    // scroll beyond any authored field depth (deepest maze reaches y=32768 + the
-    // SPAWN_DISTANCE lead-in) so this frame IS the edge. The cue under test — the
-    // trench theme on a second run — is unchanged.
+    // Re-based by sw7-18 (D-019): wave 2's authored maze is BUNK — bunkers only,
+    // ZERO towers — and killing towers no longer ends the phase anyway. Wave 2
+    // leaves the surface the authentic way: TRAVERSAL, once the ship has flown its
+    // five $8000 passes (gdSeq >= 5). Seat the run at that completion so this frame
+    // IS the edge. The cue under test — the trench theme on a second run — is unchanged.
     const out = stepGame(
-      playing({ phase: 'surface', surfaceScrollZ: 100_000, wave: 2 }),
+      playing({ phase: 'surface', wave: 2, ...traversalComplete }),
       NO_INPUT,
       DT,
     )
@@ -299,11 +306,13 @@ describe('no run-two-silent regression — a later wave still cues its edges (AC
 describe('music cues are deterministic (AC4 — pure core)', () => {
   it('identical seed + inputs replay identical music cues across a scripted run', () => {
     function musicStream(seed: number): string[] {
-      // Drive a scripted run across both quota edges: clear space, then surface.
-      let s: GameState = { ...initialState(seed), phase: 'space', phaseKills: SPACE_WAVE_QUOTA }
+      // Drive a scripted run across both music edges: clear space (→ surface), then
+      // complete the surface traversal (→ trench). WAVE 2 — wave 1 has no ground
+      // phase (D-015), so it would skip the 'towers' edge this run must cross.
+      let s: GameState = { ...initialState(seed), wave: 2, phase: 'space', phaseKills: SPACE_WAVE_QUOTA }
       const tracks: string[] = []
       for (let f = 0; f < 3; f++) {
-        if (s.phase === 'surface') s = { ...s, phaseKills: towersForWave(s.wave) }
+        if (s.phase === 'surface') s = { ...s, ...traversalComplete } // end by traversal, not kills (D-019)
         s = stepGame(s, NO_INPUT, DT)
         tracks.push(...musicTracks(s))
       }

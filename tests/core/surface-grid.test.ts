@@ -50,7 +50,8 @@ import {
 } from '../../src/core/surface-grid'
 import {
   initialState,
-  TURRET_SCROLL_SPEED,
+  SURFACE_SEED_SPEED,
+  SURFACE_ACCEL,
   type GameState,
 } from '../../src/core/state'
 import { stepGame, enterPhase } from '../../src/core/sim'
@@ -210,11 +211,16 @@ describe('Story 11-5 — surfaceScrollZ accumulator', () => {
     expect(s.surfaceScrollZ).toBe(0)
   })
 
-  it('advances surfaceScrollZ by TURRET_SCROLL_SPEED·dt while skimming the surface', () => {
+  it('advances surfaceScrollZ by the accelerating rate (seeded at $100), not the flat 600 (D-022)', () => {
+    // sw7-18: the surface scroll is the ROM's accelerating pace, seeded at
+    // SURFACE_SEED_SPEED (≈ 5,250 u/s) — the first frame moves by that rate (± one
+    // accel tick), decisively past the retired flat 600·dt.
     const s0 = enterPhase(initialState(), 'surface')
     const dt = 0.1
     const s1 = stepGame(s0, NO_INPUT, dt)
-    expect(s1.surfaceScrollZ).toBeCloseTo(TURRET_SCROLL_SPEED * dt)
+    expect(s1.surfaceScrollZ).toBeGreaterThanOrEqual(SURFACE_SEED_SPEED * dt)
+    expect(s1.surfaceScrollZ).toBeLessThanOrEqual((SURFACE_SEED_SPEED + SURFACE_ACCEL * dt) * dt + 1e-6)
+    expect(s1.surfaceScrollZ).toBeGreaterThan(600 * dt) // no longer the flat rate
   })
 
   it('rides the SAME flow as the turrets (ground and turrets advance by one delta)', () => {
@@ -222,8 +228,10 @@ describe('Story 11-5 — surfaceScrollZ accumulator', () => {
     const dt = 0.1
     const s1 = stepGame(s0, NO_INPUT, dt)
     const turretAdvance = s1.turrets[0].pos[2] - -1000
-    expect(turretAdvance).toBeCloseTo(TURRET_SCROLL_SPEED * dt)
+    // Whatever the (accelerating) rate is, the ground grid and the turrets ride it
+    // together — one delta — so the field never shears against the floor.
     expect(s1.surfaceScrollZ).toBeCloseTo(turretAdvance)
+    expect(turretAdvance).toBeGreaterThan(600 * dt) // faster than the retired flat rate
   })
 
   it('resets surfaceScrollZ to 0 on entering the surface phase', () => {

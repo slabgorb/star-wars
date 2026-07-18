@@ -54,7 +54,8 @@ import { stepGame } from '../../src/core/sim'
 import {
   initialState,
   SPACE_WAVE_QUOTA,
-  towersForWave,
+  SURFACE_END_SEQ,
+  SURFACE_SEQ_SPAN,
   EXHAUST_PORT_DISTANCE,
   PORT_APPROACH_WINDOW,
   TRENCH_SCROLL_SPEED,
@@ -199,7 +200,8 @@ describe('tune cue — the finale fires when the Death Star detonates (U-012, WS
 
 describe('tune cue — the descent plays on the space -> surface edge (U-014, WSMAIN.MAC:1439)', () => {
   it('cues descent when the space wave clears into the surface', () => {
-    const s1 = stepGame(playing({ phase: 'space', phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
+    // WAVE 2 — wave 1 has no ground phase (D-015); the descent rides the space→surface edge.
+    const s1 = stepGame(playing({ phase: 'space', wave: 2, phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
     expect(s1.phase).toBe('surface') // the transition actually happened
     expect(tunesOf(s1)).toContain('descent')
     // The towers loop still opens the phase (sw3-5's contract is untouched): the
@@ -210,8 +212,10 @@ describe('tune cue — the descent plays on the space -> surface edge (U-014, WS
   })
 
   it('does NOT cue descent on the surface -> trench edge', () => {
+    // Seat the wave-2 surface at its traversal completion (gdSeq >= 5, D-019) so the
+    // next step crosses to the trench — the descent must NOT ride that edge.
     const s1 = stepGame(
-      playing({ phase: 'surface', phaseKills: towersForWave(1) }),
+      playing({ phase: 'surface', wave: 2, gdSeq: SURFACE_END_SEQ, surfaceScrollZ: SURFACE_END_SEQ * SURFACE_SEQ_SPAN + 1 }),
       NO_INPUT,
       DT,
     )

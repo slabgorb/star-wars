@@ -108,8 +108,6 @@ import {
   SKIM_ALTITUDE,
   MIN_SKIM_ALTITUDE,
   MAX_SKIM_ALTITUDE,
-  TOWER_HEIGHT,
-  TURRET_SCROLL_SPEED,
   ENEMY_SHOT_SPEED,
   COCKPIT_HIT_RADIUS,
   type GameState,
@@ -378,14 +376,17 @@ describe('sw7-16 — enemy fire tracks the flying ship', () => {
 
     expect(s.enemyShots, 'the armed tower must fire this frame').toHaveLength(1)
 
-    // The shot leaves the tower's white cap and must fly at the SHIP. Rebuild the launch
-    // geometry from the same constants the sim uses: the field scrolls one step before the
-    // muzzle is read, so the cap's z has already advanced.
+    // The shot leaves the tower's white cap and must fly at the SHIP. Read the launch point
+    // straight from the fire event rather than rebuilding it from the scroll constant — the
+    // surface scroll is now the accelerating pace (sw7-18 / D-022), not a flat rate, so the
+    // cap's advanced z is whatever the sim scrolled it to this frame.
     //
     // The maze aims at where the ship IS at the end of this frame — the flown point, not the
     // aim-time one — which is why this is `eyeOf(s)` and not `eyeOf(s0)`. With a level yoke
     // the two coincide; (b) is where they are told apart.
-    const muzzle: Vec3 = [tower[0], tower[1] + TOWER_HEIGHT, tower[2] + TURRET_SCROLL_SPEED * DT]
+    const fired = s.events.find((e) => e.type === 'enemy-fire') as { pos: Vec3 } | undefined
+    expect(fired, 'the fire event carries the muzzle launch point').toBeDefined()
+    const muzzle: Vec3 = fired!.pos
     const atShip = scale(normalize(sub(eyeOf(s), muzzle)), ENEMY_SHOT_SPEED)
     const atOrigin = scale(normalize(sub(ORIGIN, muzzle)), ENEMY_SHOT_SPEED)
 

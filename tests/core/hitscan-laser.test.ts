@@ -101,7 +101,7 @@ import {
   SKIM_ALTITUDE,
   MAX_SKIM_ALTITUDE,
   TURRET_HIT_RADIUS,
-  TURRET_SCROLL_SPEED,
+  SURFACE_SEED_SPEED,
   PROJECTILE_SPEED,
   ENEMY_SHOT_SPEED,
   TOWER_HEIGHT,
@@ -243,15 +243,16 @@ describe('sw7-17 — a dead-on shot hits, however far off-axis the tower is', ()
   })
 
   it('the fixture is honest: the projectile really does fall short by more than a hit radius', () => {
-    // A guard on the guard. If a retune of PROJECTILE_SPEED / TURRET_SCROLL_SPEED / the hit
+    // A guard on the guard. If a retune of PROJECTILE_SPEED / the surface pace / the hit
     // radius ever closed this gap, the test above would start passing for the wrong reason and
     // silently stop describing anything. Derive the miss from the constants themselves and fail
-    // loudly here instead.
+    // loudly here instead. sw7-18: the closing speed is now the accelerating surface pace; use
+    // its SLOWEST value (the $100 seed) — the most conservative case — and the bolt still misses.
     const eye: Vec3 = [0, EYE_HIGH, 0]
     const tower: Vec3 = [6000, EYE_HIGH, -10000]
     const d = -tower[2]
     const L = length(sub(tower, eye))
-    const miss = Math.abs(tower[0]) * ((L * TURRET_SCROLL_SPEED) / (L * TURRET_SCROLL_SPEED + PROJECTILE_SPEED * d))
+    const miss = Math.abs(tower[0]) * ((L * SURFACE_SEED_SPEED) / (L * SURFACE_SEED_SPEED + PROJECTILE_SPEED * d))
 
     expect(miss, 'the travelling bolt must genuinely miss, or (b) proves nothing').toBeGreaterThan(
       TURRET_HIT_RADIUS,
@@ -407,7 +408,11 @@ describe('sw7-17 — enemy fire is still a real travelling object', () => {
     // (352) and the pilot cruises at MAX_SKIM_ALTITUDE (238), so the tower shoots down at him.
     // Assert the DIRECTION rather than a sign: "it climbs toward the pilot" is simply false at
     // this altitude, and a sign test would also pass for a shot aimed at the floor.
-    const muzzle: Vec3 = [tower[0], tower[1] + TOWER_HEIGHT, tower[2] + TURRET_SCROLL_SPEED * DT]
+    // Read the launch point from the fire event — the surface scroll is the accelerating pace
+    // now (sw7-18 / D-022), so the cap's advanced z is whatever the sim scrolled it to.
+    const fired = s.events.find((e) => e.type === 'enemy-fire') as { pos: Vec3 } | undefined
+    expect(fired, 'the fire event carries the muzzle launch point').toBeDefined()
+    const muzzle: Vec3 = fired!.pos
     const toShip = normalize(sub(eyeOf(s), muzzle))
     const flown = normalize(s.enemyShots[0].vel)
     expect(flown[0]).toBeCloseTo(toShip[0], 6)

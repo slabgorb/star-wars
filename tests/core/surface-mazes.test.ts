@@ -67,6 +67,42 @@ const ROM_TOWER_COUNTS: ReadonlyArray<readonly [name: string, towers: number]> =
   ['3TWRCTY', 32],
 ]
 
+// sw7-18 / D-018 — the AWAKENING SEQUENCE distribution per maze, transcribed from
+// the WSGRND per-maze header comments (e.g. `TSQUARE: ;16 TOWERS, 8-0, 12-1, 6-2,
+// 2-3`). Each tuple is [seq0, seq1, seq2, seq3] — the count of the maze's objects
+// (towers + bishops + bunkers, ALL entries) at each awakening sequence, the third
+// TOWER/BISHOP/BUNKER operand (`.BYTE .C`, WSGRND.MAC:115). An INDEPENDENT
+// cross-check on the .C transcription — like ROM_TOWER_COUNTS is on the coords —
+// not a copy of it. Each row sums to the maze's entry count (28 base / 32 extended).
+const SEQ_DISTRIBUTION: ReadonlyMap<string, readonly [number, number, number, number]> = new Map([
+  ['BUNK', [7, 7, 7, 7]],
+  ['SQUARE', [8, 12, 6, 2]],
+  ['3SQUARE', [8, 12, 6, 6]],
+  ['CLUSTR', [8, 6, 7, 7]],
+  ['3CLUSTR', [8, 6, 9, 9]],
+  ['TURNON', [12, 11, 5, 0]],
+  ['3TURNON', [12, 11, 9, 0]],
+  ['WEDGE', [8, 8, 4, 8]],
+  ['3WEDGE', [8, 8, 8, 8]],
+  ['DIFF', [7, 9, 7, 5]],
+  ['3DIFF', [9, 9, 8, 6]],
+  ['TRAP', [11, 8, 7, 2]],
+  ['3TRAP', [11, 8, 7, 6]],
+  ['SYMTRC', [9, 5, 7, 7]],
+  ['3SYMTRC', [11, 7, 7, 7]],
+  ['VALLEY', [10, 7, 5, 6]],
+  ['3VALLEY', [10, 7, 7, 8]],
+  ['TWRCTY', [8, 8, 7, 5]],
+  ['3TWRCTY', [8, 8, 9, 7]],
+])
+
+/** Count a maze's entries by awakening sequence: [#seq0, #seq1, #seq2, #seq3]. */
+const seqHistogram = (m: SurfaceMaze): [number, number, number, number] => {
+  const h: [number, number, number, number] = [0, 0, 0, 0]
+  for (const e of m.entries) h[e.seq]++
+  return h
+}
+
 // Base → extended pairs. Each extended form appends exactly four towers.
 const MAZE_PAIRS: ReadonlyArray<readonly [base: string, extended: string]> = [
   ['SQUARE', '3SQUARE'],
@@ -105,7 +141,7 @@ describe('sw4-3 — surfaceMazes is a pure-data registry (like models.ts)', () =
     }
   })
 
-  it('every entry is a {x,y,kind,typeDigit} record with a consistent kind↔typeDigit map', () => {
+  it('every entry is a {x,y,kind,typeDigit,seq} record with a consistent kind↔typeDigit map', () => {
     // PC$TWR=1, PC$BSH=2, PC$BNK=3 (WSGRND.MAC ground-object picture bytes).
     const digitFor: Record<string, number> = { tower: 1, bishop: 2, bunker: 3 }
     for (const m of SURFACE_MAZES) {
@@ -114,7 +150,46 @@ describe('sw4-3 — surfaceMazes is a pure-data registry (like models.ts)', () =
         expect(e.typeDigit).toBe(digitFor[e.kind])
         expect(Number.isInteger(e.x)).toBe(true)
         expect(Number.isInteger(e.y)).toBe(true)
+        // sw7-18 / D-018: the awakening-sequence byte (.C) is now carried, 0..3.
+        expect(Number.isInteger(e.seq), `${m.name} seq=${e.seq}`).toBe(true)
+        expect(e.seq).toBeGreaterThanOrEqual(0)
+        expect(e.seq).toBeLessThanOrEqual(3)
       }
+    }
+  })
+})
+
+// --- AC (sw7-18 / D-018): the awakening-sequence byte matches the ROM ---------
+
+describe('sw7-18 / D-018 — the awakening-sequence byte (.C) transcribes the ROM', () => {
+  it.each([...SEQ_DISTRIBUTION.keys()])(
+    '%s wakes its objects in the ROM-declared subset counts [seq0, seq1, seq2, seq3]',
+    (name) => {
+      const m = getMaze(name)!
+      expect(seqHistogram(m)).toEqual(SEQ_DISTRIBUTION.get(name))
+    },
+  )
+
+  it('every maze is covered by the awakening-sequence checksum (all 19)', () => {
+    expect(SEQ_DISTRIBUTION.size).toBe(SURFACE_MAZES.length)
+    for (const m of SURFACE_MAZES) expect(SEQ_DISTRIBUTION.has(m.name)).toBe(true)
+  })
+
+  it('the seq histogram sums to the maze entry count (no object dropped or double-counted)', () => {
+    for (const m of SURFACE_MAZES) {
+      const total = seqHistogram(m).reduce((a, b) => a + b, 0)
+      expect(total).toBe(m.entries.length)
+    }
+  })
+
+  it('the base maze seq bytes are the exact prefix of the extended form', () => {
+    // The prefix structure (base ⊂ extended) must hold for seq too, not just coords.
+    for (const [baseName, extName] of MAZE_PAIRS) {
+      const base = getMaze(baseName)!
+      const ext = getMaze(extName)!
+      const baseSeqs = base.entries.map((e) => e.seq)
+      const extPrefixSeqs = ext.entries.slice(0, base.entries.length).map((e) => e.seq)
+      expect(extPrefixSeqs).toEqual(baseSeqs)
     }
   })
 })

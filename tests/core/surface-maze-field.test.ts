@@ -91,8 +91,9 @@ describe('sw4-3 — the wave→maze map and tower counts are the ROM values', ()
   // `towersForWave(w) === mazeForWave(w).towerCount` — that is a tautology
   // (towersForWave IS that expression), so it can't catch a wrong mapping.
   const WAVE_MAZE: ReadonlyArray<readonly [wave: number, name: string, towers: number]> = [
-    [1, 'SQUARE', 16], // clone intro (ROM has no wave-1 ground)
-    [2, 'BUNK', 0], // the bunkers-only wave
+    [1, 'BUNK', 0], // wave 1 has NO ground phase (D-015); an out-of-band lookup clamps to wave 2's BUNK
+    [2, 'BUNK', 0], // the bunkers-only wave — the first REAL ground wave
+    [3, 'SQUARE', 16], // SQUARE now serves wave 3 ONLY (the sw7-18 de-duplication)
     [5, 'TURNON', 20],
     [7, 'DIFF', 20],
     [10, 'VALLEY', 27],
@@ -112,9 +113,12 @@ describe('sw4-3 — the wave→maze map and tower counts are the ROM values', ()
     for (let w = 21; w <= 44; w++) expect(mazeForWave(w).towerCount).toBeGreaterThanOrEqual(24)
   })
 
-  it('clamps wave ≤ 0 and floors a fractional wave to the wave-1 maze', () => {
-    expect(mazeForWave(0).name).toBe(mazeForWave(1).name)
-    expect(mazeForWave(-5).name).toBe(mazeForWave(1).name)
+  it('clamps wave < 2 to the first ground maze (BUNK) and floors a fractional wave', () => {
+    // D-015: wave 1 has no ground phase, so any out-of-band low wave clamps to the
+    // first REAL ground maze, wave 2 = BUNK — never the wave-3 SQUARE it used to double.
+    expect(mazeForWave(0).name).toBe('BUNK')
+    expect(mazeForWave(-5).name).toBe('BUNK')
+    expect(mazeForWave(1).name).toBe('BUNK')
     expect(mazeForWave(7.9).name).toBe(mazeForWave(7).name)
   })
 })
