@@ -967,6 +967,20 @@ export interface GameState {
    * to (story 8-7). A fresh list every frame — never carried between frames —
    * so the channel stays pure DATA and replays identically from a seed. */
   events: GameEvent[]
+  /** Monotonic SPACE-phase game-frame counter — the discrete-tick timebase the
+   * TIE choreography VM and authentic fire cadence hang off (sw7, docs 4c93855).
+   * Advanced by the `frameAcc` accumulator below at TICK_HZ, independent of the
+   * render dt: WSINT.MAC:145-149 (GMTIMR reloads 12 IRQs per game frame — the
+   * source of TICK_HZ) and WSMAIN.MAC:271 (WAITFRAME — the mainline's own
+   * once-per-game-frame gate). Required (not optional) so `tsc` flags every
+   * GameState construction site until it is initialised — no return path can
+   * silently drop it. This task only advances it; the decision-tick body it
+   * will drive is wired by a later task in the plan. */
+  frame: number
+  /** Carried remainder seconds toward the next `frame` tick — the fractional
+   * game-frame `frameAcc` didn't consume yet. Required alongside `frame` for the
+   * same tsc-exhaustiveness reason. Same citations as `frame`. */
+  frameAcc: number
 }
 
 export function initialState(seed = 1983): GameState {
@@ -1020,5 +1034,7 @@ export function initialState(seed = 1983): GameState {
     spawnCount: 0,
     enemyFireCooldown: ENEMY_FIRE_INTERVAL,
     events: [],
+    frame: 0,
+    frameAcc: 0,
   }
 }

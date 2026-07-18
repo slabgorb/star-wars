@@ -15,8 +15,14 @@
 import { createRng, type Rng } from '@arcade/shared/rng'
 import { lookRotation, normalize, scale, sub, IDENTITY, type Vec3, type Mat4 } from '@arcade/shared/math3d'
 import { initialState, TIE_SPAWN_DISTANCE, type GameState, type Enemy } from '../../../src/core/state'
+import type { Input } from '../../../src/core/input'
 
 const COCKPIT: Vec3 = [0, 0, 0]
+
+/** An all-neutral `Input`: no aim, no trigger, no start — the frame-accumulator
+ *  suite (and any later test that just wants time to pass) drives `stepGame`
+ *  with this so nothing else in the step is exercised. */
+export const NO_INPUT: Input = { aimX: 0, aimY: 0, fire: false }
 
 /** Unit direction from a world point back to the cockpit (the origin). */
 function toCockpit(pos: Vec3): Vec3 {

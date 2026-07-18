@@ -277,6 +277,25 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // untouched — this only scales how hard the space phase plays.
   const params = waveParams(state.wave)
 
+  // --- Discrete-tick timebase (sw7, docs 4c93855, task 2) --------------------
+  // The continuous sim runs on `dt`; the TIE choreography VM and the authentic
+  // fire cadence a later task in this plan wires up run on discrete GAME FRAMES
+  // at TICK_HZ instead (WSINT.MAC:145-149 GMTIMR ÷12; WSMAIN.MAC:271 WAITFRAME —
+  // the mainline's once-per-game-frame gate). `frameAcc` carries whatever
+  // fractional game-frame the last step didn't consume, so chunking the same
+  // total dt into coarse or fine render steps advances `frame` identically
+  // (dt-independence, tests/core/space-frame-accumulator.test.ts). The
+  // decision-tick body is EMPTY this task — it only advances the counters; a
+  // later task hangs computeStatus/the VM off this loop.
+  const tickPeriod = 1 / TICK_HZ
+  let frame = state.frame
+  let frameAcc = state.frameAcc + dt
+  while (frameAcc >= tickPeriod) {
+    // decision tick — empty for now (wired by a later task in the plan)
+    frame++
+    frameAcc -= tickPeriod
+  }
+
   // --- TIEs: advance, drop any that have peeled away, then spawn -----------
   // A TIE that has completed its pass and receded past the exit range has left
   // the play volume; dropping it here (before the spawn check) frees its slot so a
@@ -479,6 +498,8 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       spawnCount,
       enemyFireCooldown,
       events,
+      frame,
+      frameAcc,
     }),
   )
 }
