@@ -115,7 +115,9 @@ describe('Story 8-16 — firing kills the enemy under the crosshair', () => {
 describe('Story 8-16 — the space wave clears by kills, not by ramming', () => {
   it('shooting the final TIE under the crosshair clears the space phase', () => {
     const tie = tieStill([0, 660, -1200])
-    let s = loneWave(tie, { phaseKills: SPACE_WAVE_QUOTA - 1 })
+    // WAVE 2 — wave 1 has no ground phase (sw7-18 / D-015), so the space clear that
+    // this "cleared by fire" test asserts advances into the surface first appears on wave 2.
+    let s = loneWave(tie, { wave: 2, phaseKills: SPACE_WAVE_QUOTA - 1 })
     const fire: Input = { ...aimAt(tie.pos), fire: true }
     for (let i = 0; i < 180 && s.phase === 'space'; i++) s = stepGame(s, fire, DT)
     expect(s.phase).toBe('surface') // the final kill met the quota and advanced the wave

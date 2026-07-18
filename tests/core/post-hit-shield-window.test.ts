@@ -123,6 +123,9 @@ describe('S-016 — the post-hit window survives a wave-internal phase change', 
     // stamped this same frame. Pre-fix, progress()->enterPhase nulled shieldHitAt here.
     const clearing: GameState = {
       ...wave(),
+      // WAVE 2 — wave 1 has no ground phase (sw7-18 / D-015); the space->surface
+      // clear this test exercises first appears on wave 2.
+      wave: 2,
       phase: 'space',
       phaseKills: SPACE_WAVE_QUOTA,
       lives: 6,

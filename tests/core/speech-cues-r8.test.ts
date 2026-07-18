@@ -51,7 +51,8 @@ import { stepGame } from '../../src/core/sim'
 import {
   initialState,
   SPACE_WAVE_QUOTA,
-  towersForWave,
+  SURFACE_END_SEQ,
+  SURFACE_SEQ_SPAN,
   PROJECTILE_TTL,
   type GameState,
   type Projectile,
@@ -106,7 +107,9 @@ describe("speech cue — R2 swears when you miss the port and live to retry (U-0
 
 describe("speech cue — 'Red Five, I'm going in' leads the surface entry (U-016, WSMAIN.MAC:1515)", () => {
   const surfaceEntry = (): GameState =>
-    stepGame(playing({ phase: 'space', phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
+    // WAVE 2 — wave 1 has no ground phase (sw7-18 / D-015), so the space->surface
+    // edge (and its "Red Five" cue) first appears on wave 2.
+    stepGame(playing({ phase: 'space', wave: 2, phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
 
   it('cues redFiveImGoingIn on the space -> surface edge', () => {
     const s1 = surfaceEntry()
@@ -130,7 +133,15 @@ describe("speech cue — 'Red Five, I'm going in' leads the surface entry (U-016
     // Guard the neighbouring edge against a shotgun wiring: SPKTHI belongs to
     // the surface entry only (the trench keeps SPKUSE — speech-cues.test.ts).
     const s1 = stepGame(
-      playing({ phase: 'surface', phaseKills: towersForWave(1) }),
+      // Seat the surface at its traversal completion (gdSeq >= 5, sw7-18 / D-019 —
+      // the ROM ends the ground phase by traversal, not by an all-towers count) so
+      // the next step crosses the surface->trench edge.
+      playing({
+        phase: 'surface',
+        wave: 2,
+        gdSeq: SURFACE_END_SEQ,
+        surfaceScrollZ: SURFACE_END_SEQ * SURFACE_SEQ_SPAN + 1,
+      }),
       NO_INPUT,
       DT,
     )

@@ -47,11 +47,11 @@ import mainSrc from '../../src/main.ts?raw'
 const MUSIC_R2 = 'https://arcade-assets.slabgorb.com/star-wars/music/'
 const SFX_R2 = 'https://arcade-assets.slabgorb.com/star-wars/sfx/'
 
-// The five one-shot tunes the core's `tune` GameEvent can cue. Typed as
-// TuneName[], this is a COMPILE-TIME assertion that the TUNES manifest declares
-// a file for each (TuneName ⊆ keyof TUNES), and the pump's playTune(event.tune)
-// type-checks against it.
-const REQUIRED_TUNES: TuneName[] = ['deathKnell', 'cantina', 'finale', 'bensTheme', 'descent']
+// The one-shot tunes the core's `tune` GameEvent can cue (sw7-18 adds
+// finishGround / PMREB). Typed as TuneName[], this is a COMPILE-TIME assertion
+// that the TUNES manifest declares a file for each (TuneName ⊆ keyof TUNES), and
+// the pump's playTune(event.tune) type-checks against it.
+const REQUIRED_TUNES: TuneName[] = ['deathKnell', 'cantina', 'finale', 'bensTheme', 'descent', 'finishGround']
 
 // The exact R2 filenames — the contract the bake/upload and the fetch layer
 // meet at. snake_case like every other baked asset.
@@ -61,6 +61,7 @@ const TUNE_FILES: Record<string, string> = {
   finale: 'finale.wav',
   bensTheme: 'bens_theme.wav',
   descent: 'descent.wav',
+  finishGround: 'finish_ground.wav',
 }
 
 // Minimal Web Audio stub (audio.test.ts idiom). state='running' keeps resume()
@@ -95,14 +96,14 @@ afterEach(() => {
 })
 
 describe('sw7-8 — the TUNES manifest (U-010..U-014)', () => {
-  it('declares all five tunes with their exact baked filenames', () => {
+  it('declares every tune with its exact baked filename', () => {
     for (const tune of REQUIRED_TUNES) {
       expect(TUNES[tune], `TUNES.${tune}`).toBe(TUNE_FILES[tune])
     }
   })
 
-  it('carries no stray keys — the manifest IS the five', () => {
-    // A sixth "tune" with no core cue and no bake would be dead manifest weight
+  it('carries no stray keys — the manifest IS exactly the cue-able tunes', () => {
+    // A "tune" with no core cue and no bake would be dead manifest weight
     // fetched on every boot; the union stays honest.
     expect(Object.keys(TUNES).sort()).toEqual([...REQUIRED_TUNES].sort())
   })
@@ -127,7 +128,7 @@ describe('sw7-8 — the TUNES manifest (U-010..U-014)', () => {
 })
 
 describe('sw7-8 — one tune player, exactly like the cabinet (channel design)', () => {
-  it('all five tunes share ONE channel — a new tune replaces the last, never stacks', () => {
+  it('every tune shares ONE channel — a new tune replaces the last, never stacks', () => {
     const channels = REQUIRED_TUNES.map((t) => TUNE_CHANNELS[t])
     expect(new Set(channels).size).toBe(1)
   })

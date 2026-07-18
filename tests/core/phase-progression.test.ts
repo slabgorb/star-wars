@@ -36,13 +36,13 @@ import { describe, it, expect } from 'vitest'
 import {
   initialState,
   TIE_SCORE,
-  TURRET_SCORE,
   MIN_SKIM_ALTITUDE,
   PROJECTILE_TTL,
   SPACE_WAVE_QUOTA,
   towersForWave,
   SURFACE_CLEAR_BONUS,
   SURFACE_END_SEQ,
+  SURFACE_SEQ_SPAN,
   type GameState,
   type Projectile,
   type Enemy,
@@ -50,7 +50,6 @@ import {
 import { stepGame, enterPhase } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
 import { fireAt } from '../support/aim'
-import type { GameEvent } from '../../src/core/events'
 import type { Vec3 } from '@arcade/shared/math3d'
 
 const FIRE: Input = { aimX: 0, aimY: 0, fire: true }
@@ -184,11 +183,16 @@ describe('Wave progression — surface clears to trench by traversal', () => {
   })
 
   it('carries score (incl. the banked 50k) and lives forward across the trench edge', () => {
-    // All towers accounted for: the 50k banks mid-phase, then the traversal ends.
+    // All towers accounted for AND the traversal already at its end (gdSeq >= 5,
+    // D-019): the 50k banks the first frame, then the phase clears — a short hop
+    // that isolates the CARRY across the edge from the ~18 s of bunker fire a full
+    // traversal would draw (which would legitimately cost the un-padded lives).
     const wave = 3
     const start: GameState = {
       ...surfaceAtWave(wave),
       phaseKills: towersForWave(wave),
+      gdSeq: SURFACE_END_SEQ,
+      surfaceScrollZ: SURFACE_END_SEQ * SURFACE_SEQ_SPAN + 1,
       score: 800,
       lives: 5,
       towerBonusAwardedAt: null,

@@ -111,6 +111,12 @@ export interface Turret {
    * BISHOP maze macro) DO count toward the quota, like towers — only bunkers
    * are neutral. */
   kind?: 'tower' | 'bunker' | 'bishop'
+  /** Awakening sequence (WSGRND `.BYTE .C`, 0..3): the object is dormant — it does
+   * not fire (nor, in the shell, draw) — until the ground traversal has reached its
+   * sequence (`gdSeq >= seq`, WSGRND.MAC:740-742). Optional — hand-placed `{ pos }`
+   * fixtures and pre-sw7-18 saves omit it and are treated as awake-from-the-start
+   * (seq 0) via `?? 0`, like `age`/`kind` (sw7-18 / D-018). */
+  seq?: number
 }
 
 /** A trench wall/channel entity: turrets and squares are shootable for score;
@@ -469,8 +475,44 @@ export const OBJECT_CRASH_LATERAL = 1024
 
 /** How fast the yoke flies the ship up/down (altitude units/second). */
 export const ALTITUDE_RATE = 200
-/** How fast the surface scrolls turrets toward the cockpit (units/second). */
+/** Legacy flat surface scroll rate (units/second). RETIRED as the live surface
+ * pace by sw7-18 / D-022 — the ground phase now scrolls at an ACCELERATING rate
+ * (SURFACE_SEED_SPEED → SURFACE_MAX_SPEED). Kept only as a step-size unit some
+ * surface fixtures still reference. */
 export const TURRET_SCROLL_SPEED = 600
+
+// --- Wave 2 surface pacing & traversal (sw7-18 / R11c) ----------------------
+//
+// The ROM flies the ground phase at an ACCELERATING player speed and ends it by
+// TRAVERSAL alone. PHIGD seeds `M$VX+M.S1 = $100` (256 u/game-frame,
+// WSMAIN.MAC:1621) and PHEGD ramps it `ADDD #1 / CMPD #400` (+1 u/frame per frame,
+// capped at $400 = 1024, WSMAIN.MAC:1660-1665). Every sw7 speed is frame-true —
+// the immediate × the game-frame rate — exactly like TRENCH_SCROLL_SPEED.
+
+/** Surface scroll SEED rate: the ROM's `$100` (256 u/frame) over the timebase ≈
+ * 5,250 u/s (WSMAIN.MAC:1621 `LDD #100 ;INITIAL PLAYER SPEED`). */
+export const SURFACE_SEED_SPEED = 0x100 * TICK_HZ
+/** Surface scroll CAP: the ROM's `$400` (1024 u/frame) over the timebase ≈ 21,000
+ * u/s (WSMAIN.MAC:1662 `CMPD #400`). Never exceeded. */
+export const SURFACE_MAX_SPEED = 0x400 * TICK_HZ
+/** Surface scroll ACCELERATION: the ROM adds 1 u/frame to the per-frame speed
+ * every frame. In continuous terms that is TICK_HZ (frames/s) × TICK_HZ (the
+ * per-frame delta becoming u/s) = TICK_HZ² ≈ 420.6 u/s² (WSMAIN.MAC:1661 `ADDD #1`). */
+export const SURFACE_ACCEL = TICK_HZ * TICK_HZ
+/** One forward "sequence" of ground travel: the ROM's `$8000` M$TX wrap
+ * (S1MVGD, WSMAIN.MAC:2537-2545 — `INC GD.SEQ` on each signed overflow). */
+export const SURFACE_SEQ_SPAN = 0x8000
+/** The surface phase ends once the traversal has completed this many `$8000`
+ * passes: `LDA GD.SEQ / CMPA #5 ;ONLY GO SO FAR INTO GROUND SEQUENCES`
+ * (WSMAIN.MAC:1678-1679). Five passes ≈ 371 frames ≈ 18.1 s. */
+export const SURFACE_END_SEQ = 5
+/** The accelerating rate at which the PMREB "FINISH GROUND WITH REBEL" tune fires
+ * (sw7-18 audio rider). The ROM plays it at `PH.TIM == 14` pseudo-seconds
+ * (WSMAIN.MAC:1673) — PH.TIM ticks once per 16 frames, so that is game-frame 224,
+ * where the per-frame speed has ramped from `$100` to `$100 + 224 = $1E0` (480).
+ * As a u/s rate that is `$1E0 × TICK_HZ` ≈ 9,844 u/s — reached ≈ 10.9 s into the
+ * traversal, still below the cap. The tune fires the frame the pace first crosses it. */
+export const SURFACE_FINISH_GROUND_SPEED = 0x1e0 * TICK_HZ
 
 // --- Wave 3 trench constants ------------------------------------------------
 //
@@ -690,6 +732,16 @@ export interface GameState {
    * scrolls the turrets — so the grid and turrets rush past together; read `mod
    * GRID_Z` by the surfaceGrid generator and reset to 0 on every phase entry. */
   surfaceScrollZ: number
+  /** The live ACCELERATING surface scroll rate (units/second), sw7-18 / D-022.
+   * Seeded to SURFACE_SEED_SPEED on surface entry, ramped by SURFACE_ACCEL·dt each
+   * surface frame, clamped to SURFACE_MAX_SPEED. The surface scroll (both
+   * `surfaceScrollZ` and the ground field) rides THIS, not the retired flat 600. */
+  surfaceScrollSpeed: number
+  /** The ROM's GD.SEQ — how many full `$8000` forward passes the ground traversal
+   * has completed (sw7-18 / D-019). `= floor(surfaceScrollZ / SURFACE_SEQ_SPAN)`;
+   * 0 on surface entry. The phase ends at `gdSeq >= SURFACE_END_SEQ`, and a ground
+   * object wakes once `gdSeq >= (turret.seq ?? 0)`. */
+  gdSeq: number
   /** Whether this surface run's authored WSGRND maze field has been laid into
    * `turrets` yet (sw4-3). `enterPhase` resets it to false per wave; the first
    * `stepSurface` frame lays `mazeForWave(wave)` into `turrets` — but ONLY if no
@@ -869,6 +921,8 @@ export function initialState(seed = 1983): GameState {
     bonusFlash: 0,
     altitude: SKIM_ALTITUDE,
     surfaceScrollZ: 0,
+    surfaceScrollSpeed: SURFACE_SEED_SPEED,
+    gdSeq: 0,
     surfaceMazeLaid: false,
     trenchScrollZ: 0,
     // The eye rides at the ROM's trench entry height above the floor (sw5-6) — see

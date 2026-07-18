@@ -45,7 +45,12 @@ import {
   OBJECT_CRASH_LATERAL,
   ALTITUDE_RATE,
   TURRET_SPAWN_INTERVAL,
-  TURRET_SCROLL_SPEED,
+  SURFACE_SEED_SPEED,
+  SURFACE_MAX_SPEED,
+  SURFACE_ACCEL,
+  SURFACE_SEQ_SPAN,
+  SURFACE_END_SEQ,
+  SURFACE_FINISH_GROUND_SPEED,
   TURRET_SCORE,
   TURRET_HIT_RADIUS,
   TOWER_HEIGHT,
@@ -612,6 +617,25 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
   // origin is the floor, `altitude` below the pilot, and nothing about him lives there.
   const ship = surfaceShip(altitude)
 
+  // --- Accelerating forward pace (sw7-18 / D-022) ---------------------------
+  // The ROM ramps the ground speed from $100 (256 u/frame) to $400 (1024), +1
+  // u/frame per frame (WSMAIN.MAC:1621/1660-1665). Seeded on surface entry,
+  // integrated here, clamped at the cap. The WHOLE surface scroll rides this
+  // rate — both the field and the scroll accumulator — keeping the world-scroll
+  // camera inversion (STRUCTURAL-accepted); only the rate changed.
+  const scrollSpeed = Math.min(state.surfaceScrollSpeed + SURFACE_ACCEL * dt, SURFACE_MAX_SPEED)
+  const surfaceScrollZ = state.surfaceScrollZ + scrollSpeed * dt
+  // GD.SEQ: how many full $8000 forward passes have completed (WSMAIN.MAC:2537-2545).
+  const gdSeq = Math.floor(surfaceScrollZ / SURFACE_SEQ_SPAN)
+
+  // The PMREB "FINISH GROUND WITH REBEL" rider (sw7-18): the ROM fires it at
+  // PH.TIM == 14 pseudo-seconds — game-frame 224, where the per-frame speed has
+  // ramped from $100 to $1E0 (480). Fire the one-shot 'finishGround' tune the frame
+  // our accelerating rate first crosses that speed — monotonic, so exactly once.
+  if (state.surfaceScrollSpeed < SURFACE_FINISH_GROUND_SPEED && scrollSpeed >= SURFACE_FINISH_GROUND_SPEED) {
+    events.push({ type: 'tune', tune: 'finishGround' })
+  }
+
   // --- Ground objects: lay the authored WSGRND maze once, then scroll it in --
   // sw4-3: the surface is the wave's fixed, hand-authored WSGRND tower maze —
   // NOT a random spawner. Lay the whole field on the first surface frame (unless
@@ -625,8 +649,8 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     surfaceMazeLaid = true
   }
   const scrolled = field.map((turret): Turret => {
-    const pos: Vec3 = [turret.pos[0], turret.pos[1], turret.pos[2] + TURRET_SCROLL_SPEED * dt]
-    // age toward fire grace; keep the kind (bunker/tower/bishop) riding along
+    const pos: Vec3 = [turret.pos[0], turret.pos[1], turret.pos[2] + scrollSpeed * dt]
+    // age toward fire grace; keep the kind (bunker/tower/bishop) + seq riding along
     return { ...turret, pos, age: (turret.age ?? 0) + dt }
   })
   const turrets = scrolled.filter((turret) => turret.pos[2] < 0) // still ahead of the cockpit
@@ -661,7 +685,12 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
   // the clone's homing-fireball model (house rule D-017 — not the ROM's
   // directional FRB*GN guns; its distance-weighted fire chance is a logged
   // Delivery Finding, not ported).
-  const armed = turrets.filter((turret) => (turret.age ?? 0) >= TOWER_FIRE_GRACE)
+  // Awakening gate (sw7-18 / D-018): an object may fire only once the traversal
+  // has reached its awakening sequence (`gdSeq >= .C`, WSGRND.MAC:740-742). An
+  // absent seq (hand-placed fixtures / pre-D-018 saves) is awake from the start.
+  const armed = turrets.filter(
+    (turret) => (turret.age ?? 0) >= TOWER_FIRE_GRACE && gdSeq >= (turret.seq ?? 0),
+  )
   let enemyFireCooldown = state.enemyFireCooldown - dt
   if (enemyFireCooldown <= 0 && armed.length > 0 && enemyShots.length < MAX_FIREBALL_SLOTS) {
     const shooter = armed[nextInt(rng, armed.length)]
@@ -726,6 +755,20 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
   const lives = surfaceHit.lives
   pushFarewell(events, lives) // fatal hit → the end-of-game farewell (sw7-8, U-017)
 
+  // The 50,000 "cleared all towers" bonus (sw3-3 / H-021) now banks MID-PHASE,
+  // decoupled from the phase length (sw7-18 / D-019): the frame the last tower
+  // falls — phaseKills reaches the wave's quota — once, banner and all, while the
+  // pilot keeps flying the rest of the traversal. `towerBonusAwardedAt` is the
+  // once-latch; the bunkers-only wave (0 towers) can never satisfy it.
+  const phaseKills = state.phaseKills + towerKills // towers only — bunkers are quota-neutral
+  const towerQuota = towersForWave(state.wave)
+  let towerBonusAwardedAt = state.towerBonusAwardedAt
+  if (towerQuota > 0 && phaseKills >= towerQuota && towerBonusAwardedAt === null) {
+    score += SURFACE_CLEAR_BONUS
+    events.push({ type: 'tower-bonus', amount: SURFACE_CLEAR_BONUS })
+    towerBonusAwardedAt = t
+  }
+
   return {
     ...state,
     rng,
@@ -736,13 +779,16 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     lives,
     shieldHitAt: surfaceHit.shieldHitAt,
     altitude,
-    // The ground grid rides the SAME flow as the turrets (story 11-5) — both
-    // advance by TURRET_SCROLL_SPEED·dt — so they rush past the cockpit together.
-    surfaceScrollZ: state.surfaceScrollZ + TURRET_SCROLL_SPEED * dt,
+    // The ground grid rides the SAME accelerating flow as the turrets (sw7-18 /
+    // D-022) — both advance by scrollSpeed·dt — so they rush past together.
+    surfaceScrollZ,
+    surfaceScrollSpeed: scrollSpeed,
+    gdSeq,
+    towerBonusAwardedAt,
     surfaceMazeLaid,
     gameOver: lives <= 0,
     mode: lives <= 0 ? 'gameover' : state.mode,
-    phaseKills: state.phaseKills + towerKills, // towers only — bunkers are quota-neutral
+    phaseKills,
     projectiles,
     laserEdge,
     laserOn,
@@ -1149,49 +1195,32 @@ const NEXT_PHASE: Record<Phase, Phase | null> = {
   trench: null,
 }
 
-/** Has this phase been cleared? Space is a flat KILL quota. The SURFACE is a
- * scroll-COMPLETION approach (sw4-3): its authored WSGRND maze is a FINITE,
- * single-pass field, so the run drops into the trench once that field has swept
- * fully past the cockpit — killing every tower only clears it EARLY (and banks the
- * 50,000 bonus, see `progress`). A kill-count-only gate would SOFT-LOCK the run:
- * towers sit out to x = ±$8000 and a single missed one would make the quota
- * permanently unreachable over an empty floor. The trench never clears by count
- * (the exhaust-port hit in stepTrench ends it). Exhaustive over Phase so a new
- * phase can't silently default to a wrong condition. */
+/** The phase a cleared `s.phase` advances into. WAVE 1 HAS NO GROUND PHASE
+ * (sw7-18 / D-015): the ROM flies wave 1 space -> trench, skipping the surface
+ * (`;WAVE 1 HAS NO GROUND PHASE`, WSGRND.MAC:637; PHIGD's DECA "ALWAYS SKIPPED ON
+ * FIRST GAME WAVE", WSMAIN.MAC:1604). Every later wave follows the ordered table. */
+function nextPhaseFor(s: GameState): Phase | null {
+  if (s.phase === 'space' && s.wave === 1) return 'trench'
+  return NEXT_PHASE[s.phase]
+}
+
+/** Has this phase been cleared? Space is a flat KILL quota. The SURFACE ends by
+ * TRAVERSAL ONLY (sw7-18 / D-019): the ROM flies five `$8000` passes of the maze
+ * field and drops into the trench at `GD.SEQ >= 5` (`CMPA #5 ;ONLY GO SO FAR INTO
+ * GROUND SEQUENCES`, WSMAIN.MAC:1678-1679) — killing every tower banks the 50,000
+ * bonus (mid-phase, see `stepSurface`) but does NOT shorten the run, and a single
+ * missed tower never strands it. The trench never clears by count (the exhaust-port
+ * hit in stepTrench ends it). Exhaustive over Phase so a new phase can't silently
+ * default to a wrong condition. */
 function phaseCleared(s: GameState): boolean {
   switch (s.phase) {
     case 'space':
       return s.phaseKills >= SPACE_WAVE_QUOTA
     case 'surface':
-      return allTowersKilled(s) || s.surfaceScrollZ >= surfaceFieldDepth(s.wave)
+      return s.gdSeq >= SURFACE_END_SEQ
     case 'trench':
       return false
   }
-}
-
-/** Every tower in the wave's maze is down — the authentic "cleared all towers"
- * condition (WSGRND `sub_973A` fires the bonus on the kill that drives "# OF
- * TOWERS LEFT" to 0). `towerCount > 0` matters: the bunkers-only wave (BUNK) has
- * NO towers, so it can never "clear them all" — without this guard its 0-quota is
- * met at entry, insta-clearing the surface and gifting a free 50,000. Bunkers are
- * quota-neutral, so `phaseKills` only ever counts towers/bishops. */
-function allTowersKilled(s: GameState): boolean {
-  const towers = towersForWave(s.wave)
-  return towers > 0 && s.phaseKills >= towers
-}
-
-/** How far the surface must scroll for the wave's whole authored field to pass the
- * cockpit: the deepest entry's authored depth, plus the SPAWN_DISTANCE lead-in
- * `mazeField` places it behind. `surfaceScrollZ` accumulates at exactly the rate
- * the turrets advance (TURRET_SCROLL_SPEED·dt), so reaching this distance means the
- * last object has crossed z=0 and been culled — the field is spent. Derived from the
- * maze data, not from the live `turrets` array, so shooting objects down cannot make
- * the field "end" early. */
-function surfaceFieldDepth(wave: number): number {
-  const entries = mazeForWave(wave).entries
-  let deepest = 0
-  for (const e of entries) if (e.y > deepest) deepest = e.y
-  return deepest + SPAWN_DISTANCE
 }
 
 /** The looping music track a phase opens with (sw3-5). The space wave swaps to the
@@ -1305,7 +1334,7 @@ const TRENCH_VOICE_CUES: ReadonlyArray<{
 function progress(s: GameState): GameState {
   if (s.gameOver) return s
   if (!phaseCleared(s)) return s
-  const next = NEXT_PHASE[s.phase]
+  const next = nextPhaseFor(s)
   if (next === null) return s
   // The phase cleared — carry the frame's events forward, announce the warp, and
   // cue the entering phase's voice lines if it has any (sw2-5; sequence per sw7-8).
@@ -1314,33 +1343,17 @@ function progress(s: GameState): GameState {
   for (const line of ENTER_PHASE_SPEECH[next] ?? []) events.push({ type: 'speech', line })
   // The descent tune (sw7-8, U-014): PMDES fires at space PH.TIM 400, twenty
   // frames before the descend flip (WSMAIN.MAC:1439/:1442) — our un-sequenced
-  // equivalent is the space -> surface edge itself. It rides OVER the towers
-  // loop below (the ROM's PMDES -> descend -> PM4TH spacing is sw7-9 / A-019).
+  // equivalent is the space -> surface edge itself.
   if (s.phase === 'space' && next === 'surface') {
     events.push({ type: 'tune', tune: 'descent' })
   }
   // Swap the looping music channel to the entering phase's theme (sw3-5). Fires on
   // this edge only; `enterPhase` preserves the wave, so surface->'towers' /
   // trench->'trench' regardless of wave (the Imperial March is a space-only swap).
-  // Pushed BEFORE the tower-bonus early return so the surface->trench edge still
-  // carries its 'trench' music cue.
   events.push({ type: 'music', track: musicTrackFor(next, advanced.wave) })
-  // Clearing every tower on the surface banks the 50,000 "cleared all towers"
-  // bonus and cues its banner — ONCE, on the drop into the trench (sw3-3). Gated on
-  // the towers ACTUALLY being killed (sw4-3): the surface can now also be left by
-  // simply outliving the field (scroll-completion), and flying over towers you never
-  // shot must bank nothing — nor may the 0-tower bunker wave gift the bonus.
-  if (s.phase === 'surface' && allTowersKilled(s)) {
-    events.push({ type: 'tower-bonus', amount: SURFACE_CLEAR_BONUS })
-    // Stamp the all-towers reward (H-021) so its "50,000 FOR SHOOTING ALL TOWERS"
-    // banner (MS.RWD) shows through the trench run that `advanced` opens.
-    return {
-      ...advanced,
-      score: advanced.score + SURFACE_CLEAR_BONUS,
-      towerBonusAwardedAt: s.t,
-      events,
-    }
-  }
+  // NOTE (sw7-18 / D-019): the 50,000 "cleared all towers" bonus is NO LONGER banked
+  // here. It is decoupled from the phase clear and banks MID-PHASE in `stepSurface`
+  // the frame the last tower falls (the ROM's Q.ATP is set independently of GD.SEQ).
   return { ...advanced, events }
 }
 
@@ -1401,6 +1414,15 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     // Reset the surface scroll on every phase entry so a fresh (or jumped) surface
     // always opens with the ground grid anchored at the cockpit (story 11-5).
     surfaceScrollZ: 0,
+    // Re-seed the accelerating surface pace on every phase entry (sw7-18): a fresh
+    // (or jumped, or re-entered) surface always opens at the ROM's $100 seed speed —
+    // a fast prior run never bleeds its rate into the next.
+    surfaceScrollSpeed: SURFACE_SEED_SPEED,
+    // GD.SEQ zeroes only when ENTERING the surface (a fresh traversal starts at
+    // sequence 0); leaving the surface CARRIES its final count (>= SURFACE_END_SEQ)
+    // so the surface->trench edge reflects the traversal that ended it, while
+    // surfaceScrollZ resets. The next wave's surface entry re-zeroes it.
+    gdSeq: phase === 'surface' ? 0 : s.gdSeq,
     // A fresh surface re-lays its authored WSGRND maze (sw4-3): the next
     // stepSurface frame fills `turrets` from `mazeForWave(wave)`. Reset here so
     // each wave's surface (and a dev phase-jump) lays its own field.
@@ -1470,6 +1492,9 @@ function mazeField(wave: number): Turret[] {
     pos: [e.x, 0, -(e.y + SPAWN_DISTANCE)] as Vec3,
     age: 0,
     kind: e.kind,
+    // Carry the awakening sequence (sw7-18 / D-018) so the fire-gate can hold this
+    // object dormant until the traversal reaches `gdSeq >= seq`.
+    seq: e.seq,
   }))
 }
 

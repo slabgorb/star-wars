@@ -80,8 +80,9 @@ import {
   TRENCH_SCROLL_SPEED,
   PORT_HIT_RADIUS,
   COCKPIT_HIT_RADIUS,
-  towersForWave,
   STARTING_LIVES,
+  SURFACE_END_SEQ,
+  SURFACE_SEQ_SPAN,
   type GameState,
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
@@ -377,10 +378,16 @@ describe('sw2-4 — the outcome timestamps drive & survive the visual beat', () 
     // can't re-trigger a banner in a new trench. Cross surface→trench carrying
     // non-null stamps and assert they are cleared on arrival.
     const surface: GameState = {
-      ...initialState(1),
+      ...initialState(2), // wave 2 — the first wave with a ground phase (D-015)
       phase: 'surface',
-      phaseKills: towersForWave(1),
+      // Seat the surface at its traversal completion (gdSeq >= 5, sw7-18 / D-019 —
+      // the ROM ends the ground phase by traversal, not by an all-towers count) so
+      // the next step crosses the surface->trench edge; surfaceScrollZ is set
+      // consistently so stepSurface re-derives the same gdSeq.
+      gdSeq: SURFACE_END_SEQ,
+      surfaceScrollZ: SURFACE_END_SEQ * SURFACE_SEQ_SPAN + 1,
       turrets: [],
+      surfaceMazeLaid: true,
       enemyShots: [],
       deathStarDestroyedAt: 999,
       exhaustPortMissedAt: 999,

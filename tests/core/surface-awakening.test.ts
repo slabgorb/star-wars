@@ -66,7 +66,7 @@ function surfaceAt(gdSeq: number, turrets: Turret[]): GameState {
 
 const firedThisFrame = (s: GameState): boolean => s.events.some((e) => e.type === 'enemy-fire')
 const fireMuzzles = (s: GameState): number[] =>
-  s.events.filter((e) => e.type === 'enemy-fire').map((e) => (e as { pos: [number, number, number] }).pos[0])
+  s.events.filter((e) => e.type === 'enemy-fire').map((e) => (e as { pos: readonly [number, number, number] }).pos[0])
 
 // --- AC: an object stays dormant until gdSeq reaches its awakening seq --------
 

@@ -115,7 +115,7 @@ describe('MusicEvent — a core GameEvent variant (AC2)', () => {
       ...musicTracks(stepGame(playing({ mode: 'attract' }), { ...NO_INPUT, start: true }, DT)),
       // space -> surface: towers theme
       ...musicTracks(
-        stepGame(playing({ phase: 'space', phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT),
+        stepGame(playing({ phase: 'space', wave: 2, phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT),
       ),
       // surface -> trench: trench theme (D-019: ends by traversal, not kills)
       ...musicTracks(
@@ -146,21 +146,21 @@ describe('music cue — run start opens the space theme (AC2)', () => {
 
 describe('music cue — entering the Death Star surface plays the towers theme (AC2)', () => {
   it("swaps to the 'towers' theme on the space -> surface edge", () => {
-    const out = stepGame(playing({ phase: 'space', phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
+    const out = stepGame(playing({ phase: 'space', wave: 2, phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
     expect(out.phase).toBe('surface') // the transition actually happened
     expect(out.events).toContainEqual({ type: 'level-clear', next: 'surface' })
     expect(out.events).toContainEqual({ type: 'music', track: 'towers' })
   })
 
   it("names the surface track for the ROM 'towers' music, not the 'surface' phase", () => {
-    const out = stepGame(playing({ phase: 'space', phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
+    const out = stepGame(playing({ phase: 'space', wave: 2, phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
     // Deliberate: the surface phase's authentic music is Sound_20/21 "Towers music".
     expect(musicTracks(out)).toContain('towers')
     expect(musicTracks(out)).not.toContain('surface')
   })
 
   it('does NOT play the trench theme on the surface edge (right theme, right moment)', () => {
-    const out = stepGame(playing({ phase: 'space', phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
+    const out = stepGame(playing({ phase: 'space', wave: 2, phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
     expect(musicTracks(out)).not.toContain('trench')
   })
 })
@@ -254,7 +254,7 @@ describe('the cue fires on the EDGE, not every frame (AC1/AC4 — one startLoop 
   })
 
   it('an idle surface frame (already entered) emits no music cue', () => {
-    const entered = stepGame(playing({ phase: 'space', phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
+    const entered = stepGame(playing({ phase: 'space', wave: 2, phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
     expect(entered.phase).toBe('surface')
     const idle = stepGame({ ...entered, mode: 'playing' }, NO_INPUT, DT)
     expect(idle.phase).toBe('surface')
