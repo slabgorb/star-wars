@@ -117,9 +117,9 @@ describe('MusicEvent — a core GameEvent variant (AC2)', () => {
       ...musicTracks(
         stepGame(playing({ phase: 'space', phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT),
       ),
-      // surface -> trench: trench theme
+      // surface -> trench: trench theme (D-019: ends by traversal, not kills)
       ...musicTracks(
-        stepGame(playing({ phase: 'surface', phaseKills: towersForWave(1) }), NO_INPUT, DT),
+        stepGame(playing({ phase: 'surface', wave: 2, ...traversalComplete }), NO_INPUT, DT),
       ),
       // trench clear into wave 4 (even, >=4): Imperial March replaces the space theme
       ...musicTracks(stepGame(portKill(trenchAtWave(1983, 3)), NO_INPUT, DT)),
@@ -167,7 +167,7 @@ describe('music cue — entering the Death Star surface plays the towers theme (
 
 describe('music cue — entering the trench plays the trench theme (AC2)', () => {
   it("swaps to the 'trench' theme on the surface -> trench edge", () => {
-    const out = stepGame(playing({ phase: 'surface', phaseKills: towersForWave(1) }), NO_INPUT, DT)
+    const out = stepGame(playing({ phase: 'surface', wave: 2, ...traversalComplete }), NO_INPUT, DT)
     expect(out.phase).toBe('trench') // the transition actually happened
     expect(out.events).toContainEqual({ type: 'level-clear', next: 'trench' })
     expect(out.events).toContainEqual({ type: 'music', track: 'trench' })
@@ -222,7 +222,7 @@ describe('music cue — the Imperial March replaces the space theme on ROM waves
     expect(musicTracks(toSurface)).not.toContain('imperialMarch')
 
     const toTrench = stepGame(
-      playing({ phase: 'surface', phaseKills: towersForWave(3), wave: 3 }),
+      playing({ phase: 'surface', wave: 3, ...traversalComplete }),
       NO_INPUT,
       DT,
     )
@@ -234,7 +234,7 @@ describe('music cue — the Imperial March replaces the space theme on ROM waves
 
 describe('the cue fires on the EDGE, not every frame (AC1/AC4 — one startLoop per phase, not 60/sec)', () => {
   it('emits exactly one music cue entering the trench, and none on the next trench frame', () => {
-    const entered = stepGame(playing({ phase: 'surface', phaseKills: towersForWave(1) }), NO_INPUT, DT)
+    const entered = stepGame(playing({ phase: 'surface', wave: 2, ...traversalComplete }), NO_INPUT, DT)
     expect(entered.phase).toBe('trench')
     expect(musicTracks(entered)).toEqual(['trench']) // exactly one, exactly this track
     // A subsequent frame still in the trench (port far downrange, no hit) must be
