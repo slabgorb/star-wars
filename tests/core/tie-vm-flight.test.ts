@@ -8,6 +8,15 @@
 // (which twist/move bits are active); `applyManeuver` integrates those bits as the
 // §5.3 continuous rates. The invariant: a maneuver held for N game frames turns
 // exactly N × per-frame delta at ANY render dt (design §3 dt-independence).
+//
+// SUPERSESSION: the story-9-2/9-3 SOFT-FLIGHT model (curved-approach swoop + always
+// peel-away, never ram) was retired here — the invented curve/bank/peel assertions
+// in tie-flight.test.ts were removed and tie-peel-away.test.ts was deleted, as they
+// asserted the deliberately-replaced model. Authentic VM-driven flight is covered
+// here (and in tie-vm.test.ts for the VM itself); design:
+// docs/superpowers/specs/2026-07-18-star-wars-tie-vm-fire-wiring-design.md. A
+// rammed TIE is still removed and costs a shield via sim.ts's existing cockpit
+// collision pass (space-combat.test.ts pins that).
 
 import { describe, it, expect } from 'vitest'
 import {

@@ -1637,6 +1637,12 @@ function homeShots(shots: readonly Projectile[], dt: number): Projectile[] {
  * (§5.2c) is a deferred refinement (design §9); AIM_AHEAD ("aim in front of the
  * player") has no lead point modeled here and aims at the cockpit too.
  *
+ * TODO(playtest): approach aggressiveness. A TIE runs its choreography's opening
+ * straight forward `.CT …,0,MF` (no AIM/twist) and beelines the cockpit, reaching
+ * cockpit-collision range at ~frame 93 — before the weave/loiter segments engage.
+ * The authentic loiter needs the §5 play-cube clamp (`sub_8DE3`) + §7
+ * cockpit-collision-drop (out of this task's scope); tune once those land.
+ *
  * SPACE ONLY — the cockpit is the origin here (see `toCockpit`).
  */
 function aimOrient(e: Enemy): Mat4 {
