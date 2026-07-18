@@ -185,7 +185,7 @@ describe('sw4-1 §A — player bolt reach covers the restored approach volume', 
 // --- AC#2 / AC#11 / AC#14 — spawn depth + authentic lateral table -------------
 
 describe('sw4-1 §A — TIEs spawn on the far plane with the TBG lateral table', () => {
-  const spawns = collectSpawns(0.05, 1500)
+  const spawns = collectSpawns(0.05, 3000)
 
   it('the wave actually spawns a healthy sample of fighters', () => {
     // Guards the observation itself: if spawning were broken the coverage checks
@@ -193,9 +193,14 @@ describe('sw4-1 §A — TIEs spawn on the far plane with the TBG lateral table',
     // sw7 task-4 re-baseline (15 → 10): VM-driven TIEs now LOITER (design §7 —
     // slots free only when a fighter is shot or rams) instead of the old fast
     // home→peel→exit cycle, so fewer slots turn over per unit time under NO_INPUT.
-    // 10 is exactly the sample the D-group coverage test below needs (spawnCount
-    // walks the 12-slot table in order; index 9 = the first ±2048 slot), so the
-    // guard stays non-vacuous. Deterministic from seed 4041.
+    // sw7 task-5 re-baseline (window 1500 → 3000 steps): the authentic §6 fire gate
+    // now feeds C_AG on every shot, so a fighter runs its roll-away-after-shooting
+    // maneuver (WSCPU.MAC:646-651 → the script's `.CUNTIL C_AG`) instead of boring
+    // straight in — under NO_INPUT (nothing shoots the loiterers down) slots turn
+    // over even slower, so the SAME sample needs a longer window to walk the 12-slot
+    // table to index 9 (the first ±2048 D-group slot) the coverage test below needs.
+    // The spawn SEQUENCE is unchanged; only turnover time is. 3000 steps ⇒ 14 spawns
+    // (spawnCount), non-vacuously past that slot. Deterministic from seed 4041.
     expect(spawns.length).toBeGreaterThanOrEqual(10)
   })
 

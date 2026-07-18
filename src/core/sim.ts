@@ -117,7 +117,7 @@ import {
   FORCE_FIELD_DEPTH,
 } from './trench-channel'
 import { waveSpawnPlan, choreoPc } from './tie-waves'
-import { initVm, tickChoreo, program, Twist, Move } from './tie-vm'
+import { initVm, tickChoreo, program, Status, Twist, Move } from './tie-vm'
 import { computeStatus } from './tie-status'
 
 const COCKPIT: Vec3 = [0, 0, 0]
@@ -298,22 +298,54 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // coarse or fine render steps advances `frame` identically (dt-independence,
   // tests/core/space-frame-accumulator.test.ts).
   //
-  // Each DECISION TICK advances every live TIE's VM one frame: `computeStatus`
-  // reads the fighter's live geometry into the A$CHST word (consuming RNG per TIE —
-  // the map preserves the enemies' array order so the draw sequence is
-  // deterministic), then `tickChoreo` steps the bytecode and updates which
-  // twist/move bits are active. Fighters WITHOUT a seated VM (hand-built fixtures)
-  // are left untouched — no choreography to run.
+  // Each DECISION TICK advances every live TIE's VM one frame AND runs its §6 fire
+  // gate. `computeStatus` reads the fighter's live geometry into the A$CHST word
+  // (consuming RNG per TIE — the map preserves the enemies' array order so the draw
+  // sequence is deterministic), `tickChoreo` steps the bytecode, and the SAME status
+  // word feeds the fire gate (design §4). A TIE without a seated VM (hand-built
+  // fixture) runs no choreography but is still status-computed and can fire — the ROM
+  // has no un-choreographed alien; the gate applies uniformly.
+  //
+  // FIRE — the authentic cadence (design §6; WSCPU.MAC:646-651 + `TGPROB` :736). There
+  // is NO per-TIE reload timer; the retired `fireCooldown` is gone. A TIE fires iff, in
+  // ROM order: it has the player in its sights (C_AS) · is not in the AIM_AHEAD maneuver
+  // lockout (A$CHTW bit C$T9 = $11,x bit $40) · is not too close (range > $800) · is not
+  // "glowing from a hit" (A$GLW) · the cadence window is open `(frame & mask) == 0` ·
+  // the PRNG roll clears the threshold (`P.RND1 > threshold`, drawn ONLY when the gates
+  // above pass) · a fireball slot is free (`maxConcurrentShots`). On fire it launches a
+  // homing fireball from its own position (the existing `homeShots` path), pushes the
+  // `enemy-fire` event, and sets `firedGun` — feeding C_AG so the next tick's script runs
+  // the authentic roll-away-after-shooting maneuver.
   const tickPeriod = 1 / TICK_HZ
   let frame = state.frame
   let frameAcc = state.frameAcc + dt
   let tickedEnemies = state.enemies
   let catchup = 0
   while (frameAcc >= tickPeriod && catchup < MAX_CATCHUP_FRAMES) {
-    tickedEnemies = tickedEnemies.map((e) =>
-      e.vm ? { ...e, vm: tickChoreo(e.vm, program, computeStatus(e, state, rng)) } : e,
-    )
-    frame++
+    frame++ // advance to the next game frame, then process it (the FRAME the gate reads)
+    tickedEnemies = tickedEnemies.map((e) => {
+      const status = computeStatus(e, state, rng)
+      const vm = e.vm ? tickChoreo(e.vm, program, status) : undefined
+      const inSights = (status & Status.C_AS) !== 0
+      const aimingAhead = ((vm?.twist ?? 0) & Twist.AIM_AHEAD) !== 0 // C$T9 lockout
+      const inRange = length(e.pos) > TIE_NEAR_BOUND // M.XP > $800: not too close
+      const notHit = (e.glow ?? 0) <= 0 // A$GLW: don't fire while glowing from a hit
+      let fired = false
+      if (inSights && !aimingAhead && inRange && notHit && (frame & params.fireMask) === 0) {
+        // P.RND1 is read ONLY once the gates above pass; BLS skips on <=, so fire on a
+        // STRICTLY GREATER draw. The free-slot check (the ROM's gun-slot scan) follows
+        // and does NOT gate the draw — matching the ROM's conditional read order.
+        if (nextInt(rng, 256) > params.fireThreshold && enemyShots.length < params.maxConcurrentShots) {
+          fired = true
+          enemyShots.push({ pos: [...e.pos] as Vec3, vel: [0, 0, 0], ttl: ENEMY_SHOT_TTL })
+          events.push({ type: 'enemy-fire', pos: [...e.pos] as Vec3 })
+        }
+      }
+      // C_AG is a per-frame flag (WSCPU.MAC:532-536 rebuilds A$CHST every frame): set it
+      // on the tick a choreographed TIE fires, clear it otherwise. A VM-less fixture has no
+      // script to feed, so it is left untouched (no meaningless flag added).
+      return e.vm ? { ...e, vm, firedGun: fired } : e
+    })
     frameAcc -= tickPeriod
     catchup++
   }
@@ -347,41 +379,15 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     spawnTimer = params.spawnInterval
   }
 
-  // --- Enemy fireballs: each TIE strafes during its own pass window ----------
-  // The RE'd cabinet does NOT lob one bolt from a single random TIE on a shared
-  // formation timer (docs/tie-flight-ai-model.md §6). Each fighter fires
-  // INDEPENDENTLY while it is making its pass: in the firing arc (still
-  // approaching — not peeled away) AND in range (past the pass-end near edge,
-  // "not too close"). Each TIE carries its own fire cooldown, seeded the first time
-  // it is seen from the squad clock `state.enemyFireCooldown` (so a parked clock
-  // still suppresses every fighter); the per-wave cadence (waveParams) now paces an
-  // individual fighter, not the squad. Fire is a pure function of each fighter's
-  // pass — no shooter is drawn from the RNG — and the per-wave concurrency cap
-  // (waveParams.maxConcurrentShots, the RE'd §8 fire table, story 9-5) is enforced
-  // per shot: the ROM-faithful wave 1 keeps a single fireball aloft, climbing to the
-  // full 6-slot pool by wave 7, so fighters firing together never overflow the wave's
-  // allowance. The fireball still launches from the firing TIE's own position, aimed
-  // at the cockpit at the origin.
-  const enemies = movedEnemies.map((e) => {
-    const cooldown = (e.fireCooldown ?? state.enemyFireCooldown) - dt
-    const inPassWindow = !e.peeling && length(e.pos) > TIE_NEAR_BOUND
-    if (inPassWindow && cooldown <= 0 && enemyShots.length < params.maxConcurrentShots) {
-      enemyShots.push({
-        // The homing law (homeShots) drives the fireball by decaying this position
-        // toward the cockpit — it carries no straight-line velocity (sw4-2, spec §B).
-        pos: [...e.pos] as Vec3,
-        vel: [0, 0, 0],
-        ttl: ENEMY_SHOT_TTL,
-      })
-      events.push({ type: 'enemy-fire', pos: [...e.pos] as Vec3 })
-      return { ...e, fireCooldown: params.enemyFireInterval }
-    }
-    return { ...e, fireCooldown: cooldown }
-  })
+  // Enemy fireballs already launched in the decision tick above (the §6 gate). The
+  // moved/spawned fighters are the live enemies for this frame's collision passes; a
+  // freshly SPAWNED TIE (pushed after the decision loop) did not decide/fire this step.
+  const enemies = movedEnemies
 
-  // The squad clock now only SEEDS a new fighter's first shot; keep it ticking
-  // (floored at 0) so it carries a sane value into the surface phase, whose turret
-  // fire still runs on a formation timer (stepSurface, unchanged).
+  // The squad clock is retired from the SPACE fire path (the §6 gate governs space
+  // fire entirely). Keep it ticking (floored at 0) so it carries a sane value into the
+  // surface phase, whose turret fire still runs on its own formation timer (stepSurface,
+  // unchanged, seeds it from ENEMY_FIRE_INTERVAL).
   const enemyFireCooldown = Math.max(0, state.enemyFireCooldown - dt)
 
   // --- CLSLZ: the beam takes the nearest thing under the site ---------------

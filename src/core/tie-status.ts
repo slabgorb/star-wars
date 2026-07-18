@@ -18,7 +18,7 @@
 import { Status } from './tie-vm'
 import type { Enemy, GameState } from './state'
 import { nextInt, type Rng } from '@arcade/shared/rng'
-import { length, normalize, dot, sub, type Vec3 } from '@arcade/shared/math3d'
+import { length, normalize, dot, sub, IDENTITY, type Vec3 } from '@arcade/shared/math3d'
 
 const COCKPIT: Vec3 = [0, 0, 0]
 
@@ -56,7 +56,12 @@ export function computeStatus(e: Enemy, state: GameState, rng: Rng): number {
   // TIE's nose axis — model +Z mapped through e.orient, the same column
   // lookRotation writes forward into (math3d.ts:171-186) — dotted with the
   // unit direction from the TIE to the cockpit (origin) clears the cone.
-  const nose: Vec3 = [e.orient[2], e.orient[6], e.orient[10]]
+  // Minimal collision/spawn fixtures build a TIE without `orient`; the §6 fire gate
+  // now status-computes EVERY live enemy (sim.ts's decision tick), so tolerate a
+  // missing matrix by defaulting to IDENTITY (nose = model +Z), exactly as
+  // `applyManeuver` does, rather than reading off `undefined[2]`.
+  const orient = e.orient ?? IDENTITY
+  const nose: Vec3 = [orient[2], orient[6], orient[10]]
   const toCockpit = normalize(sub(COCKPIT, e.pos))
   if (dot(nose, toCockpit) >= FIRE_CONE_COS) status |= Status.C_AS
 

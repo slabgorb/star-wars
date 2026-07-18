@@ -10,6 +10,8 @@ import {
   SPAWN_INTERVAL,
   ENEMY_SPEED,
   ENEMY_FIRE_INTERVAL,
+  FIRE_MASK,
+  FIRE_THRESHOLD,
 } from './state'
 
 /** Vertical field of view (radians) the renderer projects the scene with — the
@@ -153,6 +155,14 @@ export interface WaveParams {
    * authentic 6-slot fireball pool; the space step gates per-TIE fire on it, so the
    * ROM-faithful wave 1 keeps a single fireball aloft while late waves fill it. */
   maxConcurrentShots: number
+  /** TGPROB cadence-window mask for this wave (state.ts `FIRE_MASK`, WSCPU.MAC:736).
+   * The §6 fire gate opens a window when `(state.frame & fireMask) === 0`. Tightens
+   * with the wave (0F → 07 → 03: a window every 16 → 8 → 4 game frames). */
+  fireMask: number
+  /** TGPROB probability threshold for this wave (state.ts `FIRE_THRESHOLD`,
+   * WSCPU.MAC:736). Inside an open window a TIE fires when `nextInt(rng, 256) >
+   * fireThreshold`; P(fire | window) = (255 − fireThreshold)/256. */
+  fireThreshold: number
 }
 
 /** Each wave past the first stiffens the ramp by this fraction. */
@@ -162,33 +172,44 @@ const SPAWN_INTERVAL_FLOOR = 0.3
 /** Enemy fire cadence never drops below this (seconds). */
 const ENEMY_FIRE_INTERVAL_FLOOR = 0.25
 
-// --- TIE fire aggression: the RE'd per-wave concurrency cap (story 9-5) --------
+// --- TIE fire aggression: the RE'd per-wave TGPROB row (story 9-5; sw7 Task 5) --
 //
-// The 1983 cabinet escalates TIE aggression with a fire-parameter table
-// (docs/tie-flight-ai-model.md §8, ROM:8D71) indexed by min(mission + DIP, 15).
-// The one column ported here 1:1 — a pure slot COUNT with no dependence on the
-// (unrecovered) cabinet tick rate — is the SIMULTANEOUS-FIREBALL cap: how many TIE
-// fireballs may share the sky at once. It climbs 1 → 6 and saturates at the
-// authentic 6-slot fireball pool. The cadence-mask / PRNG-threshold columns are
-// deliberately NOT ported (a frame-mask → seconds cadence would be invented, not
-// faithful — model §5.3); fire RATE keeps riding the scalar enemyFireInterval above.
+// The 1983 cabinet escalates TIE aggression with the `TGPROB` fire-parameter table
+// (WSCPU.MAC:736; the disassembly's ROM:8D71) — a per-wave `[mask, threshold, guns]`
+// row indexed by min(mission + DIP, 15). All THREE columns are now ported and drive
+// the §6 fire gate (sim.ts's decision tick):
+//   * GUNS  → `maxConcurrentShots` (the SIMULTANEOUS-FIREBALL cap; `FIRE_CONCURRENCY`
+//     below). Climbs 1 → 6 and saturates at the authentic 6-slot fireball pool.
+//   * MASK  → `fireMask` (state.ts `FIRE_MASK`) — the cadence window `(frame & mask)==0`.
+//   * THRESHOLD → `fireThreshold` (state.ts `FIRE_THRESHOLD`) — the PRNG roll.
+// The cadence columns are NO LONGER "unported": the cabinet game-frame tick IS pinned
+// (state.ts `TICK_HZ`, audit T-007), so the frame-mask ports faithfully as a discrete
+// per-game-frame gate on `state.frame` rather than an invented seconds cadence — see
+// docs/tie-flight-ai-model.md §5.3 / §6 and the sw7 design (docs 4c93855) §3. The
+// legacy scalar `enemyFireInterval` below stays only as a wave-difficulty knob
+// (pinned by difficulty.test.ts / tie-wave-ramp.test.ts); the space fire path no
+// longer consumes it — the §6 gate replaced it.
 //
 // Clone `wave` is 1-based and the cabinet's first space wave is mission 0, so the
 // fire index is min((wave - 1) + DIP, 15). The clone has no DIP switches → DIP = 0.
 
-/** Per-index simultaneous-fireball cap, transcribed from the §8 table (ROM:8D71).
+/** Per-index simultaneous-fireball cap — the TGPROB GUNS column (WSCPU.MAC:736).
  * Length 16 (the index saturates at 15); the value tops out at the 6-slot pool
- * from index 6 on. */
+ * from index 6 on. `FIRE_MASK`/`FIRE_THRESHOLD` (state.ts) are the same table's
+ * other two columns, addressed by the same fire-index below. */
 const FIRE_CONCURRENCY: readonly number[] = [1, 1, 2, 3, 4, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
 
 export function waveParams(wave: number): WaveParams {
   const ramp = 1 + (wave - 1) * RAMP_PER_WAVE
-  // Fire-aggression index into the §8 table: min((wave - 1) + DIP, 15), DIP = 0.
+  // Fire-aggression index into TGPROB: min((wave - 1) + DIP, 15), DIP = 0. One index
+  // addresses all three columns (guns / mask / threshold), which share the length-16 shape.
   const fireIndex = Math.max(0, Math.min(wave - 1, FIRE_CONCURRENCY.length - 1))
   return {
     spawnInterval: Math.max(SPAWN_INTERVAL_FLOOR, SPAWN_INTERVAL / ramp),
     enemySpeed: ENEMY_SPEED * ramp,
     enemyFireInterval: Math.max(ENEMY_FIRE_INTERVAL_FLOOR, ENEMY_FIRE_INTERVAL / ramp),
     maxConcurrentShots: FIRE_CONCURRENCY[fireIndex],
+    fireMask: FIRE_MASK[fireIndex],
+    fireThreshold: FIRE_THRESHOLD[fireIndex],
   }
 }
