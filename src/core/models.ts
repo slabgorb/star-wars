@@ -731,22 +731,26 @@ export const TRENCH_SQUARE: Model3D = {
 }
 
 /**
- * Trench catwalk — a girder spanning the channel, pure hazard (fidelity epic
- * task 3; findings ## Trench catwalks, turrets & wall squares — `sub_72D5`
- * "Draws trench catwalks"; type 1 = "catwalk cross-brace" in the ROM's shape
- * encoding, echoed here as the end-cap struts). PROVISIONAL for the same
- * reason as TRENCH_TURRET/TRENCH_SQUARE (Open follow-ups #1/#3).
+ * Trench catwalk — the authentic WALL FORCE FIELD (`.WP WFF`, WSOBJ.MAC:603-615;
+ * finding M-012). NOT the old channel-spanning girder: a 3-fin VERTICAL barrier
+ * rising y=0→512 (`0x40 * .S=8`) off a wall. `.WGD WFG`'s ";CATWALK COLOR WHEN
+ * COLLIDED" comment is what identifies WFF/WFG as the trench catwalk/force field.
+ *
+ * Six points (`.PH` rows, `.RADIX 16` hex × `.S=8`), in ROM order; edges from
+ * `.WGD WFF` (`PLOT 1 / DRAWTO 0,2,3,1,5,4,0`). Vertices are raw ROM data —
+ * ORIENTATION (seating it on a wall, height slot, and depth) is the shell/sim's
+ * job (render.ts + trench-obstacles.ts). The collided-colour twin WFG carries a
+ * genuine 1983 out-of-range `DRAWTO 6,3` and is a render concern, not ported.
  */
 export const TRENCH_CATWALK: Model3D = {
   name: 'Trench Catwalk',
   vertices: [
-    [-256, -12, 0], [256, -12, 0], [256, 12, 0], [-256, 12, 0],
-    [-256, -12, -24], [256, -12, -24], [256, 12, -24], [-256, 12, -24],
+    [-256, 0, 0], [-256, 512, 0], // 0-1 FRONT MIDLINE
+    [0, 0, -256], [0, 512, -256], // 2-3 BOTTOM MIDLINE
+    [0, 0, 256], [0, 512, 256], //   4-5 TOP MIDLINE
   ],
   edges: [
-    [0, 1], [1, 2], [2, 3], [3, 0],
-    [4, 5], [5, 6], [6, 7], [7, 4],
-    [0, 4], [1, 5], [2, 6], [3, 7],
+    [1, 0], [0, 2], [2, 3], [3, 1], [1, 5], [5, 4], [4, 0],
   ],
 }
 

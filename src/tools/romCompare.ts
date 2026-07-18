@@ -56,12 +56,14 @@ import type { Vec3 } from '@arcade/shared/math3d'
  *   DO have port counterparts), so mapping TW1 -> 'Surface Tower' etc. would
  *   diff a ~6-edge fragment against a whole object's edges and report the
  *   difference as ROM/port "drift" that isn't real — exactly the
- *   confident-lie this tool exists to avoid. WPN/WGA/WGB/WFF/WFG (wall panel
- *   / wall gun / force field) are also left unmapped: no port model's doc
- *   comment cites them, and the port's trench furniture (TRENCH_TURRET/
- *   SQUARE/CATWALK) is explicitly sourced from a *different*, disassembly-
- *   only investigation (`sub_6FD9`/`sub_720B`/`sub_72D5`) and marked
- *   PROVISIONAL — not enough evidence to assert equivalence.
+ *   confident-lie this tool exists to avoid. WPN/WGA/WGB (wall panel / wall
+ *   gun) remain unmapped: no port model cites them yet.
+ * - WFF maps to Trench Catwalk (sw7-19, finding M-012): TRENCH_CATWALK was
+ *   re-ported from `.WP WFF` ("WALL FORCE FIELD") verbatim — the 6-point table
+ *   AND `.WGD WFF`'s draw list — so, like PORT, this pair compares vertices AND
+ *   edges for real and comes out clean (0/0 drift). WFG (the collided-colour
+ *   twin) stays unmapped: it is a render-only colour variant carrying a 1983
+ *   out-of-range `DRAWTO 6,3`, with no `Model3D` counterpart.
  */
 export const ROM_TO_PORT: Readonly<Record<string, string>> = {
   TIE: 'TIE Fighter',
@@ -72,6 +74,7 @@ export const ROM_TO_PORT: Readonly<Record<string, string>> = {
   STB: 'Surface Tower',
   BNK: 'Surface Bunker',
   PORT: 'Exhaust Port',
+  WFF: 'Trench Catwalk',
 }
 
 export type Edge = readonly [number, number]

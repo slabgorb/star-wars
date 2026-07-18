@@ -125,7 +125,7 @@ describe('pairModels', () => {
   // against the port now has real ROM connectivity behind it.
   it('every mapped ROM object now has a recovered draw list — none is vertices-only', () => {
     const mapped = pairs.filter((p) => p.rom && ROM_TO_PORT[p.romName])
-    expect(mapped.length).toBe(8)
+    expect(mapped.length).toBe(9) // +WFF (sw7-19 / M-012)
     for (const p of mapped) {
       expect(p.rom!.hasDrawList, `${p.romName} must have ROM edges now`).toBe(true)
     }
@@ -269,10 +269,10 @@ describe('the punch-list (regression pin)', () => {
     }
   })
 
-  it('pins 8 compared pairs, not 5', () => {
+  it('pins 9 compared pairs, not 5', () => {
     const compared = pairs.filter((p) => p.rom?.hasDrawList && p.port)
     expect(compared.map((p) => p.romName).sort()).toEqual(
-      ['BNK', 'PORT', 'RTH', 'STB', 'TI1', 'TI2', 'TI3', 'TIE'],
+      ['BNK', 'PORT', 'RTH', 'STB', 'TI1', 'TI2', 'TI3', 'TIE', 'WFF'], // +WFF (sw7-19 / M-012)
     )
   })
 })

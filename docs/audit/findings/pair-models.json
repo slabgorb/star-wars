@@ -148,7 +148,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 855,
+      "line": 859,
       "verbatim": "export const MODELS: readonly Model3D[] = ["
     }
   },
@@ -165,7 +165,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 771,
+      "line": 775,
       "verbatim": "export function buildDeathStar(): Model3D {"
     },
     "recommendation": "fix",
@@ -206,12 +206,13 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 740,
+      "line": 745,
       "verbatim": "export const TRENCH_CATWALK: Model3D = {"
     },
     "recommendation": "fix",
     "size": "m",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-19"
   },
   {
     "id": "M-013",

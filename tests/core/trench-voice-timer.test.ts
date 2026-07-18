@@ -317,16 +317,23 @@ describe('a cue rides every return path — coexists with crash / port-kill even
   })
 
   it('fires alongside a catwalk crash on the SAME frame (obstacle-crash path)', () => {
-    // A synthetic catwalk parked at the cockpit forces the crash branch on this step,
-    // while the timer crosses 16 on an ODD wave ("Luke, trust me"). The cue must ride
-    // the crash return path too.
+    // A synthetic force field parked at the cockpit forces the crash branch on this
+    // step, while the timer crosses 16 on an ODD wave ("Luke, trust me"). The cue
+    // must ride the crash return path too.
+    //
+    // sw7-19 re-seat: the catwalk is now a SIDE-GATED wall force field (B-012), so a
+    // centred (x=0) parked obstacle no longer collides. Co-locate the field with a
+    // left-side pilot so the graze fires under BOTH the old radius sphere and the new
+    // side gate — this test is about the voice cue riding the crash return, not the
+    // collision shape.
     const trench = enterPhase(initialState(1983), 'trench')
     const s0: GameState = {
       ...trench,
       mode: 'playing',
       wave: ODD_WAVE,
       trenchTimer: F_AT16 - 0.1,
-      trenchObstacles: [{ kind: 'catwalk', pos: [0, TRENCH_EYE_SEAT, -1] }],
+      trenchObstacles: [{ kind: 'catwalk', pos: [-300, TRENCH_EYE_SEAT, -1] }],
+      trenchView: [-300, TRENCH_EYE_SEAT, 0],
     }
     const out = stepGame(s0, NO_INPUT, DT)
     expect(spokenLines(out)).toContain('lukeTrustMe') // the cue survived the crash return

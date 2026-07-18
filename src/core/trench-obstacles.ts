@@ -61,17 +61,17 @@ const W = TRENCH_HALF_W
 // is clamped to ±511 inside ±1024 walls, so he can never reach them: these are things he
 // SHOOTS, not things he crashes into.
 //
-// The CATWALK is different in kind. It spans the channel, so it is the one piece of
-// furniture that can physically block the pilot — and its height was never really tuned to
-// the wall, it was tuned to the EYE (it sat 200 above an eye seated at 0). So it anchors to
-// the eye, not the wall. Two bounds fix it, and tests/core/trench-viewpoint.test.ts asserts
-// both behaviourally:
-//
-//   • it must BITE a seated pilot:  |CATWALK_Y − TRENCH_EYE_SEAT| < CATWALK_HIT_RADIUS
-//   • a full dive must CLEAR it:     CATWALK_Y − TRENCH_EYE_MIN  ≥ CATWALK_HIT_RADIUS
-//
-// which pins it to [752, 1008). Half a hit-radius above the seat sits mid-window, with
-// comfortable margin on both sides (bites by 120, clears by 376).
+// The CATWALK is now a wall FORCE FIELD (TD$WFF, B-012): it mounts on ONE wall and is
+// SIDE-GATED — it grazes only a pilot on the wall it hangs from, within a vertical band
+// about its height. A hands-off pilot rides centred (trenchView[0] = 0), which the ROM's
+// `IFLE ;?ON LEFT SIDE?` counts as the left side, so seating the field on the LEFT wall
+// still makes a neutral run graze it — hazard preserved. The dodge is LATERAL: steer to the
+// opposite (right) wall and it can't touch you (or climb clear of its height band). The
+// graze costs NO shield (WSPANL glow+sound+roll; the shield accounting rides WSGLOW,
+// score-shields scope). tests/core/trench-viewpoint.test.ts asserts these behaviourally.
+// (The dense authentic panel grid — ~80 fields streamed over the full channel — is R6d /
+// sw7-22, which un-clamps the port stub; here the trench carries the one head-of-pie divider
+// catwalk, wall-mounted.) Its height need only sit within a hands-off pilot's hit band.
 
 /** Wall-mounted turret — 3/16 of the wall's height, as it was on the 320 wall. This lands it at
  *  exactly TRENCH_EYE_SEAT, so the seated pilot looks a turret dead in the eye: aim (0, 0). */
@@ -88,9 +88,9 @@ const TURRET_Y = (TRENCH_WALL_H * 3) / 16 // 768
  *  This is what "re-anchor the furniture" (AC-5) actually means: not just scaling it with the wall,
  *  but keeping it a TARGET. */
 const SQUARE_Y = (TRENCH_WALL_H * 5) / 16 // 1280
-/** Overhead catwalk — anchored to the PILOT, not the wall: high enough above the dive
- *  floor that a dive clears it, close enough to the entry seat that a hands-off run walks
- *  straight into it. */
+/** Wall force-field ("catwalk") height — seated just above the entry eye so a hands-off run
+ *  (centred, so on the left side) rides straight into its vertical band and grazes it, while
+ *  a lateral steer to the opposite wall — or a climb clear of the band — dodges it. */
 const CATWALK_Y = TRENCH_EYE_SEAT + CATWALK_HIT_RADIUS / 2 // 888
 
 /**
@@ -129,7 +129,7 @@ export const TRENCH_OBSTACLE_STATIONS: readonly TrenchObstacle[] = [
   { kind: 'turret', pos: [-W, TURRET_Y, -NEAR] }, // ROM row 1 ($B) — left wall only
   { kind: 'square', pos: [W, SQUARE_Y, -(NEAR + GAP)] },
   { kind: 'turret', pos: [W, TURRET_Y, -(NEAR + 2 * GAP)] }, // ROM row 2 ($E) — right wall only
-  { kind: 'catwalk', pos: [0, CATWALK_Y, -(NEAR + 3 * GAP)] },
+  { kind: 'catwalk', pos: [-W, CATWALK_Y, -(NEAR + 3 * GAP)] }, // wall FORCE FIELD (B-012), left wall
   { kind: 'square', pos: [-W, SQUARE_Y, -(NEAR + 4 * GAP)] },
   { kind: 'square', pos: [W, SQUARE_Y, -(NEAR + 5 * GAP)] },
   { kind: 'turret', pos: [-W, TURRET_Y, -(NEAR + 6 * GAP)] }, // ROM row 3 ($C) — both walls...

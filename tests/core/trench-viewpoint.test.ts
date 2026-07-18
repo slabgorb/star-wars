@@ -180,24 +180,29 @@ describe('sw3-2 — the viewpoint is clamped to the band (no overshoot, no wrap)
   })
 })
 
-describe('sw3-2 — catwalks become dodgeable, but the hazard is preserved', () => {
-  it('diving under the catwalk (yoke held down) dodges it — no crash, no shield lost', () => {
+describe('sw7-19 (B-012) — the catwalk is a side-gated wall force field: grazes, but costs no shield', () => {
+  it('steering to the OPPOSITE wall dodges the wall force field — no crash, no shield', () => {
+    // The catwalk is now a LEFT-wall force field (B-012), dodged LATERALLY — steer to the
+    // RIGHT wall (the opposite side of `IFLE ;?ON LEFT SIDE?`) and it cannot reach you. This
+    // replaces sw3-2's dive-under: with the wall band, a dive stays on the left and still
+    // grazes; the authentic dodge is the far wall.
     let s = trenchStart([spawnedCatwalk()])
     const lives0 = s.lives
     let crashed = false
     const dt = 1 / 60
-    // Drive the whole crossing (catwalk at z=-2100, scroll 500 u/s → ~4.2s) with
-    // the dive held from the first frame.
     for (let i = 0; i < 600 && s.trenchObstacles.length > 0; i++) {
-      s = stepGame(s, DOWN, dt)
+      s = stepGame(s, RIGHT, dt)
       if (s.events.some((e) => e.type === 'terrain-crash')) crashed = true
     }
-    expect(crashed).toBe(false) // steered clear — the crash never fires
+    expect(crashed).toBe(false) // steered to the far wall — the graze never fires
     expect(s.lives).toBe(lives0) // no shield lost
-    expect(s.trenchObstacles).toHaveLength(0) // the catwalk scrolled harmlessly past
+    expect(s.trenchObstacles).toHaveLength(0) // the field scrolled harmlessly past
   })
 
-  it('neutral input STILL costs exactly one shield as the catwalk passes (hazard preserved)', () => {
+  it('neutral input GRAZES it (terrain-crash) but costs NO shield — a graze is not a shield hit (B-012)', () => {
+    // A hands-off run rides centre = the ROM's left side, so it grazes the left-wall field:
+    // the crash sound fires (hazard preserved), but WSPANL's contact is a graze — the shield
+    // accounting rides WSGLOW (score-shields scope), so no shield is spent here (was: −1).
     let s = trenchStart([spawnedCatwalk()])
     const lives0 = s.lives
     let crashed = false
@@ -205,8 +210,8 @@ describe('sw3-2 — catwalks become dodgeable, but the hazard is preserved', () 
       s = stepGame(s, NO_INPUT, 1 / 60)
       if (s.events.some((e) => e.type === 'terrain-crash')) crashed = true
     }
-    expect(crashed).toBe(true) // an un-piloted run still crashes...
-    expect(lives0 - s.lives).toBe(1) // ...for exactly one shield (not zero, not doubled)
+    expect(crashed).toBe(true) // an un-piloted run still grazes the field...
+    expect(s.lives).toBe(lives0) // ...but a graze costs NO shield
     expect(s.trenchObstacles).toHaveLength(0)
   })
 })
