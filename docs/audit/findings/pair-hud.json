@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 65,
+      "line": 67,
       "verbatim": "const GLOW = '#00e5ff' // cockpit cyan"
     }
   },
@@ -61,7 +61,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 892,
+      "line": 905,
       "verbatim": "    glowText(ctx, 'EXHAUST PORT AHEAD', w / 2, h * 0.22, BANNER_TEXT_PX, 'center', '#dddddd', 14)"
     }
   },
@@ -78,7 +78,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 932,
+      "line": 945,
       "verbatim": "    glowText(ctx, 'DEATH STAR DESTROYED', w / 2, h * 0.45, BANNER_TEXT_PX, 'center', '#ffffff', 18)"
     }
   },
@@ -95,7 +95,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 940,
+      "line": 953,
       "verbatim": "    glowText(ctx, 'EXHAUST PORT MISSED', w / 2, h * 0.45, BANNER_TEXT_PX, 'center', '#ff5555', 16)"
     }
   },
@@ -112,7 +112,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 1060,
+      "line": 1073,
       "verbatim": "  glowText(ctx, 'GAME OVER', w / 2, h * 0.24, BANNER_TEXT_PX, 'center', TIE_GLOW, 24)"
     }
   },
@@ -129,7 +129,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 1042,
+      "line": 1055,
       "verbatim": "  glowText(ctx, 'STAR WARS', w / 2, h * 0.26, TITLE_TEXT_PX, 'center', GLOW, 28)"
     }
   },
@@ -207,7 +207,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 1070,
+      "line": 1083,
       "verbatim": "    glowText(ctx, 'ENTER YOUR INITIALS', w / 2, h * 0.42, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)"
     },
     "recommendation": "accept",
@@ -284,7 +284,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 529,
+      "line": 534,
       "verbatim": "const MAX_INITIALS = 3"
     }
   },
@@ -399,7 +399,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 971,
+      "line": 984,
       "verbatim": "function drawShieldMeter(ctx: CanvasRenderingContext2D, state: GameState, w: number): void {"
     },
     "recommendation": "accept"
@@ -417,7 +417,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 809,
+      "line": 822,
       "verbatim": "const HUD_SHIELD_COLOR = '#22e600' // PROVISIONAL(findings ## HUD & framing, ## Colors & intensities) — register pinned (healthy tier only), hex matched to a cabinet screenshot"
     },
     "recommendation": "accept",

@@ -34,6 +34,8 @@ import {
   SURFACE_TOWER,
   TOWER_CAP,
   SURFACE_BUNKER,
+  GROUND_DEBRIS_CHUNK,
+  GROUND_DEBRIS_SHADOW,
   GD_HEIGHT_OFFSET,
   EXHAUST_PORT,
   TRENCH_TURRET,
@@ -369,6 +371,17 @@ export function render(
         drawWireframe(ctx, SURFACE_TOWER, towerMat, proj, w, h, TOWER_GLOW)
         drawWireframe(ctx, TOWER_CAP, towerMat, proj, w, h, CAP_GLOW)
       }
+    }
+    // Ground-debris explosion (sw7-14 / X-005): each blown-off piece is a tumbling
+    // chunk arcing up from the kill, plus a scaled shadow on the floor beneath it —
+    // WHITE for towers (VWTWN), RED for bunkers (VWBKN). The sim owns the ballistics;
+    // the shell only paints the piece where the sim put it (pos) and its shadow at the
+    // same x/z on the y=0 floor, which the perspective scales with distance.
+    for (const d of state.groundDebris) {
+      const glow = d.kind === 'bunker' ? FIREBALL_GLOW : CAP_GLOW // VGCRED / VGCWHT
+      drawWireframe(ctx, GROUND_DEBRIS_CHUNK, multiply(view, modelMatrix(d.pos)), proj, w, h, glow)
+      const shadowAt: Vec3 = [d.pos[0], 0, d.pos[2]]
+      drawWireframe(ctx, GROUND_DEBRIS_SHADOW, multiply(view, modelMatrix(shadowAt)), proj, w, h, glow)
     }
   } else if (state.phase === 'trench') {
     // Story 11-6 — the trench is a procedural WALLED channel (ADR 0002 part B):
