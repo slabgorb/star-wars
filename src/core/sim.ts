@@ -111,7 +111,8 @@ import {
   FORCE_FIELD_BAND_HALF,
   FORCE_FIELD_DEPTH,
 } from './trench-channel'
-import { waveSpawnPlan } from './tie-waves'
+import { waveSpawnPlan, choreoPc } from './tie-waves'
+import { initVm } from './tie-vm'
 
 const COCKPIT: Vec3 = [0, 0, 0]
 const ZERO: Vec3 = [0, 0, 0]
@@ -1691,7 +1692,7 @@ const SPAWN_LATERALS: ReadonlyArray<readonly [number, number]> = [
  * from the ROM TBG table walked in order by `spawnIndex` (sw4-1, spec §A) — no
  * longer a continuous RNG spread — so every fighter appears on one of the authentic
  * {0, ±1024, ±2048} starting slots. The RNG still seeds only the swoop bank. */
-function spawnTie(rng: Rng, speed: number, spawnIndex: number, spaceWave: number): Enemy {
+export function spawnTie(rng: Rng, speed: number, spawnIndex: number, spaceWave: number): Enemy {
   const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]
   const pos: Vec3 = [x, y, -TIE_SPAWN_DISTANCE]
   const dir = toCockpit(pos)
@@ -1699,9 +1700,17 @@ function spawnTie(rng: Rng, speed: number, spawnIndex: number, spaceWave: number
   // The wave's TSPWAV plan (sw7-12) says which slot is Darth: the RTH shape spawns
   // kind 'darth', every other slot a plain TIE. Past the plan's end (a long wave that
   // keeps refilling its slots) fall back to a mook.
-  const shape = waveSpawnPlan(spaceWave)[spawnIndex]?.shape ?? 'TIE'
+  const entry = waveSpawnPlan(spaceWave)[spawnIndex]
+  const shape = entry?.shape ?? 'TIE'
   const kind = shape === 'RTH' ? 'darth' : 'tie'
-  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), bank }
+  // Task 3 (sw7 TIE-VM wiring, docs 4c93855): SEAT this fighter's own choreography
+  // VM from the SAME plan entry — `entry.choreography` is the `.WV` triple's TCH
+  // ref (e.g. '1A1', '2D3'), resolved to a VM program index by `choreoPc`. Flight
+  // is not yet driven from it (`moveEnemy` still owns motion this task) — only
+  // seated. Past the plan's end (no entry) default to the first mook script,
+  // '1A1' (TCH1A1) — the same fallback the `?? 'TIE'` shape above uses.
+  const vm = initVm(choreoPc(entry?.choreography ?? '1A1'))
+  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), bank, vm, firedGun: false }
 }
 
 /**

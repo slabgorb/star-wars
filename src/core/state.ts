@@ -11,6 +11,7 @@
 
 import type { Vec3, Mat4 } from '@arcade/shared/math3d'
 import type { GameEvent } from './events'
+import type { ChoreoVm } from './tie-vm'
 import { createRng, type Rng } from '@arcade/shared/rng'
 import { mazeForWave } from './surfaceMazes'
 import { TRENCH_EYE_SEAT, TRENCH_FAR } from './trench-channel'
@@ -84,6 +85,15 @@ export interface Enemy {
    * Optional — freshly spawned TIEs and every existing fixture omit it
    * (treated as false via `?? false`). */
   firedGun?: boolean
+  /** This fighter's own choreography VM (sw7-11 `tie-vm.ts`) — the ROM's per-alien
+   * A$CHPC/A$CHRT/A$CHTM/A$CHTW/A$CHMV/A$CHCN record. `spawnTie` seats it from the
+   * wave's spawn-plan entry (sw7-12 `tie-waves.ts` `choreoPc`) so each TIE runs the
+   * authentic script for its slot. Task 3 of the TIE-VM-wiring plan (sw7, docs
+   * 4c93855) only SEATS this field — `moveEnemy` still drives flight/motion;
+   * ticking the VM each frame and steering from its twist/move bits is a later
+   * task. Optional — hand-placed fixtures that only exercise motion/hit-tests
+   * omit it (no VM to tick, no choreography-driven behaviour). */
+  vm?: ChoreoVm
 }
 
 /** A TIE caught mid-death: it has been shot and is drawn as its exploded wing

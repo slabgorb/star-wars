@@ -14,15 +14,17 @@
 
 import { createRng, type Rng } from '@arcade/shared/rng'
 import { lookRotation, normalize, scale, sub, IDENTITY, type Vec3, type Mat4 } from '@arcade/shared/math3d'
-import { initialState, TIE_SPAWN_DISTANCE, type GameState, type Enemy } from '../../../src/core/state'
-import type { Input } from '../../../src/core/input'
+import { initialState, TIE_SPAWN_DISTANCE, ENEMY_SPEED, type GameState, type Enemy } from '../../../src/core/state'
+import { spawnTie } from '../../../src/core/sim'
+import { NO_INPUT } from '../../../src/core/input'
 
 const COCKPIT: Vec3 = [0, 0, 0]
 
 /** An all-neutral `Input`: no aim, no trigger, no start — the frame-accumulator
  *  suite (and any later test that just wants time to pass) drives `stepGame`
- *  with this so nothing else in the step is exercised. */
-export const NO_INPUT: Input = { aimX: 0, aimY: 0, fire: false }
+ *  with this so nothing else in the step is exercised. Re-exported from
+ *  `src/core/input.ts` rather than duplicated (Task 2 review note). */
+export { NO_INPUT }
 
 /** Unit direction from a world point back to the cockpit (the origin). */
 function toCockpit(pos: Vec3): Vec3 {
@@ -61,4 +63,13 @@ export function lookAway(pos: Vec3): Mat4 {
  *  that only care about determinism, not the RNG's own mechanics. */
 export function rngSeed(seed: number): Rng {
   return createRng(seed)
+}
+
+/** Thin wrapper over the real `spawnTie` (sim.ts) — exercises the actual spawn
+ *  path (VM seating, shape/kind, lateral slot) instead of reconstructing it here.
+ *  `wave` is the spaceWave arg spawnTie reads the TSPWAV plan with; `slot` is the
+ *  spawnIndex into that plan (Task 3, sw7 TIE-VM-wiring plan, docs 4c93855). */
+export function spawnTieForTest(opts: { wave: number; slot: number; speed?: number; seed?: number }): Enemy {
+  const rng = rngSeed(opts.seed ?? 1983)
+  return spawnTie(rng, opts.speed ?? ENEMY_SPEED, opts.slot, opts.wave)
 }
