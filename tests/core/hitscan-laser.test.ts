@@ -84,10 +84,10 @@
 //       that takes list order — or the farthest — fails. Given time to fly, today's bolt does
 //       reach the near tower first and is spent on it, so this is not a regression guard.
 //   (d) RED for reason (a). Its real job is forward too, and it is the sharpest trap in the
-//       story: the nearest-object-under-the-reticle machinery ALREADY EXISTS (`lockedEnemy` /
-//       `isLocked`, gameRules.ts:110-137) and is exactly CLSLZ — except it measures from the
-//       WORLD ORIGIN (`length(e.pos)`, and a `transform(perspective…, pos)` that assumes the
-//       camera is at the origin) and is space-only. True in space, false on the surface. Reused
+//       story: the nearest-object-under-the-reticle machinery the old lock-on ring used
+//       (`lockedEnemy` / `isLocked`, removed in sw7-21) was exactly CLSLZ — except it measured
+//       from the WORLD ORIGIN (`length(e.pos)`, and a `transform(perspective…, pos)` that assumed
+//       the camera at the origin) and was space-only. True in space, false on the surface. Reused
 //       unchanged the beam resolves from the floor `altitude` below the pilot, and R11a's
 //       parallax walks straight back in under a new name.
 //   (e) GREEN TODAY and must stay green — the one true regression guard in the file.
@@ -101,7 +101,7 @@ import {
   SKIM_ALTITUDE,
   MAX_SKIM_ALTITUDE,
   TURRET_HIT_RADIUS,
-  TURRET_SCROLL_SPEED,
+  SURFACE_SEED_SPEED,
   PROJECTILE_SPEED,
   ENEMY_SHOT_SPEED,
   TOWER_HEIGHT,
@@ -243,15 +243,16 @@ describe('sw7-17 — a dead-on shot hits, however far off-axis the tower is', ()
   })
 
   it('the fixture is honest: the projectile really does fall short by more than a hit radius', () => {
-    // A guard on the guard. If a retune of PROJECTILE_SPEED / TURRET_SCROLL_SPEED / the hit
+    // A guard on the guard. If a retune of PROJECTILE_SPEED / the surface pace / the hit
     // radius ever closed this gap, the test above would start passing for the wrong reason and
     // silently stop describing anything. Derive the miss from the constants themselves and fail
-    // loudly here instead.
+    // loudly here instead. sw7-18: the closing speed is now the accelerating surface pace; use
+    // its SLOWEST value (the $100 seed) — the most conservative case — and the bolt still misses.
     const eye: Vec3 = [0, EYE_HIGH, 0]
     const tower: Vec3 = [6000, EYE_HIGH, -10000]
     const d = -tower[2]
     const L = length(sub(tower, eye))
-    const miss = Math.abs(tower[0]) * ((L * TURRET_SCROLL_SPEED) / (L * TURRET_SCROLL_SPEED + PROJECTILE_SPEED * d))
+    const miss = Math.abs(tower[0]) * ((L * SURFACE_SEED_SPEED) / (L * SURFACE_SEED_SPEED + PROJECTILE_SPEED * d))
 
     expect(miss, 'the travelling bolt must genuinely miss, or (b) proves nothing').toBeGreaterThan(
       TURRET_HIT_RADIUS,
@@ -332,10 +333,10 @@ describe('sw7-17 — the beam is cast from the ship point, not the world origin'
     // eye. So this is not a regression guard; it is a FORWARD guard, and it is the sharpest one
     // in the file: R11b must put the RESOLVE on the eye too — the ray is cast from the ship point.
     //
-    // The trap is concrete and close at hand: `lockedEnemy`/`isLocked` (gameRules.ts:110-137)
-    // already answer "nearest object under the reticle", which is exactly CLSLZ — but they
-    // measure from the WORLD ORIGIN (`length(e.pos)`, and a raw `transform(perspective…, pos)`
-    // that assumes the camera is at the origin). True in space, false on the surface. Reused
+    // The trap is concrete: `lockedEnemy`/`isLocked` (the old lock-on ring's selector, removed in
+    // sw7-21) answered "nearest object under the reticle", which is exactly CLSLZ — but they
+    // measured from the WORLD ORIGIN (`length(e.pos)`, and a raw `transform(perspective…, pos)`
+    // that assumed the camera at the origin). True in space, false on the surface. Reused
     // unchanged, the beam would resolve from the floor `altitude` below the pilot and R11a's
     // parallax comes straight back.
     //
@@ -407,7 +408,11 @@ describe('sw7-17 — enemy fire is still a real travelling object', () => {
     // (352) and the pilot cruises at MAX_SKIM_ALTITUDE (238), so the tower shoots down at him.
     // Assert the DIRECTION rather than a sign: "it climbs toward the pilot" is simply false at
     // this altitude, and a sign test would also pass for a shot aimed at the floor.
-    const muzzle: Vec3 = [tower[0], tower[1] + TOWER_HEIGHT, tower[2] + TURRET_SCROLL_SPEED * DT]
+    // Read the launch point from the fire event — the surface scroll is the accelerating pace
+    // now (sw7-18 / D-022), so the cap's advanced z is whatever the sim scrolled it to.
+    const fired = s.events.find((e) => e.type === 'enemy-fire') as { pos: Vec3 } | undefined
+    expect(fired, 'the fire event carries the muzzle launch point').toBeDefined()
+    const muzzle: Vec3 = fired!.pos
     const toShip = normalize(sub(eyeOf(s), muzzle))
     const flown = normalize(s.enemyShots[0].vel)
     expect(flown[0]).toBeCloseTo(toShip[0], 6)
@@ -451,11 +456,16 @@ describe('sw7-17 — the trench beam is clipped to 28,672 units forward (CLBLZ)'
   // draw cull (`TRENCH_FAR`, trench-channel.ts:72) — the beam clip is the same number and must
   // read it rather than re-typing 28672.
   //
-  // The probes straddle the line by 400 units. That margin is not arbitrary: an obstacle
-  // scrolls TRENCH_SCROLL_SPEED × the 8-frame sweep ≈ 195 units closer while the laser is on,
-  // so a probe placed nearer than that to the boundary would cross it mid-sweep and the test
-  // would measure the scroll instead of the clip.
-  const MARGIN = 400
+  // The probes straddle the line, and the margin is RE-DERIVED off the ROM scroll speed
+  // (sw7-6 / B-008): a trench object advances $300 = 768 units per game frame, and the
+  // laser holds a LZ.EDG sweep for 8 game frames, so an obstacle scrolls 768 × 8 = 6,144
+  // units closer while the beam is on — the TICK_HZ cancels, so this is exact and
+  // frame-rate independent. (At the old invented 500 u/s it was only ~195 units, which is
+  // why MARGIN = 400 used to be safe and now is not — re-derived, not relabelled.) A probe
+  // nearer the boundary than the sweep scroll would cross it mid-sweep and the test would
+  // measure the scroll instead of the clip, so the margin sits comfortably past 6,144.
+  const SWEEP_SCROLL = 0x300 * 8 // 6,144 — $300/frame × the 8-frame LZ.EDG sweep
+  const MARGIN = SWEEP_SCROLL + 400
   const obstacleDied = (s: GameState): boolean =>
     s.events.some((e) => e.type === 'trench-obstacle-destroyed')
 
@@ -486,18 +496,26 @@ describe('sw7-17 — the trench beam is clipped to 28,672 units forward (CLBLZ)'
     const s0 = trench({ trenchObstacles: [{ kind: 'square', pos: [0, 0, startZ] }] })
     const aim = aimAt([0, 0, startZ], eyeOf(s0), ASPECT)
 
-    // One trigger frame, then coast with the trigger RELEASED for 4 s — comfortably past the
-    // old bolt's whole lifetime, so "it never dies" is a claim about the model and not about
-    // the clock running out.
+    // One trigger frame, then coast with the trigger RELEASED for the WHOLE life of the probe
+    // in the channel — comfortably past the LZ.EDG sweep, so "it never dies TO THE BEAM" is a
+    // claim about the model, not the clock. RE-DERIVED for the ROM scroll (sw7-6 / B-008): at
+    // 768 u/frame the probe scrolls the entire trench and out through the cockpit in ~135
+    // frames, so it despawns by SCROLLING rather than lingering — the old 500 u/s speed left it
+    // barely-moved and "still standing" after 240 frames, which is no longer true. What the
+    // clip guarantees is unchanged: the beam is never built out to 29,072, so across every frame
+    // it is on, the far probe takes no `trench-obstacle-destroyed` event; it simply flies past.
     let s = stepGame(s0, trigger({ aimX: aim.aimX, aimY: aim.aimY }), DT)
-    let died = obstacleDied(s)
-    for (let i = 0; i < 240 && !died; i++) {
+    let everDied = obstacleDied(s)
+    for (let i = 0; i < 240 && !everDied; i++) {
       s = stepGame(s, trigger({ aimX: aim.aimX, aimY: aim.aimY, fire: false }), DT)
-      died = obstacleDied(s)
+      everDied = everDied || obstacleDied(s)
     }
 
-    expect(died, '29,072 is beyond $7000 — the beam is not built out that far').toBe(false)
-    expect(s.trenchObstacles, 'and it is still standing, having only scrolled').toHaveLength(1)
+    expect(everDied, '29,072 is beyond $7000 — the beam is not built out that far').toBe(false)
+    // It left the channel un-destroyed: it scrolled clear through the cockpit (despawn), never
+    // took a beam kill. `everDied === false` above is the clip's teeth; this pins that its exit
+    // was the harmless scroll-past, not a destruction the guard failed to see.
+    expect(s.trenchObstacles, 'the far probe scrolled clear un-destroyed').toHaveLength(0)
   })
 })
 

@@ -72,6 +72,7 @@ const ALL_EVENTS: GameEvent[] = [
   { type: 'trench-obstacle-destroyed', kind: 'turret' },
   { type: 'force-bonus', amount: 5000 },
   { type: 'tower-bonus', amount: 50000 }, // sw3-3: the cleared-all-towers bonus
+  { type: 'shield-bonus', amount: 5000, shields: 1 }, // sw7-4/S-013: per-surviving-shield wave bonus
   { type: 'speech', line: 'useTheForceLuke' }, // sw2-5: speech is now a core event
   { type: 'death-star-destroyed', pos: [0, 0, -300] }, // sw2-4: the winning-shot explosion
   { type: 'exhaust-port-missed' }, // sw2-4: the port slipped past un-destroyed
@@ -98,6 +99,7 @@ function discriminant(e: GameEvent): string {
     case 'trench-obstacle-destroyed': return `obs-${e.kind}`
     case 'force-bonus': return `force@${e.amount}`
     case 'tower-bonus': return `tower@${e.amount}`
+    case 'shield-bonus': return `shield@${e.amount}x${e.shields}`
     case 'speech': return `speech:${e.line}`
     case 'death-star-destroyed': return `ds@${e.pos.join(',')}`
     case 'exhaust-port-missed': return 'port-miss'
@@ -112,8 +114,10 @@ function discriminant(e: GameEvent): string {
 }
 
 describe('GameEvent — discriminated union (AC1)', () => {
-  it('covers eighteen distinct, documented event types', () => {
-    // Eighteen: the original eight (story 8-7/8-18), 'trench-obstacle-destroyed'
+  it('covers nineteen distinct, documented event types', () => {
+    // Nineteen (sw7-4/S-013 added 'shield-bonus', the per-surviving-shield wave
+    // bonus banked at a won run).
+    // Eighteen before it: the original eight (story 8-7/8-18), 'trench-obstacle-destroyed'
     // (fidelity epic task 3), 'force-bonus' (fidelity epic task 4 — findings
     // ## Exhaust port & run outcome), 'tower-bonus' (sw3-3 — the cleared-all-
     // towers 50,000 bonus), 'speech' (sw2-5 — voice lines are now core-cued
@@ -126,12 +130,12 @@ describe('GameEvent — discriminated union (AC1)', () => {
     // tower/bunker; the ROM's BG1GLW+AUDCR shield-spending crash), and 'tune'
     // (sw7-8 / U-010..U-014 — the one-shot POKEY tunes: knell/finale/descent).
     const kinds = ALL_EVENTS.map((e) => e.type)
-    expect(new Set(kinds).size).toBe(18)
+    expect(new Set(kinds).size).toBe(19)
     expect(new Set(kinds)).toEqual(
       new Set([
         'fire', 'enemy-fire', 'enemy-death', 'player-death',
         'level-clear', 'player-spawn', 'terrain-crash', 'fireball-destroyed',
-        'trench-obstacle-destroyed', 'force-bonus', 'tower-bonus', 'speech',
+        'trench-obstacle-destroyed', 'force-bonus', 'tower-bonus', 'shield-bonus', 'speech',
         'death-star-destroyed', 'exhaust-port-missed', 'name-entered', 'music',
         'object-crash', 'tune',
       ]),
@@ -222,7 +226,9 @@ describe('event emission — space phase gameplay moments (AC1)', () => {
   })
 
   it("emits 'level-clear' (next: surface) when the space kill quota is met", () => {
-    const out = stepGame(playing({ phase: 'space', phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
+    // WAVE 2 — wave 1 has no ground phase (sw7-18 / D-015), so it clears space→trench;
+    // the space→surface edge this asserts first appears on wave 2.
+    const out = stepGame(playing({ phase: 'space', wave: 2, phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
     expect(out.phase).toBe('surface') // the transition actually happened
     expect(out.events).toContainEqual({ type: 'level-clear', next: 'surface' })
   })

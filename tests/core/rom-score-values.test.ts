@@ -30,7 +30,8 @@ import {
   VADER_SCORE,
   TRENCH_BONUS,
   FIREBALL_SCORE,
-  FORCE_BONUS,
+  forceBonusForWave,
+  SHIELD_BONUS_PER_UNIT,
   ENEMY_SHOT_TTL,
   type GameState,
   type Projectile,
@@ -131,10 +132,12 @@ describe('sw3-1 — resolved ROM score values (transcription contract)', () => {
     expect(VADER_SCORE).toBeLessThan(TRENCH_BONUS)
   })
 
-  it('the Use-the-Force bonus is UNCHANGED by this story (ROM byte_983B[0] = 5,000)', () => {
-    // sw3-1 touches TIE/Vader/port/fireball only; FORCE_BONUS stays faithful —
-    // guards against the exhaust-port change bleeding into the Force bonus.
-    expect(FORCE_BONUS).toBe(5000)
+  it('the Use-the-Force bonus base (wave 1) is 5,000 (ROM TSCFRC[0])', () => {
+    // sw7-4 / S-012 made the Force bonus WAVE-SCALED (WSGAS.MAC:509-513 TSCFRC:
+    // 5k/10k/25k/50k/100k, clamped) — the full table + walk-off live in
+    // wave-force-bonus.test.ts. Here we only keep the ROM base value pinned, so the
+    // exhaust-port scoring can't drift the wave-1 bonus.
+    expect(forceBonusForWave(1)).toBe(5000)
   })
 
   // --- End-to-end: the literal value must actually reach the score readout ----
@@ -155,17 +158,20 @@ describe('sw3-1 — resolved ROM score values (transcription contract)', () => {
     expect(s1.score - base.score).toBe(33)
   })
 
-  it('a non-clean exhaust-port kill scores exactly 25,000 (base bonus, no Force)', () => {
+  // sw7-4/S-013: a won run now ALSO banks 5,000 x surviving shields, so we subtract
+  // that term to keep pinning the ROM port/Force VALUES (25,000 / 5,000) in isolation.
+  // s1.lives is the surviving-shield count the per-shield bonus was computed from.
+  it('a non-clean exhaust-port kill scores exactly 25,000 in port bonus (no Force)', () => {
     const s0 = { ...portKill(trenchPortInWindow()), trenchShotsFired: 3 }
     const s1 = stepGame(s0, NO_INPUT, 1 / 60)
-    expect(s1.score).toBe(25000)
+    expect(s1.score - SHIELD_BONUS_PER_UNIT * s1.lives).toBe(25000)
   })
 
-  it('a clean exhaust-port kill scores 25,000 + 5,000 Force = 30,000', () => {
+  it('a clean exhaust-port kill scores 25,000 port + 5,000 Force = 30,000', () => {
     // Confirms the new 25k port value composes correctly with the untouched
     // Force bonus — it must not fold into or replace the Force branch.
     const s0 = { ...portKill(trenchPortInWindow()), trenchShotsFired: 0 }
     const s1 = stepGame(s0, NO_INPUT, 1 / 60)
-    expect(s1.score).toBe(30000)
+    expect(s1.score - SHIELD_BONUS_PER_UNIT * s1.lives).toBe(30000)
   })
 })

@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 156,
+      "line": 163,
       "verbatim": "export const TIE_SCORE = 1000"
     }
   },
@@ -47,7 +47,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 167,
+      "line": 174,
       "verbatim": "export const FIREBALL_SCORE = 33"
     }
   },
@@ -64,7 +64,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 408,
+      "line": 415,
       "verbatim": "export const TURRET_SCORE = 200"
     }
   },
@@ -81,7 +81,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 705,
+      "line": 735,
       "verbatim": "      score += TURRET_SCORE"
     }
   },
@@ -132,7 +132,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 490,
+      "line": 549,
       "verbatim": "export const TRENCH_BONUS = 25000"
     }
   },
@@ -149,7 +149,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 614,
+      "line": 705,
       "verbatim": "export const SURFACE_CLEAR_BONUS = 50000"
     }
   },
@@ -166,7 +166,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 137,
+      "line": 144,
       "verbatim": "export const STARTING_LIVES = 6"
     }
   },
@@ -183,12 +183,13 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 440,
-      "verbatim": "  const lives = Math.max(0, state.lives - damage)"
+      "line": 1287,
+      "verbatim": "  return { lives: Math.max(0, lives - 1), shieldHitAt: t }"
     }
   },
   {
     "id": "S-012",
+    "remediated_by": "sw7-4",
     "class": "DIVERGENCE",
     "title": "'Use the Force' bonus should scale with wave (5k/10k/25k/50k/100k), ours is a flat 5,000",
     "claim": "The clean-run Force bonus in the ROM is a per-wave table TSCFRC indexed by GM.WAV: wave 0=5,000; 1=10,000; 2=25,000; 3=50,000; 4+=100,000. Ours FORCE_BONUS = 5000 (flat), matching only wave 0. Waves 1+ are 2x-20x too low.",
@@ -239,6 +240,7 @@
   },
   {
     "id": "S-015",
+    "remediated_by": "sw7-4",
     "class": "BOOK_WAS_WRONG",
     "title": "Score-threshold extra shields (400,000 / 800,000) have no primary-source basis",
     "claim": "Ours awards +1 shield/life the first time the score crosses 400,000 and 800,000 (EXTRA_LIFE_THRESHOLDS, applied in finalizeScore). The primary source has NO score-threshold extra-shield mechanism: the strings 40000/80000 appear NOWHERE in the shipped source, and the ONLY shield-replenish path is ADCGAS — an operator-option amount (0-3 units, OPTS1) added only after the player KILLS the Death Star.",
@@ -271,7 +273,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 425,
+      "line": 431,
       "verbatim": "      damage++"
     },
     "recommendation": "fix",

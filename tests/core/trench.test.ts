@@ -63,7 +63,9 @@ import {
   EXHAUST_PORT_DISTANCE,
   TRENCH_SCROLL_SPEED,
   TRENCH_BONUS,
-  towersForWave,
+  SHIELD_BONUS_PER_UNIT,
+  SURFACE_END_SEQ,
+  SURFACE_SEQ_SPAN,
   type GameState,
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
@@ -157,7 +159,16 @@ describe('Wave 3 — the exhaust port scrolls toward the cockpit', () => {
   })
 
   it('entering the trench from the cleared surface spawns the port far downrange', () => {
-    const s0: GameState = { ...surface(), phaseKills: towersForWave(1), turrets: [], enemyShots: [] }
+    // sw7-18 / D-019: the surface clears by TRAVERSAL (gdSeq >= 5), not an all-towers
+    // count. Seat a wave-2 run at that completion so the next step crosses to the trench.
+    const s0: GameState = {
+      ...surface(),
+      wave: 2,
+      gdSeq: SURFACE_END_SEQ,
+      surfaceScrollZ: SURFACE_END_SEQ * SURFACE_SEQ_SPAN + 1,
+      turrets: [],
+      enemyShots: [],
+    }
     const s1 = crossFrom(s0, 'surface')
     expect(s1.phase).toBe('trench')
     expect(s1.exhaustPort).not.toBeNull()
@@ -184,7 +195,8 @@ describe('Wave 3 — destroying the exhaust port', () => {
     const s1 = fireAndFlyOut(base)
     expect(s1.exhaustPort).toBeNull() // the port is destroyed
     expect(s1.projectiles).toHaveLength(0) // the gun spawned nothing to spend
-    expect(s1.score).toBe(base.score + TRENCH_BONUS) // the bonus is awarded
+    // sw7-4/S-013: the win also banks 5,000 x surviving shields (s1.lives, unchanged here).
+    expect(s1.score).toBe(base.score + TRENCH_BONUS + SHIELD_BONUS_PER_UNIT * s1.lives) // the bonus is awarded
     expect(s1.lives).toBe(base.lives) // destroying it is not a crash
   })
 
@@ -201,7 +213,8 @@ describe('Wave 3 — destroying the exhaust port', () => {
     expect(s1.phase).toBe('space') // the next wave opens in the space phase
     expect(s1.phaseKills).toBe(0) // fresh phase counter
     expect(s1.exhaustPort).toBeNull() // no stale target carried into the next wave
-    expect(s1.score).toBe(500 + TRENCH_BONUS)
+    // sw7-4/S-013: the win also banks 5,000 x surviving shields (s1.lives).
+    expect(s1.score).toBe(500 + TRENCH_BONUS + SHIELD_BONUS_PER_UNIT * s1.lives)
   })
 
   it('a shot that misses leaves the port intact, the score untouched, and the run going', () => {

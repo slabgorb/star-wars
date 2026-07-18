@@ -201,8 +201,14 @@ const loop = createLoop(
         case 'tower-bonus':
           // Clearing every surface tower banks the 50,000 bonus on the same frame
           // as the surface->trench level-clear (sw3-3) — reuse the fanfare cue,
-          // the same no-new-asset pattern as force-bonus. A bespoke
-          // "50,000 FOR SHOOTING ALL TOWERS" banner is a HUD follow-on.
+          // the same no-new-asset pattern as force-bonus. The
+          // "50,000 FOR SHOOTING ALL TOWERS" banner (H-021) is drawn by render.ts.
+          audio.play('levelClear')
+          break
+        case 'shield-bonus':
+          // The per-surviving-shield wave bonus (sw7-4 / S-013) banks on the winning
+          // frame alongside the Force bonus — reuse the fanfare, the same no-new-asset
+          // pattern. Its "BONUS FOR REMAINING ENERGY" banner is drawn by render.ts.
           audio.play('levelClear')
           break
         case 'death-star-destroyed':

@@ -12,8 +12,8 @@
     },
     "ours": {
       "file": "src/core/surfaceMazes.ts",
-      "line": 54,
-      "verbatim": "      [12288, 1024, 3], [8192, 3072, 3], [-26624, 4096, 3], [18432, 5120, 3],"
+      "line": 66,
+      "verbatim": "      [12288, 1024, 3, 1], [8192, 3072, 3, 0], [-26624, 4096, 3, 1], [18432, 5120, 3, 1],"
     }
   },
   {
@@ -29,8 +29,8 @@
     },
     "ours": {
       "file": "src/core/surfaceMazes.ts",
-      "line": 67,
-      "verbatim": "      [-32768, 8192, 3], [-24576, 8192, 3], [-20480, 8192, 3], [20480, 8192, 3],"
+      "line": 79,
+      "verbatim": "      [-32768, 8192, 3, 2], [-24576, 8192, 3, 1], [-20480, 8192, 3, 1], [20480, 8192, 3, 1],"
     }
   },
   {
@@ -46,8 +46,8 @@
     },
     "ours": {
       "file": "src/core/surfaceMazes.ts",
-      "line": 86,
-      "verbatim": "      [-13312, 21504, 3], [13312, 21504, 3], [-24576, 24576, 1], [-8192, 24576, 3],"
+      "line": 98,
+      "verbatim": "      [-13312, 21504, 3, 1], [13312, 21504, 3, 1], [-24576, 24576, 1, 1], [-8192, 24576, 3, 0],"
     }
   },
   {
@@ -63,8 +63,8 @@
     },
     "ours": {
       "file": "src/core/surfaceMazes.ts",
-      "line": 98,
-      "verbatim": "      [0, 16384, 3], [12288, 16384, 3], [32768, 16384, 1], [-30720, 20480, 1], [0, 20480, 1],"
+      "line": 110,
+      "verbatim": "      [0, 16384, 3, 0], [12288, 16384, 3, 0], [32768, 16384, 1, 1], [-30720, 20480, 1, 2], [0, 20480, 1, 0],"
     }
   },
   {
@@ -80,8 +80,8 @@
     },
     "ours": {
       "file": "src/core/surfaceMazes.ts",
-      "line": 110,
-      "verbatim": "      [2048, 4096, 1], [8192, 4096, 1], [-14336, 8192, 1], [14336, 8192, 1], [-7168, 11264, 1],"
+      "line": 122,
+      "verbatim": "      [2048, 4096, 1, 0], [8192, 4096, 1, 1], [-14336, 8192, 1, 1], [14336, 8192, 1, 1], [-7168, 11264, 1, 0],"
     }
   },
   {
@@ -97,8 +97,8 @@
     },
     "ours": {
       "file": "src/core/surfaceMazes.ts",
-      "line": 123,
-      "verbatim": "      [-20480, 4096, 3], [-8192, 4096, 3], [8192, 4096, 3], [20480, 4096, 3],"
+      "line": 135,
+      "verbatim": "      [-20480, 4096, 3, 1], [-8192, 4096, 3, 1], [8192, 4096, 3, 1], [20480, 4096, 3, 1],"
     }
   },
   {
@@ -114,8 +114,8 @@
     },
     "ours": {
       "file": "src/core/surfaceMazes.ts",
-      "line": 137,
-      "verbatim": "      [-26624, 24576, 1], [26624, 4096, 1], [-12288, 8192, 3], [-28672, 12288, 3],"
+      "line": 149,
+      "verbatim": "      [-26624, 24576, 1, 2], [26624, 4096, 1, 2], [-12288, 8192, 3, 1], [-28672, 12288, 3, 2],"
     }
   },
   {
@@ -131,8 +131,8 @@
     },
     "ours": {
       "file": "src/core/surfaceMazes.ts",
-      "line": 152,
-      "verbatim": "      [-15360, 5120, 1], [15360, 5120, 1], [-22528, 10240, 1], [22528, 10240, 1],"
+      "line": 164,
+      "verbatim": "      [-15360, 5120, 1, 0], [15360, 5120, 1, 0], [-22528, 10240, 1, 2], [22528, 10240, 1, 2],"
     }
   },
   {
@@ -148,8 +148,8 @@
     },
     "ours": {
       "file": "src/core/surfaceMazes.ts",
-      "line": 170,
-      "verbatim": "      [-4096, 24576, 1], [4096, 24576, 1], [31744, 24576, 1], [-14336, 28672, 1],"
+      "line": 182,
+      "verbatim": "      [-4096, 24576, 1, 0], [4096, 24576, 1, 0], [31744, 24576, 1, 3], [-14336, 28672, 1, 1],"
     }
   },
   {
@@ -165,8 +165,8 @@
     },
     "ours": {
       "file": "src/core/surfaceMazes.ts",
-      "line": 183,
-      "verbatim": "      [0, 24576, 1], [-31744, 26624, 1], [-26624, 28672, 1], [-18432, 28672, 1],"
+      "line": 195,
+      "verbatim": "      [0, 24576, 1, 3], [-31744, 26624, 1, 3], [-26624, 28672, 1, 1], [-18432, 28672, 1, 1],"
     }
   },
   {
@@ -182,7 +182,7 @@
     },
     "ours": {
       "file": "src/core/surfaceMazes.ts",
-      "line": 194,
+      "line": 206,
       "verbatim": "  es.filter((e) => e.kind !== 'bunker').length"
     }
   },
@@ -199,8 +199,8 @@
     },
     "ours": {
       "file": "src/core/surfaceMazes.ts",
-      "line": 252,
-      "verbatim": "  else if (w <= 20) idx = w - 2 // ROM wave numbering: wave 2 -> index 0 (BUNK)"
+      "line": 265,
+      "verbatim": "  if (w <= 20) idx = w - 2 // ROM wave numbering: wave 2 -> index 0 (BUNK)"
     }
   },
   {
@@ -216,7 +216,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 404,
+      "line": 411,
       "verbatim": "export const SKIM_ALTITUDE = 128"
     },
     "verdict": "CONFIRMED",
@@ -235,7 +235,7 @@
     },
     "ours": {
       "file": "src/core/surfaceMazes.ts",
-      "line": 253,
+      "line": 266,
       "verbatim": "  else idx = WRAP_START + ((w - 21) % WRAP_COUNT) // cycle the last six"
     },
     "recommendation": "accept"
@@ -257,7 +257,8 @@
       "verbatim": "  if (w === 1) idx = MAZE_ORDER.indexOf('SQUARE') // clone intro (no ROM wave-1 ground)"
     },
     "recommendation": "accept",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-18"
   },
   {
     "id": "D-016",
@@ -293,7 +294,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 674,
+      "line": 704,
       "verbatim": "      vel: scale(normalize(sub(ship, muzzle)), ENEMY_SHOT_SPEED),"
     },
     "recommendation": "accept",
@@ -311,7 +312,8 @@
       "verbatim": "\t.BYTE .C\t\t;AWAKENING SEQUENCE NUMBER"
     },
     "ours": null,
-    "recommendation": "accept"
+    "recommendation": "accept",
+    "remediated_by": "sw7-18"
   },
   {
     "id": "D-019",
@@ -326,11 +328,12 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1124,
+      "line": 1166,
       "verbatim": "      return allTowersKilled(s) || s.surfaceScrollZ >= surfaceFieldDepth(s.wave)"
     },
     "recommendation": "accept",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-18"
   },
   {
     "id": "D-020",
@@ -361,7 +364,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 603,
+      "line": 609,
       "verbatim": "  if (altitude < MIN_SKIM_ALTITUDE) {"
     },
     "recommendation": "accept",
@@ -380,10 +383,11 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 472,
+      "line": 473,
       "verbatim": "export const TURRET_SCROLL_SPEED = 600"
     },
     "recommendation": "accept",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-18"
   }
 ]

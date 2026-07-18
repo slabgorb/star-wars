@@ -54,9 +54,11 @@ import { stepGame } from '../../src/core/sim'
 import {
   initialState,
   SPACE_WAVE_QUOTA,
-  towersForWave,
+  SURFACE_END_SEQ,
+  SURFACE_SEQ_SPAN,
   EXHAUST_PORT_DISTANCE,
   PORT_APPROACH_WINDOW,
+  TRENCH_SCROLL_SPEED,
   type GameState,
 } from '../../src/core/state'
 import { TRENCH_EYE_MIN } from '../../src/core/trench-channel'
@@ -169,7 +171,14 @@ describe('tune cue — the finale fires when the Death Star detonates (U-012, WS
     // pilot must be flying the floor himself. At TRENCH_EYE_MIN (512, the ROM's minimum
     // ground clearance) with the yoke hard down, the beam grazes the porthole exactly as
     // it crosses the $800 gate — the last frame on which this shot is takeable at all.
-    const atGate: Vec3 = [0, 0, -PORT_APPROACH_WINDOW]
+    // RE-DERIVED for the ROM scroll (sw7-6 / B-008): the port advances one scroll-step
+    // (TRENCH_SCROLL_SPEED × DT ≈ 262 u) between the frame's start and the beam's resolution, so
+    // it must be seated one step + a hair OUTSIDE the gate to land just inside the $800 window on
+    // the resolution frame — where it both detonates (in-window) and is still within the EYE_MIN
+    // hard-down beam's grazing reach (which the port climbs out of as it closes). At the old 500
+    // u/s speed it barely moved, so seating it AT the gate sufficed. The 30-unit inset keeps it
+    // clear of the window edge without climbing past where the yoke-hard-down beam can reach.
+    const atGate: Vec3 = [0, 0, -(PORT_APPROACH_WINDOW + TRENCH_SCROLL_SPEED * DT - 30)]
     const HARD_DOWN: Input = { aimX: 0, aimY: -1, fire: true, aspect: 1 }
     const s0 = trench(portAt(atGate), { trenchView: [0, TRENCH_EYE_MIN, 0] })
     const s1 = stepGame(s0, HARD_DOWN, DT)
@@ -191,7 +200,8 @@ describe('tune cue — the finale fires when the Death Star detonates (U-012, WS
 
 describe('tune cue — the descent plays on the space -> surface edge (U-014, WSMAIN.MAC:1439)', () => {
   it('cues descent when the space wave clears into the surface', () => {
-    const s1 = stepGame(playing({ phase: 'space', phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
+    // WAVE 2 — wave 1 has no ground phase (D-015); the descent rides the space→surface edge.
+    const s1 = stepGame(playing({ phase: 'space', wave: 2, phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
     expect(s1.phase).toBe('surface') // the transition actually happened
     expect(tunesOf(s1)).toContain('descent')
     // The towers loop still opens the phase (sw3-5's contract is untouched): the
@@ -202,8 +212,10 @@ describe('tune cue — the descent plays on the space -> surface edge (U-014, WS
   })
 
   it('does NOT cue descent on the surface -> trench edge', () => {
+    // Seat the wave-2 surface at its traversal completion (gdSeq >= 5, D-019) so the
+    // next step crosses to the trench — the descent must NOT ride that edge.
     const s1 = stepGame(
-      playing({ phase: 'surface', phaseKills: towersForWave(1) }),
+      playing({ phase: 'surface', wave: 2, gdSeq: SURFACE_END_SEQ, surfaceScrollZ: SURFACE_END_SEQ * SURFACE_SEQ_SPAN + 1 }),
       NO_INPUT,
       DT,
     )

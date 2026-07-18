@@ -76,11 +76,13 @@ import { describe, it, expect } from 'vitest'
 import {
   initialState,
   TRENCH_BONUS,
+  SHIELD_BONUS_PER_UNIT,
   TRENCH_SCROLL_SPEED,
   PORT_HIT_RADIUS,
   COCKPIT_HIT_RADIUS,
-  towersForWave,
   STARTING_LIVES,
+  SURFACE_END_SEQ,
+  SURFACE_SEQ_SPAN,
   type GameState,
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
@@ -183,7 +185,8 @@ describe('sw2-4 — destroying the port emits a Death-Star-destroyed cue', () =>
     expect(s1.exhaustPort).toBeNull() // destroyed
     expect(s1.phase).toBe('space') // warped to the next wave
     expect(s1.wave).toBe(5)
-    expect(s1.score).toBe(500 + TRENCH_BONUS) // the bonus still lands
+    // sw7-4/S-013: the win also banks 5,000 x surviving shields (s1.lives).
+    expect(s1.score).toBe(500 + TRENCH_BONUS + SHIELD_BONUS_PER_UNIT * s1.lives) // the bonus still lands
     // Han's winning-shot line still fires on the port kill (sw2-5, wave-gated by sw7-2)
     // — the new explosion cue rides ALONGSIDE it, not instead of it.
     expect(s1.events).toContainEqual({ type: 'speech', line: 'greatShotKidThatWasOneInAMillion' })
@@ -315,10 +318,15 @@ describe('sw2-4 — a missed run gives a clear miss indication', () => {
     // not fire. That is the same guard, and a stronger statement of it — the cue is the port's
     // business, and it is not merely indifferent to what the gun launched, there is nothing to be
     // indifferent to.
-    const portZ = -COCKPIT_HIT_RADIUS * 5 // 400u ahead — nowhere near arrival
+    // RE-DERIVED for the ROM scroll (sw7-6 / B-008): the port advances ~262 units per 1/60 s
+    // frame here, so the old 400u-downrange probe reaches the cockpit in two frames and the loop
+    // below would read a real arrival as the thing it means to rule out. Seat it at its full spawn
+    // distance — far downrange, nowhere near arrival across the frames checked — so the guard
+    // isolates what it claims: a stray shot, not the port's own arrival, and no miss fires.
+    const portZ = -EXHAUST_PORT_DISTANCE
     const s0 = trench(portAt([0, 0, portZ]))
-    // The port itself is unaimable from here (~62° down), which is the point — the pilot's shot
-    // goes down the trench, where the yoke actually reaches, and the port is nowhere near it.
+    // The pilot's shot goes wide — far off-axis, down the trench where the yoke reaches — nowhere
+    // near the on-axis port, so it cannot arm it; the port simply scrolls on, un-hit.
     const wide: Vec3 = [EXHAUST_PORT_DISTANCE / 2, 0, -EXHAUST_PORT_DISTANCE]
     expect(aimAt(wide, eyeOf(s0)).reachable).toBe(true)
     let s = stepGame(s0, fireAt(s0, wide), FRAME)
@@ -370,10 +378,16 @@ describe('sw2-4 — the outcome timestamps drive & survive the visual beat', () 
     // can't re-trigger a banner in a new trench. Cross surface→trench carrying
     // non-null stamps and assert they are cleared on arrival.
     const surface: GameState = {
-      ...initialState(1),
+      ...initialState(2), // wave 2 — the first wave with a ground phase (D-015)
       phase: 'surface',
-      phaseKills: towersForWave(1),
+      // Seat the surface at its traversal completion (gdSeq >= 5, sw7-18 / D-019 —
+      // the ROM ends the ground phase by traversal, not by an all-towers count) so
+      // the next step crosses the surface->trench edge; surfaceScrollZ is set
+      // consistently so stepSurface re-derives the same gdSeq.
+      gdSeq: SURFACE_END_SEQ,
+      surfaceScrollZ: SURFACE_END_SEQ * SURFACE_SEQ_SPAN + 1,
       turrets: [],
+      surfaceMazeLaid: true,
       enemyShots: [],
       deathStarDestroyedAt: 999,
       exhaustPortMissedAt: 999,

@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 64,
+      "line": 65,
       "verbatim": "const GLOW = '#00e5ff' // cockpit cyan"
     }
   },
@@ -29,7 +29,7 @@
     },
     "ours": {
       "file": "src/core/gameRules.ts",
-      "line": 47,
+      "line": 45,
       "verbatim": "  return [clamp(aimX, -1, 1), clamp(aimY, -1, 1)]"
     },
     "recommendation": "accept"
@@ -61,7 +61,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 919,
+      "line": 892,
       "verbatim": "    glowText(ctx, 'EXHAUST PORT AHEAD', w / 2, h * 0.22, BANNER_TEXT_PX, 'center', '#dddddd', 14)"
     }
   },
@@ -78,7 +78,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 937,
+      "line": 932,
       "verbatim": "    glowText(ctx, 'DEATH STAR DESTROYED', w / 2, h * 0.45, BANNER_TEXT_PX, 'center', '#ffffff', 18)"
     }
   },
@@ -95,7 +95,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 945,
+      "line": 940,
       "verbatim": "    glowText(ctx, 'EXHAUST PORT MISSED', w / 2, h * 0.45, BANNER_TEXT_PX, 'center', '#ff5555', 16)"
     }
   },
@@ -112,7 +112,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 1065,
+      "line": 1060,
       "verbatim": "  glowText(ctx, 'GAME OVER', w / 2, h * 0.24, BANNER_TEXT_PX, 'center', TIE_GLOW, 24)"
     }
   },
@@ -129,12 +129,13 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 1047,
+      "line": 1042,
       "verbatim": "  glowText(ctx, 'STAR WARS', w / 2, h * 0.26, TITLE_TEXT_PX, 'center', GLOW, 28)"
     }
   },
   {
     "id": "H-009",
+    "remediated_by": "sw7-4",
     "class": "CONFIRMED",
     "title": "\"FOR USING THE FORCE\" bonus banner text matches (amount is per-wave in ROM)",
     "claim": "The clean-trench-run reward is displayed as <n> followed by message < FOR USING THE FORCE> (TCMES.MAC:622, drawn by VWFRC in WSGAS which prints a 6-digit score then DOMESS on MS.USE+1). Our banner draws `${amount} FOR USING THE FORCE`. The trailing text matches exactly.",
@@ -146,7 +147,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 928,
+      "line": 894,
       "verbatim": "    glowText(ctx, `${FORCE_BONUS.toLocaleString('en-US')} FOR USING THE FORCE`, w / 2, h * 0.16, BANNER_TEXT_PX, 'center', '#dddddd', 12)"
     }
   },
@@ -206,7 +207,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 1075,
+      "line": 1070,
       "verbatim": "    glowText(ctx, 'ENTER YOUR INITIALS', w / 2, h * 0.42, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)"
     },
     "recommendation": "accept",
@@ -283,7 +284,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 523,
+      "line": 529,
       "verbatim": "const MAX_INITIALS = 3"
     }
   },
@@ -398,7 +399,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 976,
+      "line": 971,
       "verbatim": "function drawShieldMeter(ctx: CanvasRenderingContext2D, state: GameState, w: number): void {"
     },
     "recommendation": "accept"
@@ -416,7 +417,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 842,
+      "line": 809,
       "verbatim": "const HUD_SHIELD_COLOR = '#22e600' // PROVISIONAL(findings ## HUD & framing, ## Colors & intensities) — register pinned (healthy tier only), hex matched to a cabinet screenshot"
     },
     "recommendation": "accept",
@@ -440,5 +441,25 @@
       "verbatim": "// The HUD / framing text is an authentic stroke-vector font (the 1981 ROM VGMSGA"
     },
     "recommendation": "accept"
+  },
+  {
+    "id": "H-026",
+    "class": "DIVERGENCE",
+    "title": "Green predictive lock-on ring is non-ROM — the reticle is the bare site cursor, never a lock circle",
+    "claim": "We rang the nearest TIE under the reticle with a green circle (render.ts drawLockOn, gameRules.ts LOCK_RADIUS_NDC=0.12, story 8-14) — a predictive 'your next shot connects' aim-assist. The 1983 site has no such ring: VWSITE ('VIEW ALL SITE STUFF') draws exactly the joystick-moved cursor (VWCURS) and the X-wing cockpit parts (VWPLAN, see H-003) — neither is a predictive lock circle. There is no lock ring anywhere in the 1983 source.",
+    "reasoning": "No `lock`/`lock-on` exists in the 1983 source (grep hits are only inside BLOCK, in the DIVTST/MATEST/SND test files). VWSITE (WSSITE.MAC:37-40) is just `JSR VWCURS` (the joystick-moved cursor) + `JSR VWPLAN` (the X-wing cockpit hood/gun parts, H-003) — there is no ring routine among them. The cabinet's only target feedback is the site crosshair plus a POST-hit flash (LZ.HIT, the unported G-008) — feedback AFTER a hit, never a predictive ring before the shot lands. Object_12 (three concentric squares), once guessed to be a targeting/lock box, is `.WP PORT` — the THERMAL EXHAUST PORT (WSOBJ.MAC), SUPERSEDED in sw5-4. The QUANTITY the ring computed from IS authentic — the nearest object under the site, CLSLZ = min(CL.GDS, CL.ADS), the sw7-17 hitscan — but the cabinet never draws a ring around it. sw7-21 removed the ring for authenticity and kept the CLSLZ targeting (`beamHit`).",
+    "source": {
+      "file": "WSSITE.MAC",
+      "line": 37,
+      "verbatim": "VWSITE::\t\t\t;VIEW ALL SITE STUFF WITH NORMAL COLORS"
+    },
+    "ours": {
+      "file": "src/core/gameRules.ts",
+      "line": 152,
+      "verbatim": "export const LOCK_RADIUS_NDC = 0.12"
+    },
+    "recommendation": "fix",
+    "size": "s",
+    "remediated_by": "sw7-21"
   }
 ]

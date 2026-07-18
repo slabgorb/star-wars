@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 233,
+      "line": 240,
       "verbatim": "export const TIE_SPAWN_DISTANCE = 0x7c00 // 31744 — WSCPU STARTING LOCATIONS depth word"
     }
   },
@@ -29,7 +29,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1492,
+      "line": 1613,
       "verbatim": "const ROM_LATERAL_UNIT = 0x400 // 1024 — the ×$400 STARTING-LOCATION lateral step"
     }
   },
@@ -46,7 +46,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1503,
+      "line": 1624,
       "verbatim": "  [-2 * ROM_LATERAL_UNIT, 0], // 1D1"
     }
   },
@@ -63,7 +63,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 191,
+      "line": 198,
       "verbatim": "export const WAVE_SIZE = 3"
     }
   },
@@ -80,7 +80,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 386,
+      "line": 392,
       "verbatim": "        killedTie.add(hitTie)"
     }
   },
@@ -97,7 +97,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 373,
+      "line": 380,
       "verbatim": "export const TIE_NEAR_BOUND = 0x800 // 2048 — WSCPU \"not too close\" fire/peel floor"
     }
   },
@@ -114,7 +114,7 @@
     },
     "ours": {
       "file": "src/core/gameRules.ts",
-      "line": 240,
+      "line": 182,
       "verbatim": "const FIRE_CONCURRENCY: readonly number[] = [1, 1, 2, 3, 4, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]"
     }
   },
@@ -131,7 +131,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1524,
+      "line": 1645,
       "verbatim": "  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), bank }"
     }
   },
@@ -170,7 +170,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 423,
+      "line": 429,
       "verbatim": "  const liveEnemies = standingEnemies.filter((e) => {"
     },
     "recommendation": "fix",
@@ -191,7 +191,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1450,
+      "line": 1571,
       "verbatim": "  const peeling = e.peeling ?? (dist <= TIE_NEAR_BOUND && lateralOffset >= COCKPIT_HIT_RADIUS)"
     },
     "recommendation": "accept",
@@ -210,7 +210,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 307,
+      "line": 313,
       "verbatim": "    if (inPassWindow && cooldown <= 0 && enemyShots.length < params.maxConcurrentShots) {"
     },
     "recommendation": "accept",
@@ -229,7 +229,7 @@
     },
     "ours": {
       "file": "src/core/gameRules.ts",
-      "line": 217,
+      "line": 159,
       "verbatim": "const RAMP_PER_WAVE = 0.15"
     },
     "recommendation": "accept",
@@ -248,7 +248,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 242,
+      "line": 249,
       "verbatim": "export const ENEMY_SPEED = 10000"
     },
     "recommendation": "accept",
@@ -267,7 +267,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1515,
+      "line": 1636,
       "verbatim": "  const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]"
     },
     "recommendation": "accept",
@@ -336,7 +336,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 592,
+      "line": 683,
       "verbatim": "export const SPACE_WAVE_QUOTA = 6"
     },
     "recommendation": "accept",

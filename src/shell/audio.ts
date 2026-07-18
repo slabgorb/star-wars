@@ -89,19 +89,21 @@ export const MUSIC_CHANNELS: Record<MusicName, string> = {
   imperialMarch: 'music',
 }
 
-// The five one-shot tunes (sw7-8, U-010..U-014), baked by the same
-// tools/music-bake pipeline as the loops and served from the same music/
+// The one-shot tunes (sw7-8, U-010..U-014; sw7-18 adds finishGround), baked by
+// the same tools/music-bake pipeline as the loops and served from the same music/
 // prefix. Names follow the CALLERS in the 1983 source (never the entry-point
 // labels — the PMBEN lesson): deathKnell = PMSF2 (WSGUNS.MAC:1220 FRPTGN),
 // cantina = PMCNT (WSMAIN.MAC:1164 PHIENT), finale = PMEND (WSMAIN.MAC:2179
 // PHIDX1), bensTheme = PMBEN (WSMAIN.MAC:2161, lose-with-no-high-score),
-// descent = PMDES (WSMAIN.MAC:1439).
+// descent = PMDES (WSMAIN.MAC:1439), finishGround = PMREB "FINISH GROUND WITH
+// REBEL" (WSMAIN.MAC:1673, late in the surface traversal).
 export const TUNES = {
   deathKnell: 'death_knell.wav',
   cantina: 'cantina.wav',
   finale: 'finale.wav',
   bensTheme: 'bens_theme.wav',
   descent: 'descent.wav',
+  finishGround: 'finish_ground.wav',
 } as const
 
 export type TuneName = keyof typeof TUNES
@@ -118,6 +120,7 @@ export const TUNE_CHANNELS: Record<TuneName, string> = {
   finale: 'tune',
   bensTheme: 'tune',
   descent: 'tune',
+  finishGround: 'tune',
 }
 
 // TMS5220 LPC speech (story 8-7), under its own R2 prefix. AUTHENTIC re-synthesis bakes

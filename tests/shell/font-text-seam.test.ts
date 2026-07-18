@@ -28,7 +28,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render } from '../../src/shell/render'
 import {
   initialState,
-  FORCE_BONUS,
+  forceBonusForWave,
   PORT_AHEAD_RANGE,
   type GameState,
 } from '../../src/core/state'
@@ -145,8 +145,10 @@ describe('SH2-5 — the trench banners flow through layoutText', () => {
   })
 
   it('hands the comma-grouped force-bonus banner to layoutText', () => {
+    // sw7-4 / S-012: the banner shows the WAVE-scaled bonus (forceBonusForWave), not
+    // a flat 5,000. trenchBanners() is wave 2 -> 10,000.
     render(makeCtx(), trenchBanners(), W, H, [])
-    const banner = `${FORCE_BONUS.toLocaleString('en-US')} FOR USING THE FORCE`
+    const banner = `${forceBonusForWave(2).toLocaleString('en-US')} FOR USING THE FORCE`
     expect(banner).toContain(',') // guard: the fixture really exercises the comma
     expect(texts()).toContain(banner)
   })

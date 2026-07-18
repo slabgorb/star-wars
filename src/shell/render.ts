@@ -14,7 +14,8 @@ import {
   SPACE_WAVE_QUOTA,
   STARTING_LIVES,
   PORT_AHEAD_RANGE,
-  FORCE_BONUS,
+  forceBonusForWave,
+  SHIELD_BONUS_PER_UNIT,
   TIE_WING_LIFE_SECONDS,
   TIE_GLOBE_LIFE_SECONDS,
   TIE_DEATH_SPREAD,
@@ -42,7 +43,7 @@ import {
 import { surfaceGrid } from '../core/surface-grid'
 import { trenchChannel } from '../core/trench-channel'
 import { trenchWallDetail } from '../core/trench-detail'
-import { crosshairNdc, lockedEnemy, LOCK_RADIUS_NDC, FOV_Y } from '../core/gameRules'
+import { crosshairNdc, FOV_Y } from '../core/gameRules'
 import { surfaceShip } from '../core/sim' // the ship point itself (sw7-16), not a copy of it
 import {
   perspective,
@@ -475,44 +476,10 @@ export function render(
   } else if (state.mode === 'gameover') {
     drawGameOver(ctx, state, highScores, w, h)
   } else {
-    // The green lock-on ring sits UNDER the cyan reticle so the crosshair always
-    // reads on top of it; both composite over the 3D scene (drawn above).
-    drawLockOn(ctx, state, proj, w, h)
     drawCrosshair(ctx, state, w, h)
     drawHudHeader(ctx, state, w, h)
     drawTrenchBanners(ctx, state, w, h)
   }
-}
-
-/**
- * The green lock-on ring (story 8-14). The core decides WHICH enemy is under the
- * reticle — `lockedEnemy` returns the nearest TIE a shot would hit — and the shell
- * only rings it, honouring the boundary. Drawn at the target's projected screen
- * position with the lock radius scaled NDC→pixels (LOCK_RADIUS_NDC spans the NDC
- * half-height, i.e. h/2 px). Nothing is drawn when no target is locked, so the
- * ring is the player's "your next shot connects" confirmation. Naturally limited
- * to the space phase: surface/trench carry no `enemies`, so nothing locks there.
- */
-function drawLockOn(
-  ctx: CanvasRenderingContext2D,
-  state: GameState,
-  proj: Mat4,
-  w: number,
-  h: number,
-): void {
-  const target = lockedEnemy(state, w / h)
-  if (!target) return
-  const c = project(target.pos, proj, w, h)
-  if (!c) return
-  const r = LOCK_RADIUS_NDC * (h / 2)
-  ctx.lineWidth = 2
-  ctx.strokeStyle = BOLT_GLOW
-  ctx.shadowColor = BOLT_GLOW
-  ctx.shadowBlur = 12
-  ctx.beginPath()
-  ctx.arc(c[0], c[1], r, 0, Math.PI * 2)
-  ctx.stroke()
-  ctx.shadowBlur = 0
 }
 
 /**
@@ -895,6 +862,12 @@ function drawHudHeader(ctx: CanvasRenderingContext2D, state: GameState, w: numbe
 // on-screen timing for it, so this is a tuned UX choice.
 const FORCE_BANNER_SECONDS = 3
 
+// How long the reward banners (per-shield "BONUS FOR REMAINING ENERGY" and the
+// all-towers "50,000 FOR SHOOTING ALL TOWERS") dwell after they are banked (sw7-4).
+// A tuned UX dwell like FORCE_BANNER_SECONDS — the ROM shows them in its between-wave
+// beats, which our sim has no distinct screen for.
+const REWARD_BANNER_SECONDS = 3
+
 // How long the Death-Star explosion beat (flash + "DESTROYED" banner) plays after
 // a port kill, and how long the "MISSED" banner shows after a slipped-past port
 // (sw2-4). Tuned UX dwell times like FORCE_BANNER_SECONDS — no ROM timing exists.
@@ -925,7 +898,29 @@ function drawTrenchBanners(ctx: CanvasRenderingContext2D, state: GameState, w: n
     // (docs/star-wars-1983-source-findings.md:655); the plain "USE THE FORCE"
     // string listed earlier in the same item is a shorter ROM string-table
     // fragment, not the full banner text.
-    glowText(ctx, `${FORCE_BONUS.toLocaleString('en-US')} FOR USING THE FORCE`, w / 2, h * 0.16, BANNER_TEXT_PX, 'center', '#dddddd', 12)
+    // sw7-4 / S-012: the banner shows the WAVE-scaled amount (TSCFRC), not a flat 5,000.
+    glowText(ctx, `${forceBonusForWave(state.wave).toLocaleString('en-US')} FOR USING THE FORCE`, w / 2, h * 0.16, BANNER_TEXT_PX, 'center', '#dddddd', 12)
+  }
+  // The per-surviving-shield reward banner (sw7-4 / S-013): MS.BRE "BONUS FOR
+  // REMAINING ENERGY" over "5,000  X <shields>" (TCMES.MAC:611-612), banked at a won
+  // run and riding the warp on `shieldBonusAwardedAt` (re-stamped by clearRun).
+  if (
+    state.shieldBonusAwardedAt !== null &&
+    state.t - state.shieldBonusAwardedAt <= REWARD_BANNER_SECONDS
+  ) {
+    glowText(ctx, 'BONUS FOR REMAINING ENERGY', w / 2, h * 0.28, BANNER_TEXT_PX, 'center', '#dddddd', 12)
+    glowText(ctx, `${SHIELD_BONUS_PER_UNIT.toLocaleString('en-US')} X ${state.lives}`, w / 2, h * 0.34, BANNER_TEXT_PX, 'center', '#dddddd', 12)
+  }
+  // The all-towers reward banner (sw7-4 / H-021): MS.RWD "50,000 FOR SHOOTING ALL
+  // TOWERS" (TCMES.MAC:609, ROM:E039). Since sw7-18 / D-019 the bonus banks MID-SURFACE
+  // (the frame the last tower falls, decoupled from the phase clear), so `towerBonusAwardedAt`
+  // is stamped there; `progress` carries it across the surface->trench edge so the banner
+  // still shows for REWARD_BANNER_SECONDS from the stamp, whether that spans the edge or not.
+  if (
+    state.towerBonusAwardedAt !== null &&
+    state.t - state.towerBonusAwardedAt <= REWARD_BANNER_SECONDS
+  ) {
+    glowText(ctx, '50,000 FOR SHOOTING ALL TOWERS', w / 2, h * 0.22, BANNER_TEXT_PX, 'center', '#dddddd', 12)
   }
   // The winning shot's payoff (sw2-4): a bold "DEATH STAR DESTROYED" callout that
   // rides across the warp into the next wave's space phase (deathStarDestroyedAt

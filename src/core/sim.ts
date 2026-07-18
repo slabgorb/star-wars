@@ -45,7 +45,12 @@ import {
   OBJECT_CRASH_LATERAL,
   ALTITUDE_RATE,
   TURRET_SPAWN_INTERVAL,
-  TURRET_SCROLL_SPEED,
+  SURFACE_SEED_SPEED,
+  SURFACE_MAX_SPEED,
+  SURFACE_ACCEL,
+  SURFACE_SEQ_SPAN,
+  SURFACE_END_SEQ,
+  SURFACE_FINISH_GROUND_SPEED,
   TURRET_SCORE,
   TURRET_HIT_RADIUS,
   TOWER_HEIGHT,
@@ -53,18 +58,18 @@ import {
   SPACE_WAVE_QUOTA,
   towersForWave,
   SURFACE_CLEAR_BONUS,
-  EXHAUST_PORT_DISTANCE,
   TRENCH_SCROLL_SPEED,
   TRENCH_BONUS,
   PORT_HIT_RADIUS,
   PORT_APPROACH_WINDOW,
-  FORCE_BONUS,
+  forceBonusForWave,
+  SHIELD_BONUS_PER_UNIT,
+  POST_HIT_SHIELD_WINDOW,
   TIE_SWOOP_BIAS,
   TIE_BANK_ANGLE,
   TIE_NEAR_BOUND,
   TIE_EXIT_RANGE,
   TIE_PEEL_SWEEP,
-  EXTRA_LIFE_THRESHOLDS,
   BONUS_FLASH_MAX,
   BONUS_FLASH_DECAY,
 } from './state'
@@ -91,6 +96,7 @@ import {
   TRENCH_SQUARE_SCORE,
   OBSTACLE_HIT_RADIUS,
 } from './trench-obstacles'
+import { trenchPortDistance } from './trench-wedges'
 import {
   TRENCH_VIEW_HALF_W,
   TRENCH_VIEW_RATE,
@@ -437,7 +443,8 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     return true
   })
 
-  const lives = Math.max(0, state.lives - damage)
+  const spaceHit = loseShield(state.lives, state.shieldHitAt, damage, t) // S-016 window
+  const lives = spaceHit.lives
   pushFarewell(events, lives) // fatal hit → the end-of-game farewell (sw7-8, U-017)
 
   return finalizeScore(
@@ -450,6 +457,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       aimY,
       score,
       lives,
+      shieldHitAt: spaceHit.shieldHitAt,
       gameOver: lives <= 0,
       mode: lives <= 0 ? 'gameover' : state.mode,
       phaseKills: state.phaseKills + killedTie.size,
@@ -470,31 +478,29 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
 }
 
 /**
- * Fold the frame's SCORE change into its lives + HUD flash (sw3-6). Runs once at
- * every active-play return, so it catches score from any phase (TIE/fireball,
- * turrets, trench obstacles, the exhaust-port + Force bonus, the cleared-all-towers
- * bonus) uniformly:
+ * Fold the frame's SCORE change into its HUD flash (sw3-6). Runs once at every
+ * active-play return, so it catches score from any phase (TIE/fireball, turrets,
+ * trench obstacles, the exhaust-port + Force bonus, the cleared-all-towers bonus)
+ * uniformly:
  *
- * - Awards one bonus shield per EXTRA_LIFE_THRESHOLDS entry (400,000 / 800,000)
- *   the first time the score reaches it — a loop over prev-vs-new score, so a
- *   single frame's delta can cross both and grant both (do NOT ×10 the thresholds).
  * - Arms `bonusFlash` to full on any score change, else decays it toward 0 — the
  *   ROM `byte_4B2C` "score changed, redraw HUD" flash. Clamped at 0 so it lands
  *   exactly on rest, never negative.
+ *
+ * (sw7-4 / S-015 removed the score-threshold extra-shield award that used to live
+ * here — the ROM has no such grant; see EXTRA_LIFE_THRESHOLDS' removal in state.ts.)
  *
  * `prev` is the frame's input state (its `score`/`bonusFlash` are the pre-step
  * values); `next` is the fully-stepped state whose `score` is final.
  */
 export function finalizeScore(prev: GameState, next: GameState): GameState {
+  // sw7-4 / S-015: the ROM has NO score-threshold extra shield, so this funnel no
+  // longer touches `lives` — it only drives the byte_4B2C score-change flash.
   const scoreChanged = next.score !== prev.score
-  let lives = next.lives
-  for (const threshold of EXTRA_LIFE_THRESHOLDS) {
-    if (prev.score < threshold && next.score >= threshold) lives += 1
-  }
   const bonusFlash = scoreChanged
     ? BONUS_FLASH_MAX
     : Math.max(0, prev.bonusFlash - BONUS_FLASH_DECAY)
-  return { ...next, lives, bonusFlash }
+  return { ...next, bonusFlash }
 }
 
 /**
@@ -611,6 +617,25 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
   // origin is the floor, `altitude` below the pilot, and nothing about him lives there.
   const ship = surfaceShip(altitude)
 
+  // --- Accelerating forward pace (sw7-18 / D-022) ---------------------------
+  // The ROM ramps the ground speed from $100 (256 u/frame) to $400 (1024), +1
+  // u/frame per frame (WSMAIN.MAC:1621/1660-1665). Seeded on surface entry,
+  // integrated here, clamped at the cap. The WHOLE surface scroll rides this
+  // rate — both the field and the scroll accumulator — keeping the world-scroll
+  // camera inversion (STRUCTURAL-accepted); only the rate changed.
+  const scrollSpeed = Math.min(state.surfaceScrollSpeed + SURFACE_ACCEL * dt, SURFACE_MAX_SPEED)
+  const surfaceScrollZ = state.surfaceScrollZ + scrollSpeed * dt
+  // GD.SEQ: how many full $8000 forward passes have completed (WSMAIN.MAC:2537-2545).
+  const gdSeq = Math.floor(surfaceScrollZ / SURFACE_SEQ_SPAN)
+
+  // The PMREB "FINISH GROUND WITH REBEL" rider (sw7-18): the ROM fires it at
+  // PH.TIM == 14 pseudo-seconds — game-frame 224, where the per-frame speed has
+  // ramped from $100 to $1E0 (480). Fire the one-shot 'finishGround' tune the frame
+  // our accelerating rate first crosses that speed — monotonic, so exactly once.
+  if (state.surfaceScrollSpeed < SURFACE_FINISH_GROUND_SPEED && scrollSpeed >= SURFACE_FINISH_GROUND_SPEED) {
+    events.push({ type: 'tune', tune: 'finishGround' })
+  }
+
   // --- Ground objects: lay the authored WSGRND maze once, then scroll it in --
   // sw4-3: the surface is the wave's fixed, hand-authored WSGRND tower maze —
   // NOT a random spawner. Lay the whole field on the first surface frame (unless
@@ -624,8 +649,8 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     surfaceMazeLaid = true
   }
   const scrolled = field.map((turret): Turret => {
-    const pos: Vec3 = [turret.pos[0], turret.pos[1], turret.pos[2] + TURRET_SCROLL_SPEED * dt]
-    // age toward fire grace; keep the kind (bunker/tower/bishop) riding along
+    const pos: Vec3 = [turret.pos[0], turret.pos[1], turret.pos[2] + scrollSpeed * dt]
+    // age toward fire grace; keep the kind (bunker/tower/bishop) + seq riding along
     return { ...turret, pos, age: (turret.age ?? 0) + dt }
   })
   const turrets = scrolled.filter((turret) => turret.pos[2] < 0) // still ahead of the cockpit
@@ -660,7 +685,12 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
   // the clone's homing-fireball model (house rule D-017 — not the ROM's
   // directional FRB*GN guns; its distance-weighted fire chance is a logged
   // Delivery Finding, not ported).
-  const armed = turrets.filter((turret) => (turret.age ?? 0) >= TOWER_FIRE_GRACE)
+  // Awakening gate (sw7-18 / D-018): an object may fire only once the traversal
+  // has reached its awakening sequence (`gdSeq >= .C`, WSGRND.MAC:740-742). An
+  // absent seq (hand-placed fixtures / pre-D-018 saves) is awake from the start.
+  const armed = turrets.filter(
+    (turret) => (turret.age ?? 0) >= TOWER_FIRE_GRACE && gdSeq >= (turret.seq ?? 0),
+  )
   let enemyFireCooldown = state.enemyFireCooldown - dt
   if (enemyFireCooldown <= 0 && armed.length > 0 && enemyShots.length < MAX_FIREBALL_SLOTS) {
     const shooter = armed[nextInt(rng, armed.length)]
@@ -721,8 +751,23 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     return true
   })
 
-  const lives = Math.max(0, state.lives - damage)
+  const surfaceHit = loseShield(state.lives, state.shieldHitAt, damage, t) // S-016 window
+  const lives = surfaceHit.lives
   pushFarewell(events, lives) // fatal hit → the end-of-game farewell (sw7-8, U-017)
+
+  // The 50,000 "cleared all towers" bonus (sw3-3 / H-021) now banks MID-PHASE,
+  // decoupled from the phase length (sw7-18 / D-019): the frame the last tower
+  // falls — phaseKills reaches the wave's quota — once, banner and all, while the
+  // pilot keeps flying the rest of the traversal. `towerBonusAwardedAt` is the
+  // once-latch; the bunkers-only wave (0 towers) can never satisfy it.
+  const phaseKills = state.phaseKills + towerKills // towers only — bunkers are quota-neutral
+  const towerQuota = towersForWave(state.wave)
+  let towerBonusAwardedAt = state.towerBonusAwardedAt
+  if (towerQuota > 0 && phaseKills >= towerQuota && towerBonusAwardedAt === null) {
+    score += SURFACE_CLEAR_BONUS
+    events.push({ type: 'tower-bonus', amount: SURFACE_CLEAR_BONUS })
+    towerBonusAwardedAt = t
+  }
 
   return {
     ...state,
@@ -732,14 +777,18 @@ function stepSurface(state: GameState, input: Input, dt: number, common: StepCom
     aimY,
     score,
     lives,
+    shieldHitAt: surfaceHit.shieldHitAt,
     altitude,
-    // The ground grid rides the SAME flow as the turrets (story 11-5) — both
-    // advance by TURRET_SCROLL_SPEED·dt — so they rush past the cockpit together.
-    surfaceScrollZ: state.surfaceScrollZ + TURRET_SCROLL_SPEED * dt,
+    // The ground grid rides the SAME accelerating flow as the turrets (sw7-18 /
+    // D-022) — both advance by scrollSpeed·dt — so they rush past together.
+    surfaceScrollZ,
+    surfaceScrollSpeed: scrollSpeed,
+    gdSeq,
+    towerBonusAwardedAt,
     surfaceMazeLaid,
     gameOver: lives <= 0,
     mode: lives <= 0 ? 'gameover' : state.mode,
-    phaseKills: state.phaseKills + towerKills, // towers only — bunkers are quota-neutral
+    phaseKills,
     projectiles,
     laserEdge,
     laserOn,
@@ -874,8 +923,14 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     for (let i = 0; i < state.trenchObstacles.length; i++) {
       const o = state.trenchObstacles[i]
       if (o.kind === 'catwalk') continue // a catwalk is a hazard to fly into, not a target
-      const pos: Vec3 = [o.pos[0], o.pos[1], o.pos[2] + TRENCH_SCROLL_SPEED * dt]
-      const range = beamHit(beamOrigin, beamDir, pos, OBSTACLE_HIT_RADIUS, TRENCH_FAR)
+      // The instantaneous beam hits the obstacle the pilot SEES — its position at the
+      // START of the frame, before this frame's scroll (WYSIWYG, sw5-6). At the ROM
+      // scroll speed (B-008) the obstacle advances ~768 units per frame, so ranging
+      // against the post-scroll position would move the target off the aim between
+      // sighting and resolution and make "aim at it, hit it" depend on the frame rate
+      // — the exact defect trench-aim-wysiwyg.test.ts guards. The obstacle's own
+      // scroll below still carries it up the channel for the next frame.
+      const range = beamHit(beamOrigin, beamDir, o.pos, OBSTACLE_HIT_RADIUS, TRENCH_FAR)
       if (range !== null && range < beamObstacleRange) {
         beamObstacleRange = range
         beamObstacle = i
@@ -905,7 +960,19 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
       // seated within one hit radius of it, so it still bites; a dive to TRENCH_EYE_MIN opens
       // more than a hit radius of clearance beneath it, so it stays dodgeable. Both bounds are
       // asserted behaviourally in tests/core/trench-viewpoint.test.ts.
-      if (collides(pos, trenchView, CATWALK_HIT_RADIUS)) {
+      // At the ROM scroll speed a catwalk seated near the cockpit advances ~768
+      // units per frame (B-008) and can leap clean over the hit sphere between two
+      // frames — a catwalk at z=-1 lands at +261 in one step, well past the 240
+      // radius. So the sphere (which still catches a catwalk that lands inside it on
+      // approach) is backed by a CROSSING test: once the catwalk reaches or passes
+      // the cockpit plane (z >= 0) still within a hit radius LATERALLY and
+      // VERTICALLY of the ship, it has struck. dt-independent, and a full dive
+      // (trenchView at TRENCH_EYE_MIN, > a hit radius below the catwalk) still opens
+      // clean under it — the dodge is unchanged.
+      const spanCrash = collides(pos, trenchView, CATWALK_HIT_RADIUS)
+      const crossCrash =
+        pos[2] >= 0 && Math.hypot(pos[0] - trenchView[0], pos[1] - trenchView[1]) <= CATWALK_HIT_RADIUS
+      if (spanCrash || crossCrash) {
         crashedCatwalk = true
         events.push({ type: 'terrain-crash' })
         continue // crashed through it — removed
@@ -918,20 +985,22 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     if (pos[2] > 0) continue // scrolled past the cockpit — despawn
     survivors.push({ kind: o.kind, pos })
   }
+  const catwalkHit = crashedCatwalk ? loseShield(base.lives, base.shieldHitAt, 1, t) : null // S-016 window
   const afterObstacles: GameState = {
     ...base,
     score: base.score + obstacleScore,
     trenchObstacles: survivors,
-    ...(crashedCatwalk
+    ...(catwalkHit
       ? {
-          lives: Math.max(0, base.lives - 1),
-          gameOver: base.lives - 1 <= 0,
-          mode: base.lives - 1 <= 0 ? ('gameover' as const) : base.mode,
+          lives: catwalkHit.lives,
+          shieldHitAt: catwalkHit.shieldHitAt,
+          gameOver: catwalkHit.lives <= 0,
+          mode: catwalkHit.lives <= 0 ? ('gameover' as const) : base.mode,
         }
       : {}),
   }
   // A fatal catwalk crash is a death like any other (sw7-8, U-017).
-  if (crashedCatwalk) pushFarewell(events, base.lives - 1)
+  if (catwalkHit) pushFarewell(events, catwalkHit.lives)
 
   // No active port → safe hold (no score, no damage; the empty channel still scrolls).
   if (state.exhaustPort === null) return afterObstacles
@@ -1010,8 +1079,13 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     // itself — awards FORCE_BONUS on top of TRENCH_BONUS (fidelity epic, task 4;
     // findings ## Exhaust port & run outcome, the type-4 marker's one-shot latch).
     const clean = afterObstacles.trenchShotsFired <= 1 // only the killing torpedo
-    const bonus = TRENCH_BONUS + (clean ? FORCE_BONUS : 0)
-    if (clean) events.push({ type: 'force-bonus', amount: FORCE_BONUS })
+    // sw7-4: the Force bonus is WAVE-SCALED (S-012) and clean-gated; the per-shield
+    // bonus banks 5,000 x surviving shields (S-013) on ANY win, unconditionally.
+    const forceBonus = clean ? forceBonusForWave(state.wave) : 0
+    const shieldBonus = SHIELD_BONUS_PER_UNIT * afterObstacles.lives
+    const bonus = TRENCH_BONUS + forceBonus + shieldBonus
+    if (clean) events.push({ type: 'force-bonus', amount: forceBonus })
+    events.push({ type: 'shield-bonus', amount: shieldBonus, shields: afterObstacles.lives })
     // Han's line on the winning shot — the ROM (WSMAIN.MAC:1919) reserves it for the
     // same 0-based gate as the Imperial March: GM.WAV >= 3 AND GM.WAV odd, i.e. human
     // waves {4,6,8,...}; every other wave explodes silent (sw7-2, U-006). The gate is
@@ -1047,12 +1121,25 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
       // space that `clearRun` triggers this same frame (sw2-4). Unlike the Force
       // bonus, this fires on ANY port kill, clean or not.
       deathStarDestroyedAt: t,
+      // The per-shield reward banner (S-013) rides the warp the same way — banked
+      // on any win, so its banner shows into the next wave's space phase.
+      shieldBonusAwardedAt: t,
     })
   }
 
   // --- The port reaching the cockpit un-destroyed is a crash: costs a shield --
-  if (collides(port, COCKPIT, COCKPIT_HIT_RADIUS)) {
-    const lives = Math.max(0, afterObstacles.lives - 1)
+  // At the ROM scroll speed the port advances up to ~768 units per game frame (B-008),
+  // far past COCKPIT_HIT_RADIUS (80), so the old symmetric-sphere test let it TUNNEL
+  // clean through the nose in one step and scroll away un-missed — a hazard the old
+  // 500 u/s speed hid. Detect the CROSSING instead: the port has reached the nose
+  // once it is at or past the cockpit plane (z >= 0) while still laterally within a
+  // hit-radius. dt-independent (no overshoot escape), and an off-axis port — a test
+  // construct; the ROM's port is centred — still never counts, exactly as the sphere
+  // did (its 3D distance stayed ≥ its lateral offset ≫ the radius).
+  const reachedCockpit = port[2] >= 0 && Math.hypot(port[0] - COCKPIT[0], port[1] - COCKPIT[1]) <= COCKPIT_HIT_RADIUS
+  if (reachedCockpit) {
+    const portHit = loseShield(afterObstacles.lives, afterObstacles.shieldHitAt, 1, t) // S-016 window
+    const lives = portHit.lives
     // The run is LOST — the port slipped past un-destroyed. A distinct miss cue
     // (sw2-4) so the shell can say "YOU MISSED", separate from the crash tell.
     events.push({ type: 'exhaust-port-missed' })
@@ -1068,9 +1155,10 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     return {
       ...afterObstacles,
       lives,
+      shieldHitAt: portHit.shieldHitAt,
       gameOver: lives <= 0,
       mode: lives <= 0 ? 'gameover' : afterObstacles.mode,
-      exhaustPort: spawnPort(), // another pass down the trench
+      exhaustPort: spawnPort(romWave0(state.wave), createRng(state.rng.seed)), // another pass down the trench
       // A fresh port is a fresh torpedo: the ROM re-primes both flags the moment a new porthole
       // comes into sight (WSBASE.MAC, at `STD BS.PLC ;LOCATION OF THE PORT` — `STA PT.LZF ;NO
       // FIRE VIA LAZAR YET` / `STA PT.LIV ;PROTON TORP NOT LIVE YET`). Without this an armed run
@@ -1107,49 +1195,32 @@ const NEXT_PHASE: Record<Phase, Phase | null> = {
   trench: null,
 }
 
-/** Has this phase been cleared? Space is a flat KILL quota. The SURFACE is a
- * scroll-COMPLETION approach (sw4-3): its authored WSGRND maze is a FINITE,
- * single-pass field, so the run drops into the trench once that field has swept
- * fully past the cockpit — killing every tower only clears it EARLY (and banks the
- * 50,000 bonus, see `progress`). A kill-count-only gate would SOFT-LOCK the run:
- * towers sit out to x = ±$8000 and a single missed one would make the quota
- * permanently unreachable over an empty floor. The trench never clears by count
- * (the exhaust-port hit in stepTrench ends it). Exhaustive over Phase so a new
- * phase can't silently default to a wrong condition. */
+/** The phase a cleared `s.phase` advances into. WAVE 1 HAS NO GROUND PHASE
+ * (sw7-18 / D-015): the ROM flies wave 1 space -> trench, skipping the surface
+ * (`;WAVE 1 HAS NO GROUND PHASE`, WSGRND.MAC:637; PHIGD's DECA "ALWAYS SKIPPED ON
+ * FIRST GAME WAVE", WSMAIN.MAC:1604). Every later wave follows the ordered table. */
+function nextPhaseFor(s: GameState): Phase | null {
+  if (s.phase === 'space' && s.wave === 1) return 'trench'
+  return NEXT_PHASE[s.phase]
+}
+
+/** Has this phase been cleared? Space is a flat KILL quota. The SURFACE ends by
+ * TRAVERSAL ONLY (sw7-18 / D-019): the ROM flies five `$8000` passes of the maze
+ * field and drops into the trench at `GD.SEQ >= 5` (`CMPA #5 ;ONLY GO SO FAR INTO
+ * GROUND SEQUENCES`, WSMAIN.MAC:1678-1679) — killing every tower banks the 50,000
+ * bonus (mid-phase, see `stepSurface`) but does NOT shorten the run, and a single
+ * missed tower never strands it. The trench never clears by count (the exhaust-port
+ * hit in stepTrench ends it). Exhaustive over Phase so a new phase can't silently
+ * default to a wrong condition. */
 function phaseCleared(s: GameState): boolean {
   switch (s.phase) {
     case 'space':
       return s.phaseKills >= SPACE_WAVE_QUOTA
     case 'surface':
-      return allTowersKilled(s) || s.surfaceScrollZ >= surfaceFieldDepth(s.wave)
+      return s.gdSeq >= SURFACE_END_SEQ
     case 'trench':
       return false
   }
-}
-
-/** Every tower in the wave's maze is down — the authentic "cleared all towers"
- * condition (WSGRND `sub_973A` fires the bonus on the kill that drives "# OF
- * TOWERS LEFT" to 0). `towerCount > 0` matters: the bunkers-only wave (BUNK) has
- * NO towers, so it can never "clear them all" — without this guard its 0-quota is
- * met at entry, insta-clearing the surface and gifting a free 50,000. Bunkers are
- * quota-neutral, so `phaseKills` only ever counts towers/bishops. */
-function allTowersKilled(s: GameState): boolean {
-  const towers = towersForWave(s.wave)
-  return towers > 0 && s.phaseKills >= towers
-}
-
-/** How far the surface must scroll for the wave's whole authored field to pass the
- * cockpit: the deepest entry's authored depth, plus the SPAWN_DISTANCE lead-in
- * `mazeField` places it behind. `surfaceScrollZ` accumulates at exactly the rate
- * the turrets advance (TURRET_SCROLL_SPEED·dt), so reaching this distance means the
- * last object has crossed z=0 and been culled — the field is spent. Derived from the
- * maze data, not from the live `turrets` array, so shooting objects down cannot make
- * the field "end" early. */
-function surfaceFieldDepth(wave: number): number {
-  const entries = mazeForWave(wave).entries
-  let deepest = 0
-  for (const e of entries) if (e.y > deepest) deepest = e.y
-  return deepest + SPAWN_DISTANCE
 }
 
 /** The looping music track a phase opens with (sw3-5). The space wave swaps to the
@@ -1194,6 +1265,26 @@ const ENTER_PHASE_SPEECH: Partial<Record<Phase, readonly SpeechLine[]>> = {
   // remediation (deviation logged in the session file).
   surface: ['redFiveImGoingIn', 'lookAtTheSizeOfThatThing'],
   trench: ['useTheForceLuke'], // "Use the Force, Luke"
+}
+
+/** The post-hit gauge-redraw window (sw7-4 / S-016): fold a frame's raw shield
+ * damage into AT MOST ONE lost shield per POST_HIT_SHIELD_WINDOW — a hit landing
+ * while the gauge is still animating the previous loss is dropped, not stacked
+ * (ROM GS.GLW/GS.HIT debounce, WSGLOW.MAC:58-64 `BG1GLW`). The shared funnel every
+ * shield-loss site routes through, so the cap holds across sources (two fireballs,
+ * a TIE + a fireball, a crash right after a hit). Returns the post-hit lives and
+ * the updated `shieldHitAt` stamp; `rawDamage <= 0` is a no-op. */
+function loseShield(
+  lives: number,
+  shieldHitAt: number | null,
+  rawDamage: number,
+  t: number,
+): { lives: number; shieldHitAt: number | null } {
+  if (rawDamage <= 0) return { lives, shieldHitAt }
+  if (shieldHitAt !== null && t - shieldHitAt < POST_HIT_SHIELD_WINDOW) {
+    return { lives, shieldHitAt } // inside the redraw cycle — the hit is dropped
+  }
+  return { lives: Math.max(0, lives - 1), shieldHitAt: t }
 }
 
 /** The end-of-game farewell (sw7-8, U-017): PHIEGM speaks SPKREM then SPKFOA on
@@ -1243,7 +1334,7 @@ const TRENCH_VOICE_CUES: ReadonlyArray<{
 function progress(s: GameState): GameState {
   if (s.gameOver) return s
   if (!phaseCleared(s)) return s
-  const next = NEXT_PHASE[s.phase]
+  const next = nextPhaseFor(s)
   if (next === null) return s
   // The phase cleared — carry the frame's events forward, announce the warp, and
   // cue the entering phase's voice lines if it has any (sw2-5; sequence per sw7-8).
@@ -1252,25 +1343,24 @@ function progress(s: GameState): GameState {
   for (const line of ENTER_PHASE_SPEECH[next] ?? []) events.push({ type: 'speech', line })
   // The descent tune (sw7-8, U-014): PMDES fires at space PH.TIM 400, twenty
   // frames before the descend flip (WSMAIN.MAC:1439/:1442) — our un-sequenced
-  // equivalent is the space -> surface edge itself. It rides OVER the towers
-  // loop below (the ROM's PMDES -> descend -> PM4TH spacing is sw7-9 / A-019).
+  // equivalent is the space -> surface edge itself.
   if (s.phase === 'space' && next === 'surface') {
     events.push({ type: 'tune', tune: 'descent' })
   }
   // Swap the looping music channel to the entering phase's theme (sw3-5). Fires on
   // this edge only; `enterPhase` preserves the wave, so surface->'towers' /
   // trench->'trench' regardless of wave (the Imperial March is a space-only swap).
-  // Pushed BEFORE the tower-bonus early return so the surface->trench edge still
-  // carries its 'trench' music cue.
   events.push({ type: 'music', track: musicTrackFor(next, advanced.wave) })
-  // Clearing every tower on the surface banks the 50,000 "cleared all towers"
-  // bonus and cues its banner — ONCE, on the drop into the trench (sw3-3). Gated on
-  // the towers ACTUALLY being killed (sw4-3): the surface can now also be left by
-  // simply outliving the field (scroll-completion), and flying over towers you never
-  // shot must bank nothing — nor may the 0-tower bunker wave gift the bonus.
-  if (s.phase === 'surface' && allTowersKilled(s)) {
-    events.push({ type: 'tower-bonus', amount: SURFACE_CLEAR_BONUS })
-    return { ...advanced, score: advanced.score + SURFACE_CLEAR_BONUS, events }
+  // NOTE (sw7-18 / D-019): the 50,000 "cleared all towers" bonus is NO LONGER banked
+  // here. It is decoupled from the phase clear and banks MID-PHASE in `stepSurface`
+  // the frame the last tower falls (the ROM's Q.ATP is set independently of GD.SEQ).
+  // But `enterPhase` nulls `towerBonusAwardedAt` on every entry, so the surface->trench
+  // edge would otherwise DISCARD a stamp banked earlier in the same surface — cutting the
+  // "50,000 FOR SHOOTING ALL TOWERS" banner short in the trench (render.ts), unlike the
+  // sibling reward stamps that `clearRun` carries across the wave boundary. Carry it here,
+  // ONLY when leaving the surface (a fresh surface has no bonus to preserve).
+  if (s.phase === 'surface') {
+    return { ...advanced, towerBonusAwardedAt: s.towerBonusAwardedAt, events }
   }
   return { ...advanced, events }
 }
@@ -1294,8 +1384,9 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     // A leftover death cue never crosses into the next phase (story sw3-8).
     dyingTies: [],
     turrets: [],
-    // The trench opens with its target downrange; other phases carry no port.
-    exhaustPort: phase === 'trench' ? spawnPort() : null,
+    // The trench opens with its target downrange at the chain-derived BS.PLC
+    // (B-009); other phases carry no port. Seeded per-run like the obstacles below.
+    exhaustPort: phase === 'trench' ? spawnPort(romWave0(s.wave), createRng(s.rng.seed)) : null,
     // ...and its wall obstacles (fidelity epic, task 3); other phases carry none.
     // Seeded per-run variation (sw3-7): the trench chain's picked tail is drawn
     // from the run RNG via a LOCAL cursor (createRng(s.rng.seed)), so different
@@ -1315,11 +1406,31 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     // survives the wave transition, and a fresh trench never opens mid-"missed".
     deathStarDestroyedAt: null,
     exhaustPortMissedAt: null,
+    // The reward banners reset on phase entry too; `clearRun` re-stamps
+    // shieldBonusAwardedAt (per-shield) so it survives the warp, and progress()
+    // stamps towerBonusAwardedAt on the surface->trench drop.
+    shieldBonusAwardedAt: null,
+    towerBonusAwardedAt: null,
+    // NOTE (sw7-4 R2, Reviewer): shieldHitAt is DELIBERATELY carried through `...s`,
+    // NOT reset here — the ROM shield gauge (GS.GLW/GS.HIT) is ONE continuous
+    // mechanism across a whole run (space->surface->trench), so the post-hit window
+    // (S-016) must survive a wave-internal phase change. Resetting it let a hit on a
+    // phase-clear frame escape the debounce. `t` is monotonic, so an old stamp
+    // simply expires; no explicit reset is needed even at a new wave.
     enemyShots: [],
     altitude: phase === 'surface' ? SKIM_ALTITUDE : s.altitude,
     // Reset the surface scroll on every phase entry so a fresh (or jumped) surface
     // always opens with the ground grid anchored at the cockpit (story 11-5).
     surfaceScrollZ: 0,
+    // Re-seed the accelerating surface pace on every phase entry (sw7-18): a fresh
+    // (or jumped, or re-entered) surface always opens at the ROM's $100 seed speed —
+    // a fast prior run never bleeds its rate into the next.
+    surfaceScrollSpeed: SURFACE_SEED_SPEED,
+    // GD.SEQ zeroes only when ENTERING the surface (a fresh traversal starts at
+    // sequence 0); leaving the surface CARRIES its final count (>= SURFACE_END_SEQ)
+    // so the surface->trench edge reflects the traversal that ended it, while
+    // surfaceScrollZ resets. The next wave's surface entry re-zeroes it.
+    gdSeq: phase === 'surface' ? 0 : s.gdSeq,
     // A fresh surface re-lays its authored WSGRND maze (sw4-3): the next
     // stepSurface frame fills `turrets` from `mazeForWave(wave)`. Reset here so
     // each wave's surface (and a dev phase-jump) lays its own field.
@@ -1338,9 +1449,15 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
   }
 }
 
-/** A fresh exhaust port: centred on the run, far down −Z toward the player. */
-function spawnPort(): { pos: Vec3 } {
-  return { pos: [0, 0, -EXHAUST_PORT_DISTANCE] }
+/** A fresh exhaust port: centred on the run, at the wave's chain-derived BS.PLC
+ *  offset down −Z (finding B-009), clamped into the beam's `#7000` forward reach
+ *  (TRENCH_FAR — WSLAZR CLBLZ) so the port that must exist to scroll is seated at
+ *  the farthest point still under the beam. The location is read from the wedge
+ *  chain (`trenchPortDistance`), not the old fixed −2400; the run RNG is threaded
+ *  through a LOCAL cursor so the seed is never consumed here (core purity),
+ *  matching how `enterPhase` seeds the trench obstacles. */
+function spawnPort(baseWave: number, rng: Rng): { pos: Vec3 } {
+  return { pos: [0, 0, -Math.min(trenchPortDistance(baseWave, rng), TRENCH_FAR)] }
 }
 
 /**
@@ -1366,6 +1483,7 @@ function clearRun(s: GameState): GameState {
     spawnCount: 0,
     forceBonusAwardedAt: s.forceBonusAwardedAt,
     deathStarDestroyedAt: s.deathStarDestroyedAt,
+    shieldBonusAwardedAt: s.shieldBonusAwardedAt,
   }
 }
 
@@ -1382,6 +1500,9 @@ function mazeField(wave: number): Turret[] {
     pos: [e.x, 0, -(e.y + SPAWN_DISTANCE)] as Vec3,
     age: 0,
     kind: e.kind,
+    // Carry the awakening sequence (sw7-18 / D-018) so the fire-gate can hold this
+    // object dormant until the traversal reaches `gdSeq >= seq`.
+    seq: e.seq,
   }))
 }
 

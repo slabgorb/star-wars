@@ -13,7 +13,8 @@ import type { Vec3, Mat4 } from '@arcade/shared/math3d'
 import type { GameEvent } from './events'
 import { createRng, type Rng } from '@arcade/shared/rng'
 import { mazeForWave } from './surfaceMazes'
-import { TRENCH_EYE_SEAT } from './trench-channel'
+import { TRENCH_EYE_SEAT, TRENCH_FAR } from './trench-channel'
+import { TRENCH_PORT_OFFSET } from './trench-wedges'
 
 /** The three phases of an attack run, in order. */
 export type Phase = 'space' | 'surface' | 'trench'
@@ -110,6 +111,12 @@ export interface Turret {
    * BISHOP maze macro) DO count toward the quota, like towers — only bunkers
    * are neutral. */
   kind?: 'tower' | 'bunker' | 'bishop'
+  /** Awakening sequence (WSGRND `.BYTE .C`, 0..3): the object is dormant — it does
+   * not fire (nor, in the shell, draw) — until the ground traversal has reached its
+   * sequence (`gdSeq >= seq`, WSGRND.MAC:740-742). Optional — hand-placed `{ pos }`
+   * fixtures and pre-sw7-18 saves omit it and are treated as awake-from-the-start
+   * (seq 0) via `?? 0`, like `age`/`kind` (sw7-18 / D-018). */
+  seq?: number
 }
 
 /** A trench wall/channel entity: turrets and squares are shootable for score;
@@ -135,13 +142,13 @@ export interface TrenchObstacle {
 
 /** Shields the player starts a run with; a hit costs one. */
 export const STARTING_LIVES = 6
-/** Cumulative-score thresholds that each award one bonus shield/life, the first
- *  time the score reaches them (sw3-6). ROM: the extra-life text `a40000`/`a80000`
- *  (docs/star-wars-1983-source-findings.md ~442-449) = **400,000 / 800,000**. The
- *  doc's load-bearing cross-note warns against reading these as 4M/8M or 250k/500k —
- *  "do NOT ×10". Each fires once; a single score delta that vaults past both grants
- *  both (see `awardExtraLives` in sim.ts). */
-export const EXTRA_LIFE_THRESHOLDS: readonly number[] = [400_000, 800_000]
+// sw7-4 / S-015 removed the 400,000 / 800,000 "extra shield" thresholds: the ROM
+// has NO score-threshold life/shield grant (the 2026-07-15 audit's refuter did the
+// exhaustive BCD hunt). Those numbers are the Death-Star-SELECTION start-bonus
+// DISPLAY strings (TSCBN1..4 = 200k/400k/600k/800k, WSGAS.MAC:527-530; banner
+// MS.BON "DEATH STAR BONUS EARNED"), which the clone misread as a recurring ladder.
+// The genuine selection bonus is a separate, unmodelled feature (see the sw7-4
+// session Delivery Findings).
 /** The bonus/extra-life HUD flash (`bonusFlash`) re-arms to this on any score
  *  change, then decays by BONUS_FLASH_DECAY per tick toward 0 — the ROM `byte_4B2C`
  *  "score changed, redraw HUD" counter (`lda #$FF` on every score change; `sub_761D`
@@ -468,8 +475,44 @@ export const OBJECT_CRASH_LATERAL = 1024
 
 /** How fast the yoke flies the ship up/down (altitude units/second). */
 export const ALTITUDE_RATE = 200
-/** How fast the surface scrolls turrets toward the cockpit (units/second). */
+/** Legacy flat surface scroll rate (units/second). RETIRED as the live surface
+ * pace by sw7-18 / D-022 — the ground phase now scrolls at an ACCELERATING rate
+ * (SURFACE_SEED_SPEED → SURFACE_MAX_SPEED). Kept only as a step-size unit some
+ * surface fixtures still reference. */
 export const TURRET_SCROLL_SPEED = 600
+
+// --- Wave 2 surface pacing & traversal (sw7-18 / R11c) ----------------------
+//
+// The ROM flies the ground phase at an ACCELERATING player speed and ends it by
+// TRAVERSAL alone. PHIGD seeds `M$VX+M.S1 = $100` (256 u/game-frame,
+// WSMAIN.MAC:1621) and PHEGD ramps it `ADDD #1 / CMPD #400` (+1 u/frame per frame,
+// capped at $400 = 1024, WSMAIN.MAC:1660-1665). Every sw7 speed is frame-true —
+// the immediate × the game-frame rate — exactly like TRENCH_SCROLL_SPEED.
+
+/** Surface scroll SEED rate: the ROM's `$100` (256 u/frame) over the timebase ≈
+ * 5,250 u/s (WSMAIN.MAC:1621 `LDD #100 ;INITIAL PLAYER SPEED`). */
+export const SURFACE_SEED_SPEED = 0x100 * TICK_HZ
+/** Surface scroll CAP: the ROM's `$400` (1024 u/frame) over the timebase ≈ 21,000
+ * u/s (WSMAIN.MAC:1662 `CMPD #400`). Never exceeded. */
+export const SURFACE_MAX_SPEED = 0x400 * TICK_HZ
+/** Surface scroll ACCELERATION: the ROM adds 1 u/frame to the per-frame speed
+ * every frame. In continuous terms that is TICK_HZ (frames/s) × TICK_HZ (the
+ * per-frame delta becoming u/s) = TICK_HZ² ≈ 420.6 u/s² (WSMAIN.MAC:1661 `ADDD #1`). */
+export const SURFACE_ACCEL = TICK_HZ * TICK_HZ
+/** One forward "sequence" of ground travel: the ROM's `$8000` M$TX wrap
+ * (S1MVGD, WSMAIN.MAC:2537-2545 — `INC GD.SEQ` on each signed overflow). */
+export const SURFACE_SEQ_SPAN = 0x8000
+/** The surface phase ends once the traversal has completed this many `$8000`
+ * passes: `LDA GD.SEQ / CMPA #5 ;ONLY GO SO FAR INTO GROUND SEQUENCES`
+ * (WSMAIN.MAC:1678-1679). Five passes ≈ 371 frames ≈ 18.1 s. */
+export const SURFACE_END_SEQ = 5
+/** The accelerating rate at which the PMREB "FINISH GROUND WITH REBEL" tune fires
+ * (sw7-18 audio rider). The ROM plays it at `PH.TIM == 14` pseudo-seconds
+ * (WSMAIN.MAC:1673) — PH.TIM ticks once per 16 frames, so that is game-frame 224,
+ * where the per-frame speed has ramped from `$100` to `$100 + 224 = $1E0` (480).
+ * As a u/s rate that is `$1E0 × TICK_HZ` ≈ 9,844 u/s — reached ≈ 10.9 s into the
+ * traversal, still below the cap. The tune fires the frame the pace first crosses it. */
+export const SURFACE_FINISH_GROUND_SPEED = 0x1e0 * TICK_HZ
 
 // --- Wave 3 trench constants ------------------------------------------------
 //
@@ -480,16 +523,43 @@ export const TURRET_SCROLL_SPEED = 600
 // scrolls up the channel toward the cockpit; the player destroys it for the
 // bonus or it reaches the cockpit and costs a shield.
 
-/** Distance ahead (−Z) at which the exhaust port appears when the trench opens. */
-export const EXHAUST_PORT_DISTANCE = 2400
+/**
+ * Distance ahead (−Z) at which the exhaust port becomes an interactive target when
+ * the trench opens — finding B-009. No longer the fabricated 2400 stub (which gave
+ * the trench no channel body at all).
+ *
+ * The port's true location is the ROM's BS.PLC, DERIVED from the wedge chain
+ * (`trenchPortDistance`) — the sum of the $800/$1000 wedge lengths before the PORT
+ * wedge (0x50000 = 327,680 on the balanced pies), with the END wall $1000 beyond.
+ * That full length is the pure model (tests/core/trench-length.test.ts). But the
+ * ROM only lets the beam reach `#7000 = TRENCH_FAR = 28,672` units forward
+ * (WSLAZR.MAC CLBLZ, "FARTHEST FORWARD POINT"), and our channel renders only that
+ * far. Our sim carries ONE port object that must exist to scroll, so we seat it at
+ * its BS.PLC CLAMPED into that forward window — the farthest it can be and still be
+ * under the beam. The ~19 s of empty channel the pilot flies before the port comes
+ * into range is the trench length buildTrench models; streaming the wedges in
+ * one-by-one is R6b/R6c, out of this story's scope. `sim.ts spawnPort` recomputes
+ * this per wave from the chain so it stays data-driven. */
+export const EXHAUST_PORT_DISTANCE = Math.min(TRENCH_PORT_OFFSET, TRENCH_FAR)
 /** Points for destroying the exhaust port — the run's big payoff. ROM
  *  `byte_985F` = 25,000 (sw3-1, from the sw2-6 audit; the load-bearing
  *  cross-note settles this at 25,000, "do NOT ×10"). Was a 1,000-point
  *  authentic-feel guess. The clean-run "Use the Force" bonus (FORCE_BONUS,
  *  5,000) still lands on top of this. */
 export const TRENCH_BONUS = 25000
-/** How fast the exhaust port scrolls toward the cockpit (units/second). */
-export const TRENCH_SCROLL_SPEED = 500
+/**
+ * How fast the whole trench scrolls toward the cockpit (units/second) — finding
+ * B-008. The ROM sets the forward speed once at trench entry (PHIBS `LDD #300
+ * ;INITIAL PLAYER SPEED`, WSMAIN.MAC:1834 → $300 = 768) and integrates it ONCE PER
+ * GAME-FRAME by the single caller S1MVBS (`ADDD M$TX+M.S1`, WSMAIN.MAC:2654). So
+ * the per-second rate is that immediate times the game-frame rate — 768 × TICK_HZ
+ * ≈ 15,750 u/s, 31.5× the old invented 500. Frame-true like every other sw7 speed
+ * constant (ENEMY_SHOT_TTL, DARTH_GLOW_SECONDS …): derived from the timebase, not
+ * a re-tuned magic number. length ÷ speed is ONE traversal system, so this single
+ * rate scrolls the whole channel — ribs, port, and end wall alike. (Playable only
+ * because sw7-17 made the gun hitscan; the old 12,000 u/s projectile bolt was
+ * out-run at this speed.) */
+export const TRENCH_SCROLL_SPEED = 0x300 * TICK_HZ
 /** Hit sphere around the exhaust port for player bolts. WYSIWYG (sw3-15): you may
  *  only HIT what you can SEE — a rule this constant keeps, re-pointed by sw5-4 at
  *  the geometry that is actually there.
@@ -563,14 +633,35 @@ export const PORT_APPROACH_WINDOW = 800
  * part — **arm early, resolve late** — not a constant that does not survive the crossing. Logged
  * as a deviation.
  */
-/** Awarded on top of TRENCH_BONUS for a port kill with no prior trench shots —
- *  the arcade's "USE THE FORCE" bonus (findings ## Exhaust port & run outcome:
- *  the type-4 segment's one-shot `byte_4B36` latch fires `sub_97E3`, the
- *  Use-the-Force scoring trigger). findings ## Scoring tables: `byte_983B` is
- *  wave-indexed (5,000 / 10,000 / 25,000 / 50,000 for waves 1-4); we are not yet
- *  wave-scaled, so this pins the wave-1 base (`0,$50,0` → 5,000) — see docs
- *  Open follow-ups #11. */
-export const FORCE_BONUS = 5000
+/** The "USE THE FORCE" clean-run bonus, WAVE-SCALED (sw7-4 / S-012). ROM table
+ *  `TSCFRC` (WSGAS.MAC:509-513), five entries of packed BCD read as decimal
+ *  digit-pairs: `00,50,00`→5,000 / `01,00,00`→10,000 / `02,50,00`→25,000 /
+ *  `05,00,00`→50,000 / `10,00,00`→100,000 (";LEVEL 5 AND ABOVE"). Indexed 0-based
+ *  by `GM.WAV` (= our `wave - 1`) and CLAMPED to the last entry for wave >= 5
+ *  (`GETFRP` `IFHS`, WSGAS.MAC:404-416 — ";HIGHER LEVELS USE MAX SCORE"). */
+export const FORCE_BONUS_BY_WAVE: readonly number[] = [5000, 10000, 25000, 50000, 100000]
+
+/** The clean-run Force bonus for a (1-based) wave — `TSCFRC` clamped: waves past
+ *  the table's last row all award the max (100,000). `state.wave` climbs without a
+ *  cap (clearRun), so the clamp is load-bearing, not defensive. */
+export function forceBonusForWave(wave: number): number {
+  const i = Math.max(0, Math.min(wave - 1, FORCE_BONUS_BY_WAVE.length - 1))
+  return FORCE_BONUS_BY_WAVE[i]
+}
+
+/** Points per SURVIVING shield unit, banked once at the end of a won run
+ *  (sw7-4 / S-013). ROM `TSCSHL` (WSGAS.MAC:519) `.BYTE 00,50,00` = 5,000 (BCD),
+ *  added once per remaining shield by `SCRSHLD` (WSGAS.MAC:375-391). Awarded on ANY
+ *  win — NOT clean-gated, unlike the Force bonus. */
+export const SHIELD_BONUS_PER_UNIT = 5000
+
+/** Post-hit shield-loss window (sw7-4 / S-016): at most ONE shield is lost per
+ *  gauge-redraw cycle — a hit that lands while the gauge is still animating the
+ *  previous loss is dropped, not stacked (ROM GS.GLW/GS.HIT debounce,
+ *  WSGLOW.MAC:58-64 `BG1GLW` / WSGAS.MAC:63-82 `DO1GAS`). The ROM cycle length is
+ *  data-dependent (GS.VTP/VUP/VBS off the shield count, ~200 ms–1 s+ at the 20 Hz
+ *  game frame), so this duration is an authentic-FEEL tunable, not a ROM constant. */
+export const POST_HIT_SHIELD_WINDOW = 0.5
 /** Port distance (world units, −Z) at which the EXHAUST PORT AHEAD banner shows.
  *  findings ## HUD & framing / Open follow-ups #7 confirm "EXHAUST PORT AHEAD"
  *  as an authentic HUD string, but no ROM-recovered distance pins WHEN it first
@@ -637,10 +728,21 @@ export interface GameState {
   /** Player height above the y=0 surface (Wave 2 terrain skim). */
   altitude: number
   /** How far the Death Star surface ground grid has scrolled toward the cockpit
-   * (Wave 2, story 11-5). Advanced by TURRET_SCROLL_SPEED — the SAME flow that
-   * scrolls the turrets — so the grid and turrets rush past together; read `mod
-   * GRID_Z` by the surfaceGrid generator and reset to 0 on every phase entry. */
+   * (Wave 2, story 11-5). Advanced by the ACCELERATING `surfaceScrollSpeed`·dt
+   * (sw7-18 / D-022) — the SAME flow that scrolls the turrets — so the grid and
+   * turrets rush past together; read `mod GRID_Z` by the surfaceGrid generator and
+   * reset to 0 on every phase entry. Also drives `gdSeq` (= floor / SURFACE_SEQ_SPAN). */
   surfaceScrollZ: number
+  /** The live ACCELERATING surface scroll rate (units/second), sw7-18 / D-022.
+   * Seeded to SURFACE_SEED_SPEED on surface entry, ramped by SURFACE_ACCEL·dt each
+   * surface frame, clamped to SURFACE_MAX_SPEED. The surface scroll (both
+   * `surfaceScrollZ` and the ground field) rides THIS, not the retired flat 600. */
+  surfaceScrollSpeed: number
+  /** The ROM's GD.SEQ — how many full `$8000` forward passes the ground traversal
+   * has completed (sw7-18 / D-019). `= floor(surfaceScrollZ / SURFACE_SEQ_SPAN)`;
+   * 0 on surface entry. The phase ends at `gdSeq >= SURFACE_END_SEQ`, and a ground
+   * object wakes once `gdSeq >= (turret.seq ?? 0)`. */
+  gdSeq: number
   /** Whether this surface run's authored WSGRND maze field has been laid into
    * `turrets` yet (sw4-3). `enterPhase` resets it to false per wave; the first
    * `stepSurface` frame lays `mazeForWave(wave)` into `turrets` — but ONLY if no
@@ -749,6 +851,21 @@ export interface GameState {
    * shell can show a "you missed" tell distinct from a generic crash (sw2-4);
    * pairs with the `exhaust-port-missed` GameEvent. Reset on every phase entry. */
   exhaustPortMissedAt: number | null
+  /** Sim time (`t`) the per-surviving-shield bonus (sw7-4 / S-013) was banked at a
+   * won run, or `null`. Stamped on ANY port kill; `clearRun` re-stamps it so the
+   * "BONUS FOR REMAINING ENERGY" banner survives the warp into the next space wave.
+   * Reset to `null` on every phase entry. */
+  shieldBonusAwardedAt: number | null
+  /** Sim time (`t`) the all-towers reward (sw7-4 / H-021) was banked, or `null`.
+   * Stamped on the surface->trench drop when every tower was cleared, so the
+   * "50,000 FOR SHOOTING ALL TOWERS" banner (MS.RWD) shows through the trench run.
+   * Reset to `null` on every phase entry. */
+  towerBonusAwardedAt: number | null
+  /** Sim time (`t`) the last shield was lost, or `null` if none lost recently — the
+   * post-hit gauge-redraw window (sw7-4 / S-016). While `t - shieldHitAt <
+   * POST_HIT_SHIELD_WINDOW`, further hits cost no shield (ROM GS.GLW debounce).
+   * Reset to `null` on every phase entry. */
+  shieldHitAt: number | null
   /** Enemy fireballs currently in flight. */
   enemyShots: Projectile[]
   /** True once the last shield is lost — the wave is over. */
@@ -805,6 +922,8 @@ export function initialState(seed = 1983): GameState {
     bonusFlash: 0,
     altitude: SKIM_ALTITUDE,
     surfaceScrollZ: 0,
+    surfaceScrollSpeed: SURFACE_SEED_SPEED,
+    gdSeq: 0,
     surfaceMazeLaid: false,
     trenchScrollZ: 0,
     // The eye rides at the ROM's trench entry height above the floor (sw5-6) — see
@@ -826,6 +945,9 @@ export function initialState(seed = 1983): GameState {
     forceBonusAwardedAt: null,
     deathStarDestroyedAt: null,
     exhaustPortMissedAt: null,
+    shieldBonusAwardedAt: null,
+    towerBonusAwardedAt: null,
+    shieldHitAt: null,
     enemyShots: [],
     gameOver: false,
     entry: null,

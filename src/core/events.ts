@@ -118,6 +118,17 @@ export interface TowerBonusEvent {
   amount: number
 }
 
+// The per-surviving-shield wave bonus banked at a won run (sw7-4 / S-013). The ROM
+// `SCRSHLD` (WSGAS.MAC:375-391) adds `TSCSHL` = 5,000 once per remaining shield unit,
+// unconditionally, in the end-of-wave VEWNXT sequence. `amount` is the total
+// (5,000 × shields) for the SFX/HUD layer; `shields` is the surviving count the
+// "BONUS FOR REMAINING ENERGY / 5,000 X N" banner (MS.BRE) displays.
+export interface ShieldBonusEvent {
+  type: 'shield-bonus'
+  amount: number
+  shields: number
+}
+
 // The winning shot — a player torpedo destroyed the exhaust port and the Death
 // Star blows (sw2-4). Positioned like `enemy-death` / `fireball-destroyed` so the
 // shell can stage the explosion AT the port's world spot; `pos` is the port's
@@ -212,6 +223,7 @@ export type TuneName =
   | 'finale' // PMEND — the Death Star detonates (WSMAIN.MAC:2179 PHIDX1)
   | 'bensTheme' // PMBEN — lose with no high score (WSMAIN.MAC:2161), NOT the towers theme
   | 'descent' // PMDES — the space -> surface descent (WSMAIN.MAC:1439)
+  | 'finishGround' // PMREB — "FINISH GROUND WITH REBEL", late in the surface (WSMAIN.MAC:1673, PH.TIM==14)
 
 // A one-shot tune cue (sw7-8). Same core-owns-WHEN / shell-owns-HOW split as
 // speech and music: the shell plays it once on the single shared 'tune'
@@ -237,6 +249,7 @@ export type GameEvent =
   | TrenchObstacleDestroyedEvent
   | ForceBonusEvent
   | TowerBonusEvent
+  | ShieldBonusEvent
   | DeathStarDestroyedEvent
   | ExhaustPortMissedEvent
   | SpeechEvent
