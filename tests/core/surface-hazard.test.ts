@@ -89,7 +89,10 @@ import { NO_INPUT, type Input } from '../../src/core/input'
 import { fireAt } from '../support/aim'
 import { dot, sub, type Vec3 } from '@arcade/shared/math3d'
 
-const DT = 0.02 // 12 world units of scroll per step at TURRET_SCROLL_SPEED 600
+const DT = 0.02 // small surface tick. The scroll is the ROM's accelerating pace now
+// (sw7-18 / D-022): ~105 u/step at the $100 seed, rising toward ~420 at the $400 cap —
+// so a hand-placed object at −300 sweeps the cockpit plane in a handful of steps, and the
+// fixed-count `fly(_, 40)` passes below still carry it fully through (and cull it) exactly once.
 
 /** A fresh surface run: Wave 1's initial state flipped into the surface phase
  *  (mirrors tests/core/surface.test.ts). */
@@ -192,18 +195,17 @@ describe('sw7-5 / D-016 — standing bunkers fire', () => {
     expect(shot.pos[1]).toBeCloseTo(TOWER_HEIGHT, 0)
   })
 
-  it('a real wave-1 maze run eventually fires from a bunker body (RED: integration)', () => {
+  it('a real ground-maze run eventually fires from a bunker body (RED: integration)', () => {
     // Keeps the wiring honest: the fixture tests above could be satisfied by a
-    // bunker-only special path that the real maze never reaches. Wave 1's
-    // SQUARE maze mixes 12 bunkers among its 28 objects (D-015 house rule keeps
-    // the wave-1 surface); on the clone's cadence a bunker muzzle (y <= 24)
-    // must show up well inside the maze's ~57 s traversal. Tower muzzles sit at
-    // 352, so the two populations cannot be confused. Lives are padded so the
-    // homing return fire cannot end the run mid-observation
-    // (surface-clear.test.ts precedent).
-    let s: GameState = { ...surface(1983), lives: 9999 }
+    // bunker-only special path that the real maze never reaches. Wave 2 IS the
+    // bunker wave (BUNK, all 28 objects bunkers — the first real ground wave, D-015);
+    // its seq-0 subset wakes at gdSeq 0, so a bunker muzzle (y <= 24) shows up well
+    // inside the traversal, past its TOWER_FIRE_GRACE. Tower muzzles sit at 352, so
+    // the two populations cannot be confused. Lives are padded so the homing return
+    // fire cannot end the run mid-observation (surface-clear.test.ts precedent).
+    let s: GameState = { ...surface(1983), wave: 2, lives: 9999 }
     let lowMuzzle = false
-    for (let i = 0; i < 2400 && !lowMuzzle; i++) {
+    for (let i = 0; i < 2400 && !lowMuzzle && s.phase === 'surface'; i++) {
       s = stepGame(s, NO_INPUT, DT)
       for (const e of s.events) {
         if (e.type === 'enemy-fire' && e.pos[1] <= BUNKER_BODY_TOP) lowMuzzle = true
@@ -385,12 +387,12 @@ describe('sw7-5 — the surface flight band has the ROM ceiling (GD$MXT, WSMAIN:
 // =============================================================================
 
 describe('sw7-5 — the hazard is deterministic (guard — green today, protects GREEN)', () => {
-  it('same seed, same crashes: two real wave-1 runs stay deep-equal through the crash frames', () => {
-    // 1600 steps ≈ 32 s: past the centre-line bunker (~22.5 s, overflown at
-    // cruise) and the centre-line tower (~29.3 s, a crash post-GREEN). Any
-    // Math.random()/Date.now() sneaking into the new paths diverges here.
+  it('same seed, same crashes: two real ground runs stay deep-equal through the crash frames', () => {
+    // 1600 steps ≈ 32 s carries a wave-2 run through the whole accelerating surface
+    // traversal (gdSeq 0→5, ~18 s) and on into the trench. Any Math.random()/Date.now()
+    // sneaking into the new pacing/awakening paths diverges the two runs here.
     const run = (): GameState => {
-      let s = surface(7)
+      let s: GameState = { ...surface(7), wave: 2 }
       for (let i = 0; i < 1600; i++) s = stepGame(s, NO_INPUT, DT)
       return s
     }

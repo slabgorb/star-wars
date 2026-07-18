@@ -64,7 +64,8 @@ import {
   TRENCH_SCROLL_SPEED,
   TRENCH_BONUS,
   SHIELD_BONUS_PER_UNIT,
-  towersForWave,
+  SURFACE_END_SEQ,
+  SURFACE_SEQ_SPAN,
   type GameState,
 } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
@@ -158,7 +159,16 @@ describe('Wave 3 — the exhaust port scrolls toward the cockpit', () => {
   })
 
   it('entering the trench from the cleared surface spawns the port far downrange', () => {
-    const s0: GameState = { ...surface(), phaseKills: towersForWave(1), turrets: [], enemyShots: [] }
+    // sw7-18 / D-019: the surface clears by TRAVERSAL (gdSeq >= 5), not an all-towers
+    // count. Seat a wave-2 run at that completion so the next step crosses to the trench.
+    const s0: GameState = {
+      ...surface(),
+      wave: 2,
+      gdSeq: SURFACE_END_SEQ,
+      surfaceScrollZ: SURFACE_END_SEQ * SURFACE_SEQ_SPAN + 1,
+      turrets: [],
+      enemyShots: [],
+    }
     const s1 = crossFrom(s0, 'surface')
     expect(s1.phase).toBe('trench')
     expect(s1.exhaustPort).not.toBeNull()

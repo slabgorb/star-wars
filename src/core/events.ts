@@ -223,6 +223,7 @@ export type TuneName =
   | 'finale' // PMEND — the Death Star detonates (WSMAIN.MAC:2179 PHIDX1)
   | 'bensTheme' // PMBEN — lose with no high score (WSMAIN.MAC:2161), NOT the towers theme
   | 'descent' // PMDES — the space -> surface descent (WSMAIN.MAC:1439)
+  | 'finishGround' // PMREB — "FINISH GROUND WITH REBEL", late in the surface (WSMAIN.MAC:1673, PH.TIM==14)
 
 // A one-shot tune cue (sw7-8). Same core-owns-WHEN / shell-owns-HOW split as
 // speech and music: the shell plays it once on the single shared 'tune'

@@ -219,7 +219,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 926,
+      "line": 972,
       "verbatim": "      const spanCrash = collides(pos, trenchView, CATWALK_HIT_RADIUS)"
     },
     "recommendation": "fix",
@@ -240,7 +240,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 554,
+      "line": 596,
       "verbatim": "export const PORT_APPROACH_WINDOW = 800"
     }
   },
@@ -257,7 +257,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1430,
+      "line": 1460,
       "verbatim": "  return { pos: [0, 0, -Math.min(trenchPortDistance(baseWave, rng), TRENCH_FAR)] }"
     }
   },
@@ -274,7 +274,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 545,
+      "line": 587,
       "verbatim": "export const PORT_HIT_RADIUS = 108"
     },
     "recommendation": "accept"
@@ -292,7 +292,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1028,
+      "line": 1074,
       "verbatim": "  const detonates = armed && inApproachWindow"
     }
   },
@@ -324,7 +324,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1094,
+      "line": 1140,
       "verbatim": "  if (reachedCockpit) {"
     },
     "recommendation": "accept",

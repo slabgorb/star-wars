@@ -912,8 +912,10 @@ function drawTrenchBanners(ctx: CanvasRenderingContext2D, state: GameState, w: n
     glowText(ctx, `${SHIELD_BONUS_PER_UNIT.toLocaleString('en-US')} X ${state.lives}`, w / 2, h * 0.34, BANNER_TEXT_PX, 'center', '#dddddd', 12)
   }
   // The all-towers reward banner (sw7-4 / H-021): MS.RWD "50,000 FOR SHOOTING ALL
-  // TOWERS" (TCMES.MAC:609, ROM:E039), stamped on the surface->trench drop and shown
-  // through the trench run on `towerBonusAwardedAt`.
+  // TOWERS" (TCMES.MAC:609, ROM:E039). Since sw7-18 / D-019 the bonus banks MID-SURFACE
+  // (the frame the last tower falls, decoupled from the phase clear), so `towerBonusAwardedAt`
+  // is stamped there; `progress` carries it across the surface->trench edge so the banner
+  // still shows for REWARD_BANNER_SECONDS from the stamp, whether that spans the edge or not.
   if (
     state.towerBonusAwardedAt !== null &&
     state.t - state.towerBonusAwardedAt <= REWARD_BANNER_SECONDS

@@ -31,7 +31,8 @@ import { stepGame, enterPhase } from '../../src/core/sim'
 import {
   initialState,
   SPACE_WAVE_QUOTA,
-  towersForWave,
+  SURFACE_END_SEQ,
+  SURFACE_SEQ_SPAN,
   forceBonusForWave,
   type GameState,
 } from '../../src/core/state'
@@ -42,6 +43,15 @@ const DT = 1 / 60
 /** A playing-phase state seeded deterministically, with optional overrides. */
 function playing(overrides: Partial<GameState> = {}): GameState {
   return { ...initialState(1), ...overrides }
+}
+
+/** Overrides that seat a surface run at its TRAVERSAL completion (gdSeq >= 5), so
+ *  the next step crosses the surface→trench edge — sw7-18 / D-019 ends the ground
+ *  phase by traversal, not by an all-towers count. gdSeq and surfaceScrollZ are set
+ *  consistently so the gate reads the same whether Dev stores or derives gdSeq. */
+const traversalComplete: Partial<GameState> = {
+  gdSeq: SURFACE_END_SEQ,
+  surfaceScrollZ: SURFACE_END_SEQ * SURFACE_SEQ_SPAN + 1,
 }
 
 /** A trench run ARMED AND AT THE WALL: the proton-torpedo latch closed and the port
@@ -113,21 +123,22 @@ describe('speech cue — run start (AC2)', () => {
 
 describe('speech cue — entering the Death Star surface (AC2)', () => {
   it("cues 'Look at the size of that thing' on the space -> surface transition", () => {
-    const out = stepGame(playing({ phase: 'space', phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
+    // WAVE 2 — wave 1 has no ground phase (D-015); the space→surface edge is a wave-2+ event.
+    const out = stepGame(playing({ phase: 'space', wave: 2, phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
     expect(out.phase).toBe('surface') // the transition actually happened
     expect(out.events).toContainEqual({ type: 'level-clear', next: 'surface' })
     expect(out.events).toContainEqual({ type: 'speech', line: 'lookAtTheSizeOfThatThing' })
   })
 
   it('does NOT cue the trench line on the surface transition (right line, right moment)', () => {
-    const out = stepGame(playing({ phase: 'space', phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
+    const out = stepGame(playing({ phase: 'space', wave: 2, phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
     expect(out.events).not.toContainEqual({ type: 'speech', line: 'useTheForceLuke' })
   })
 })
 
 describe('speech cue — entering the trench (AC2)', () => {
   it("cues 'Use the Force, Luke' on the surface -> trench transition", () => {
-    const out = stepGame(playing({ phase: 'surface', phaseKills: towersForWave(1) }), NO_INPUT, DT)
+    const out = stepGame(playing({ phase: 'surface', wave: 2, ...traversalComplete }), NO_INPUT, DT)
     expect(out.phase).toBe('trench') // the transition actually happened
     expect(out.events).toContainEqual({ type: 'level-clear', next: 'trench' })
     expect(out.events).toContainEqual({ type: 'speech', line: 'useTheForceLuke' })
@@ -135,7 +146,7 @@ describe('speech cue — entering the trench (AC2)', () => {
 
   it('cues the trench line exactly ONCE — not re-emitted on later trench frames', () => {
     const entered = stepGame(
-      playing({ phase: 'surface', phaseKills: towersForWave(1) }),
+      playing({ phase: 'surface', wave: 2, ...traversalComplete }),
       NO_INPUT,
       DT,
     )
@@ -199,13 +210,14 @@ describe('speech cue — silence when nothing cues (AC4: no lines fire out of se
 describe('speech cues are deterministic (AC2 — pure core)', () => {
   it('identical seed + inputs replay identical speech cues across a run', () => {
     function speechStream(seed: number): string[] {
-      // Drive a scripted run to the trench: clear space, clear surface, then hold.
-      let s: GameState = { ...initialState(seed), phase: 'space', phaseKills: SPACE_WAVE_QUOTA }
+      // Drive a scripted run to the trench: clear space, complete the surface
+      // traversal, then hold. WAVE 2 — wave 1 has no ground phase (D-015).
+      let s: GameState = { ...initialState(seed), wave: 2, phase: 'space', phaseKills: SPACE_WAVE_QUOTA }
       const lines: string[] = []
       for (let f = 0; f < 3; f++) {
-        // After the space->surface step, force the surface quota so the next step
-        // advances to the trench — a fixed script, no RNG divergence.
-        if (s.phase === 'surface') s = { ...s, phaseKills: towersForWave(1) }
+        // After the space->surface step, complete the traversal so the next step
+        // advances to the trench (D-019) — a fixed script, no RNG divergence.
+        if (s.phase === 'surface') s = { ...s, ...traversalComplete }
         s = stepGame(s, NO_INPUT, DT)
         lines.push(...spokenLines(s))
       }

@@ -86,10 +86,11 @@ const killedAGroundObject = (s: GameState): boolean =>
 
 describe('sw3-11 — the surface spawns red ground bunkers among the towers', () => {
   it('a deterministic surface run raises BOTH kinds: towers and bunkers', () => {
-    // WSGRND's mazes mix the two picture types in one table. Run the surface
-    // long enough for many spawns; both kinds must appear. RED: no spawn ever
+    // WSGRND's mazes mix the two picture types in one table. WAVE 3 (SQUARE) is a
+    // MIXED maze — 16 towers + 12 bunkers — so both kinds appear (wave 1 has no
+    // ground phase and wave 2's BUNK is bunkers-only; D-015). RED: no object ever
     // carries kind 'bunker' today.
-    let s = surface(1983)
+    let s: GameState = { ...surface(1983), wave: 3 }
     let sawBunker = false
     let sawTower = false
     for (let i = 0; i < 9000 && !(sawBunker && sawTower); i++) {
@@ -183,10 +184,11 @@ describe('sw3-11 — bunkers are quota-NEUTRAL (the ROM .TWRS count is towers on
     expect(s1.phaseKills).toBe(1)
   })
 
-  it('a bunker kill alone can never clear the surface phase', () => {
-    // One tower short of the wave-1 quota, the player kills a BUNKER: the phase
-    // must hold. (The equivalent TOWER kill crossing to trench is pinned by
-    // sw3-3's quota suite.)
+  it('a bunker kill does not count toward the tower quota (banks no clear bonus)', () => {
+    // One tower short of the wave-3 quota, the player kills a BUNKER: the bunker is
+    // quota-neutral, so the all-towers bonus does NOT bank and the phase holds. (Under
+    // sw7-18 / D-019 the phase never clears by kills anyway; the claim here is the
+    // NEUTRALITY — a bunker kill neither advances the count nor banks the 50k.)
     //
     // The kill is asserted, not assumed. Under the old bolt fixture this test would have gone on
     // passing had the shot stopped landing altogether — "the phase held" is trivially true of a
@@ -194,9 +196,10 @@ describe('sw3-11 — bunkers are quota-NEUTRAL (the ROM .TWRS count is towers on
     // held ANYWAY, which is the whole claim.
     const s0: GameState = {
       ...surface(),
-      wave: 1,
-      phaseKills: towersForWave(1) - 1,
+      wave: 3, // SQUARE — a real ground wave WITH towers (wave 1 has none, D-015)
+      phaseKills: towersForWave(3) - 1,
       turrets: [groundObject(SITE, 'bunker')],
+      surfaceMazeLaid: true, // hand-placed field — don't lay the wave maze over it
       enemyShots: [],
       fireCooldown: 0,
       firePrev: false,

@@ -226,7 +226,9 @@ describe('event emission — space phase gameplay moments (AC1)', () => {
   })
 
   it("emits 'level-clear' (next: surface) when the space kill quota is met", () => {
-    const out = stepGame(playing({ phase: 'space', phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
+    // WAVE 2 — wave 1 has no ground phase (sw7-18 / D-015), so it clears space→trench;
+    // the space→surface edge this asserts first appears on wave 2.
+    const out = stepGame(playing({ phase: 'space', wave: 2, phaseKills: SPACE_WAVE_QUOTA }), NO_INPUT, DT)
     expect(out.phase).toBe('surface') // the transition actually happened
     expect(out.events).toContainEqual({ type: 'level-clear', next: 'surface' })
   })
