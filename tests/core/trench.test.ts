@@ -72,6 +72,7 @@ import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
 import type { Vec3 } from '@arcade/shared/math3d'
 import { TRENCH } from '../../src/core/models'
+import { TRENCH_PORT_OFFSET } from '../../src/core/trench-wedges'
 import * as RenderModule from '../../src/shell/render'
 import { FIRE_AT_PORT, fireAt } from '../support/aim'
 
@@ -172,7 +173,9 @@ describe('Wave 3 — the exhaust port scrolls toward the cockpit', () => {
     const s1 = crossFrom(s0, 'surface')
     expect(s1.phase).toBe('trench')
     expect(s1.exhaustPort).not.toBeNull()
-    expect(s1.exhaustPort!.pos[2]).toBe(-EXHAUST_PORT_DISTANCE) // centred, far ahead
+    // sw7-22 (R6d): the port spawns at its real BS.PLC distance now, not the old
+    // TRENCH_FAR clamp — still centred, but the FULL channel far ahead (not −28,672).
+    expect(s1.exhaustPort!.pos[2]).toBe(-TRENCH_PORT_OFFSET) // centred, far ahead
     expect(s1.exhaustPort!.pos[0]).toBe(0)
   })
 })

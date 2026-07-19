@@ -33,6 +33,7 @@ import {
   type Enemy,
 } from '../../src/core/state'
 import { enterPhase, stepGame } from '../../src/core/sim'
+import { TRENCH_PORT_OFFSET } from '../../src/core/trench-wedges'
 import { NO_INPUT, type Input } from '../../src/core/input'
 import type { Vec3 } from '@arcade/shared/math3d'
 
@@ -82,7 +83,8 @@ describe('Dev phase-jump — the transitions progression itself can never make',
   it('jumps space -> trench in ONE step, skipping surface, with the port seated for 11-6', () => {
     const s = enterPhase(dirtyRun('space'), 'trench')
     expect(s.phase).toBe('trench')
-    expect(s.exhaustPort?.pos).toEqual([0, 0, -EXHAUST_PORT_DISTANCE])
+    // sw7-22 (R6d): spawnPort seats the port at its real BS.PLC distance now.
+    expect(s.exhaustPort?.pos).toEqual([0, 0, -TRENCH_PORT_OFFSET])
   })
 
   it('jumps BACKWARD trench -> space (progression only ever moves forward)', () => {
