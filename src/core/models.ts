@@ -761,101 +761,66 @@ export const TRENCH_CATWALK: Model3D = {
 }
 
 /**
- * The Death Star BODY — the thing the space phase is attacking (story 11-7, ADR
- * 0002 part C). Unlike the disassembly-ported models, no authentic vertex table
- * exists for it, so it is generated procedurally in the pure core (the same
- * approach Tempest uses for its tube): a deterministic UV wireframe sphere —
- * latitude rings (one EXACTLY on the equator, since STACKS is even — that ring is
- * the iconic equatorial trench line) joined by longitude meridians and capped at
- * the poles — plus a recessed SUPERLASER DISH (an inset rim ring + a focus point,
- * stitched into the shell) seated on the +Z axis (facing the player in the space
- * phase), i.e. on the x=0 and y=0 planes, so the body keeps its bilateral
- * symmetry. Origin-centred in object space; the
- * shell seats and scales it (render.ts `deathStarPlacement`). PURE: trig only, no
- * DOM/time/random — deterministic.
+ * The Death Star BODY — the target of the space phase. sw7-15 / M-010 (CONFIRMED,
+ * pair-models.json): the 1983 cabinet does NOT draw a 3D sphere — it draws an
+ * authentic 2D vector PICTURE ("DEATH STAR PICS", WSVROM.MAC:2449), a flat billboard
+ * SCALED by the AVG multiplier `M.=32` as the player closes. It has three coloured
+ * parts, ported here as three flat (z=0) picture models the shell strokes in their
+ * own colour: a GREEN disc (`BSCIR`, VGCGRN, radius 50), a WHITE equatorial trench
+ * chord (`BSTRN`, VGCWHT), and a RED offset superlaser dish (`BSDSH`, VGCRED). This
+ * replaces the story-11-7 procedural UV sphere (a stand-in whose doc comment wrongly
+ * claimed "no authentic vertex table exists").
  *
- * Display orientation and the exact dish placement are RENDER concerns to be
- * eyeballed in the dev server (repo convention — see render.ts SURFACE_ORIENT
- * note and the 11-7 session findings); this builder pins the structure only.
+ * Raw ROM picture units (radius 50), decimal — the AON/AOFF deltas of a radius-50
+ * circle (30²+40² = 50²); the shell applies the display scale + billboard seat
+ * (render.ts `deathStarPlacement` / `DEATH_STAR_PIC_SCALE`). PURE: literal tables,
+ * no DOM/time/random.
  */
-export function buildDeathStar(): Model3D {
-  const R = 520
-  const STACKS = 8 // even ⇒ an exact equatorial ring (the trench line)
-  const SLICES = 12
-  const vertices: Vec3[] = []
+
+/** A flat (z=0) picture model from a single polyline; `close` links last→first. */
+function picture(name: string, pts2d: readonly (readonly [number, number])[], close: boolean): Model3D {
+  const vertices: Vec3[] = pts2d.map(([x, y]) => [x, y, 0])
   const edges: [number, number][] = []
-
-  // Poles on the Y axis.
-  const south = vertices.push([0, -R, 0]) - 1
-  const north = vertices.push([0, R, 0]) - 1
-  // Non-pole latitude rings j = 1..STACKS-1, each SLICES vertices.
-  const ringStart: number[] = []
-  for (let j = 1; j < STACKS; j++) {
-    ringStart[j] = vertices.length
-    const phi = -Math.PI / 2 + (Math.PI * j) / STACKS
-    const y = R * Math.sin(phi)
-    const rho = R * Math.cos(phi)
-    for (let k = 0; k < SLICES; k++) {
-      const theta = (2 * Math.PI * k) / SLICES
-      vertices.push([rho * Math.cos(theta), y, rho * Math.sin(theta)])
-    }
-  }
-  // Latitude ring loops.
-  for (let j = 1; j < STACKS; j++) {
-    for (let k = 0; k < SLICES; k++) edges.push([ringStart[j] + k, ringStart[j] + ((k + 1) % SLICES)])
-  }
-  // Longitude meridians between adjacent rings.
-  for (let j = 1; j < STACKS - 1; j++) {
-    for (let k = 0; k < SLICES; k++) edges.push([ringStart[j] + k, ringStart[j + 1] + k])
-  }
-  // Pole spokes.
-  for (let k = 0; k < SLICES; k++) {
-    edges.push([south, ringStart[1] + k])
-    edges.push([north, ringStart[STACKS - 1] + k])
-  }
-
-  // Superlaser dish, centred on +Z — the camera-facing hemisphere in the space
-  // phase (the body is drawn with IDENTITY orientation seated down −Z, so its +Z
-  // face is the one the player sees; render.ts deathStarPlacement/cameraView). The
-  // rim ring sits ON the shell; the focus is recessed toward the centre, giving the
-  // concave dish. Stitched to the nearest shell vertices so the dish is part of one
-  // connected wireframe, not a floater. (sw3-10: the pre-fix +X seat faced sideways,
-  // so the dish was seen edge-on and rendered as an anomalous crossed spike.)
-  const sphereCount = vertices.length
-  const DISH = 8
-  const rd = R * 0.42
-  const zRim = Math.sqrt(R * R - rd * rd)
-  const dishStart = vertices.length
-  for (let m = 0; m < DISH; m++) {
-    const psi = (2 * Math.PI * m) / DISH
-    vertices.push([rd * Math.cos(psi), rd * Math.sin(psi), zRim])
-  }
-  const focus = vertices.push([0, 0, R * 0.6]) - 1
-  for (let m = 0; m < DISH; m++) {
-    const rim = dishStart + m
-    edges.push([rim, dishStart + ((m + 1) % DISH)]) // rim loop
-    edges.push([rim, focus]) // spoke to the recessed focus
-    // Stitch the rim into the shell at its nearest sphere vertex.
-    let best = 0
-    let bestD = Infinity
-    for (let si = 0; si < sphereCount; si++) {
-      const dx = vertices[si][0] - vertices[rim][0]
-      const dy = vertices[si][1] - vertices[rim][1]
-      const dz = vertices[si][2] - vertices[rim][2]
-      const d = dx * dx + dy * dy + dz * dz
-      if (d < bestD) {
-        bestD = d
-        best = si
-      }
-    }
-    edges.push([rim, best])
-  }
-
-  return { name: 'Death Star', vertices, edges }
+  for (let i = 0; i + 1 < pts2d.length; i++) edges.push([i, i + 1])
+  if (close && pts2d.length > 2) edges.push([pts2d.length - 1, 0])
+  return { name, vertices, edges }
 }
 
-/** The procedural Death Star body (story 11-7). See `buildDeathStar`. */
-export const DEATH_STAR: Model3D = buildDeathStar()
+/** A flat (z=0) picture model from explicit disjoint segments (each [a,b] a line). */
+function pictureSegments(name: string, pts2d: readonly (readonly [number, number])[], edges: readonly [number, number][]): Model3D {
+  return { name, vertices: pts2d.map(([x, y]) => [x, y, 0]), edges: edges.map(([a, b]) => [a, b]) }
+}
+
+// BSCIR — the green base circle (WSVROM.MAC), 28 points on a radius-50 circle.
+const DEATH_STAR_BODY_PTS: readonly (readonly [number, number])[] = [
+  [-49, -10], [-46, -20], [-40, -30], [-30, -40], [-20, -46], [-10, -49], [0, -50],
+  [10, -49], [20, -46], [30, -40], [40, -30], [46, -20], [49, -10], [50, 0], [49, 10],
+  [46, 20], [40, 30], [30, 40], [20, 46], [10, 49], [0, 50], [-10, 49], [-20, 46],
+  [-30, 40], [-40, 30], [-46, 20], [-50, 0], [-49, 10],
+]
+
+// BSTRN — the white equatorial trench: two horizontal chords across the disc
+// (`AOFF 49,10 / AON -49,-9` and `AOFF -49,-10 / AON 49,9`).
+const DEATH_STAR_TRENCH_PTS: readonly (readonly [number, number])[] = [
+  [49, 10], [-49, -9], [-49, -10], [49, 9],
+]
+
+// BSDSH — the red superlaser dish outline: an offset ~9-radius loop centred near
+// (22,27) in picture units (`AOFF 20,17 / AON …`), in the disc's upper region.
+const DEATH_STAR_DISH_PTS: readonly (readonly [number, number])[] = [
+  [20, 17], [16, 19], [13, 22], [11, 26], [10, 30], [11, 34], [14, 37], [18, 38],
+  [22, 38], [26, 36], [30, 32], [33, 28], [34, 24], [33, 20], [30, 17], [26, 16], [23, 16],
+]
+
+/** The authentic Death Star body disc (M-010, BSCIR). Green; the space-phase target. */
+export const DEATH_STAR: Model3D = picture('Death Star', DEATH_STAR_BODY_PTS, true)
+/** The white equatorial trench chord (M-010, BSTRN). Two disjoint lines across the disc. */
+export const DEATH_STAR_TRENCH: Model3D = pictureSegments('Death Star Trench', DEATH_STAR_TRENCH_PTS, [
+  [0, 1],
+  [2, 3],
+])
+/** The red superlaser dish outline (M-010, BSDSH). An offset closed loop. */
+export const DEATH_STAR_DISH: Model3D = picture('Death Star Dish', DEATH_STAR_DISH_PTS, true)
 
 /**
  * The authentic model registry — the single source consumed by Wave 1+
