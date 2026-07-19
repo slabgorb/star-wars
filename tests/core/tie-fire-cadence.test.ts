@@ -39,7 +39,7 @@ function lookAtOrigin(pos: Vec3): Mat4 {
  *  it and it stays in-sights every tick. That leaves the frame-mask + PRNG gate as
  *  the ONLY thing deciding whether it fires (twist 0 ⇒ the AIM_AHEAD lockout passes). */
 function inSightsTie(pos: Vec3): Enemy {
-  return { pos, vel: [0, 0, 0], kind: 'tie', orient: lookAtOrigin(pos) }
+  return { pos, kind: 'tie', orient: lookAtOrigin(pos) }
 }
 
 /** A playing state with a single dead-in-sights TIE. `wave` selects the TGPROB row;

@@ -34,9 +34,8 @@ import { IDENTITY, type Vec3, type Mat4 } from '@arcade/shared/math3d'
  *  sim must overwrite each step; it is seeded to IDENTITY so an unimplemented
  *  sim leaves the forward axis at [0,0,1] — which fails every off-axis look-at
  *  assertion below, keeping this suite honestly RED until GREEN computes it. */
-const tieAt = (pos: Vec3, vel: Vec3 = [0, 0, 0]): Enemy => ({
+const tieAt = (pos: Vec3): Enemy => ({
   pos,
-  vel,
   kind: 'tie',
   orient: IDENTITY,
 })

@@ -518,7 +518,7 @@ describe('sw7-16 — the other phases do not move', () => {
       ...enterPhase(initialState(1983), 'space'),
       mode: 'playing',
       altitude: MAX_SKIM_ALTITUDE,
-      enemies: [{ pos: [0, 0, 0], vel: [0, 0, 0], kind: 'tie', orient: IDENTITY }],
+      enemies: [{ pos: [0, 0, 0], kind: 'tie', orient: IDENTITY }],
       fireCooldown: 0,
     }
     const s = stepGame(s0, trigger({ fire: false }), DT)

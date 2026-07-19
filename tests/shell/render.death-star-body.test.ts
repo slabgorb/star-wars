@@ -91,7 +91,7 @@ const isTie = (name: string) => /tie\s*fighter/i.test(name)
 // A real `orient` (IDENTITY) is required — render.ts composes it into the TIE's
 // model matrix (`multiply(e.orient, TIE_ORIENT)`), so an undefined orient would
 // crash the existing TIE draw and mask the body assertion we are actually testing.
-const tie = (): Enemy => ({ pos: [120, 0, -1200], vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
+const tie = (): Enemy => ({ pos: [120, 0, -1200], kind: 'tie', orient: IDENTITY })
 
 beforeEach(() => {
   vi.clearAllMocks()

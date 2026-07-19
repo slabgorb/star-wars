@@ -73,7 +73,7 @@ const H = 600
 // render.ts BOLT_GLOW — the green drawLockOn stroked the lock-on ring in.
 const RING_GREEN = '#9dff00'
 
-const tie = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
+const tie = (pos: Vec3): Enemy => ({ pos, kind: 'tie', orient: IDENTITY })
 
 /** A live space scene with a single TIE dead ahead and the yoke centred on it — the
  *  canonical 8-14 "locked" state. Spawns/fire are suppressed so the TIE stays put. */

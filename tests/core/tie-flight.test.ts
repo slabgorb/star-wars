@@ -45,7 +45,7 @@ import { describe, it, expect } from 'vitest'
 import {
   initialState,
   SPAWN_INTERVAL,
-  ENEMY_SPEED,
+  TIE_THRUST_RATE,
   TIE_SCORE,
   type GameState,
   type Enemy,
@@ -108,7 +108,6 @@ const isPureRotation = (m: Mat4): boolean => {
 interface Sample {
   pos: Vec3
   orient: Mat4
-  vel: Vec3
 }
 
 /**
@@ -125,15 +124,14 @@ function followFirstTie(seed: number, steps: number, dt = 0.05): Sample[] {
   const samples: Sample[] = []
   let last: Vec3 | null = null
   // A genuine index-0 TIE SWAP is a discontinuity far larger than one frame of
-  // legitimate flight. One frame moves ~ENEMY_SPEED·dt (500u at the restored sw4-1
-  // metric — up from ~65u in the old compressed world), so the swap threshold must
-  // clear a few normal steps or it false-trips on ordinary fast motion and cuts the
-  // track to a single sample.
-  const swapJump = ENEMY_SPEED * dt * 3
+  // legitimate flight. Under VM-driven flight one frame thrusts ~TIE_THRUST_RATE·dt,
+  // so the swap threshold must clear a few normal steps or it false-trips on ordinary
+  // fast motion and cuts the track to a single sample.
+  const swapJump = TIE_THRUST_RATE * dt * 3
   for (let i = 0; i < steps && s.enemies.length > 0; i++) {
     const e = s.enemies[0]
     if (last && length(sub(e.pos, last)) > swapJump) break // index-0 changed TIEs
-    samples.push({ pos: e.pos, orient: e.orient, vel: e.vel })
+    samples.push({ pos: e.pos, orient: e.orient })
     last = e.pos
     s = stepGame(s, NO_INPUT, dt)
   }
@@ -208,7 +206,7 @@ describe('Story 9-2 — the flight model is deterministic and pure (AC2)', () =>
 describe('Story 9-2 — existing collision & motion contracts are unaffected (AC4)', () => {
   // Fully-typed minimal fixtures (the combat-kill-loop.test.ts `tieStill` idiom):
   // collision reads only .pos, but a complete Enemy keeps the suite type-clean.
-  const tieAt = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
+  const tieAt = (pos: Vec3): Enemy => ({ pos, kind: 'tie', orient: IDENTITY })
   /** Dead ahead, outside COCKPIT_HIT_RADIUS — the beam's target, and the old bolt's spot. */
   const AT: Vec3 = [0, 0, -100]
 

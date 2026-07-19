@@ -44,7 +44,7 @@ import { perspective, transform } from '@arcade/shared/math3d'
 import { modelBounds } from '../../src/core/modelView'
 import { TIE_FIGHTER } from '../../src/core/models'
 import { FOV_Y } from '../../src/core/gameRules'
-import { TIE_SPAWN_DISTANCE, TIE_NEAR_BOUND, ENEMY_SPEED } from '../../src/core/state'
+import { TIE_SPAWN_DISTANCE, TIE_NEAR_BOUND, TIE_THRUST_RATE } from '../../src/core/state'
 
 const { center, radius } = modelBounds(TIE_FIGHTER)
 
@@ -106,9 +106,10 @@ describe('Story 9-7 — TIE fighters scale with distance', () => {
   })
 
   it('the approach stays playable after pushing spawn out (no slow crawl)', () => {
-    // Guards the ENEMY_SPEED companion: a far spawn at the old speed makes TIEs
-    // crawl in for ~39s. Base (wave-1) speed is the slowest, so it's the worst case.
-    const approachSeconds = (TIE_SPAWN_DISTANCE - TIE_NEAR_BOUND) / ENEMY_SPEED
+    // The far spawn must not make TIEs crawl in. Approach is VM-driven now, so the
+    // worst-case transit is the full depth at the forward thrust rate (TIE_THRUST_RATE),
+    // which must still clear the playable ceiling (sw7-23: retired the ENEMY_SPEED scalar).
+    const approachSeconds = (TIE_SPAWN_DISTANCE - TIE_NEAR_BOUND) / TIE_THRUST_RATE
     expect(approachSeconds).toBeLessThanOrEqual(MAX_APPROACH_SECONDS)
   })
 })

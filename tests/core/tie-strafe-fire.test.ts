@@ -30,7 +30,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   initialState,
-  ENEMY_SPEED,
   ENEMY_SHOT_TTL,
   ENEMY_FIRE_INTERVAL,
   MAX_FIREBALL_SLOTS,
@@ -44,21 +43,13 @@ import {
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
 import { fireAt } from '../support/aim'
-import { normalize, sub, scale, length, type Vec3, type Mat4 } from '@arcade/shared/math3d'
-
-const COCKPIT: Vec3 = [0, 0, 0]
+import { sub, length, type Vec3, type Mat4 } from '@arcade/shared/math3d'
 const DT = 0.05
 const IDENTITY: Mat4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 
-/** A TIE making its pass: at `pos`, thrusting toward the cockpit at `speed`, with
- * swoop `bank` (0 = pure homing). Mirrors `tieToward` in tie-peel-away.test.ts. */
-const tieToward = (pos: Vec3, speed = ENEMY_SPEED, bank = 0): Enemy => ({
-  pos,
-  vel: scale(normalize(sub(COCKPIT, pos)), speed),
-  kind: 'tie',
-  orient: IDENTITY,
-  bank,
-})
+/** A TIE making its pass at `pos`, holding station (no VM). Flight is VM-driven now,
+ * so the fixture just places the fighter; the fire gate reads pos/orient/range. */
+const tieToward = (pos: Vec3): Enemy => ({ pos, kind: 'tie', orient: IDENTITY })
 
 // NOTE (sw7-23): the `peelingTie` helper (which set the retired `peeling` latch + a
 // receding `vel`) was removed. The peel-away lifecycle it modelled no longer exists —

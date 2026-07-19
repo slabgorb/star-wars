@@ -88,7 +88,7 @@ const aimAt = (pos: Vec3): { aimX: number; aimY: number } => {
   const ndc = transform(proj, pos)
   return { aimX: ndc[0], aimY: ndc[1] }
 }
-const tieStill = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
+const tieStill = (pos: Vec3): Enemy => ({ pos, kind: 'tie', orient: IDENTITY })
 /** A lone TIE with spawns and enemy fire suppressed — the only thing that can
  *  change the sky is the player's own fire. */
 const loneWave = (enemy: Enemy, over: Partial<GameState> = {}): GameState => ({

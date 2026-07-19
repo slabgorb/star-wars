@@ -78,7 +78,6 @@ import {
   TIE_THRUST_RATE,
   TIE_THRUST_RATE_SLOW,
   TIE_NEAR_BOUND,
-  TIE_EXIT_RANGE,
   BONUS_FLASH_MAX,
   BONUS_FLASH_DECAY,
 } from './state'
@@ -99,7 +98,7 @@ import {
   type Vec3,
   type Mat4,
 } from '@arcade/shared/math3d'
-import { aimDirection, beamHit, collides, waveParams } from './gameRules'
+import { aimDirection, beamHit, collides, toCockpit, waveParams } from './gameRules'
 import { createRng, nextInt, type Rng } from '@arcade/shared/rng'
 import { stepNameEntry } from '@arcade/shared/name-entry'
 import {
@@ -370,7 +369,6 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     .map((e) => applyManeuver(e, e.vm?.twist ?? 0, e.vm?.move ?? 0, dt))
     // Decay Darth's post-hit glow (the A$GLW window); plain TIEs never carry it.
     .map((e) => (e.glow ? { ...e, glow: Math.max(0, e.glow - dt) } : e))
-    .filter((e) => !(e.peeling && length(e.pos) > TIE_EXIT_RANGE))
   let spawnTimer = state.spawnTimer - dt
   let spawnCount = state.spawnCount
   if (spawnTimer <= 0 && movedEnemies.length < WAVE_SIZE) {
@@ -378,7 +376,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     // the deterministic per-slot index, advanced only when a fighter actually spawns.
     // The counter also indexes the wave's TSPWAV plan (sw7-12) so the RTH slot spawns
     // Darth; the plan is per-wave, walked 0-based from SP.WAV = state.wave − 1.
-    movedEnemies.push(spawnTie(rng, params.enemySpeed, spawnCount, state.wave - 1))
+    movedEnemies.push(spawnTie(rng, spawnCount, state.wave - 1))
     spawnCount += 1
     spawnTimer = params.spawnInterval
   }
@@ -1813,13 +1811,13 @@ const SPAWN_LATERALS: ReadonlyArray<readonly [number, number]> = [
   [0, 2 * ROM_LATERAL_UNIT], // 1D3
 ]
 
-/** A fresh TIE spawned far down −Z at the authentic depth, aimed at the cockpit at
- * the wave's approach speed (gameRules.waveParams). The LATERAL comes from the ROM
- * TBG table walked in order by `spawnIndex` (sw4-1, spec §A) — so every fighter
- * appears on one of the authentic {0, ±1024, ±2048} starting slots. Task 4 (sw7
- * TIE-VM wiring) retired the invented swoop `bank` (moveEnemy is gone; the VM
- * governs the approach), so `spawnTie` no longer seeds it and draws no RNG. */
-export function spawnTie(_rng: Rng, speed: number, spawnIndex: number, spaceWave: number): Enemy {
+/** A fresh TIE spawned far down −Z at the authentic depth, its nose aimed at the
+ * cockpit. The LATERAL comes from the ROM TBG table walked in order by `spawnIndex`
+ * (sw4-1, spec §A) — so every fighter appears on one of the authentic {0, ±1024,
+ * ±2048} starting slots. Flight is VM-driven (applyManeuver); `spawnTie` seeds only
+ * the initial facing and the choreography VM, and draws no RNG (the invented swoop
+ * `bank` and the unread `Enemy.vel` were retired in sw7-23). */
+export function spawnTie(_rng: Rng, spawnIndex: number, spaceWave: number): Enemy {
   const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]
   const pos: Vec3 = [x, y, -TIE_SPAWN_DISTANCE]
   const dir = toCockpit(pos)
@@ -1836,7 +1834,7 @@ export function spawnTie(_rng: Rng, speed: number, spawnIndex: number, spaceWave
   // default to the first mook script, '1A1' (TCH1A1) — the same fallback the
   // `?? 'TIE'` shape above uses.
   const vm = initVm(choreoPc(entry?.choreography ?? '1A1'))
-  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), vm, firedGun: false }
+  return { pos, kind, orient: lookRotation(dir), vm, firedGun: false }
 }
 
 /**
@@ -1885,21 +1883,3 @@ export function shipPoint(s: GameState): Vec3 {
   }
 }
 
-/** Unit vector from a world position back toward the cockpit at the origin.
- *
- * ⚠ SPACE ONLY — this is the TIE flight model's homing target, where the ship really is the
- * origin. It is NOT the surface's ship: `stepSurface` aims its fire with `surfaceShip(altitude)`
- * instead. Retargeting this helper would break space the way the surface was broken before sw7-16.
- *
- * Both `moveEnemy` and `tests/core/tie-peel-away.test.ts` (story 9-3) — the guard that used to
- * catch a regression here — are gone (sw7 Task 4: VM-driven flight retired the invented
- * swoop/weave `moveEnemy` for space; see `docs/superpowers/specs/
- * 2026-07-18-star-wars-tie-vm-fire-wiring-design.md` §5). This module's remaining caller is
- * `aimOrient`, which `applyManeuver` uses for the VM's `AIM_PLAYER`/`AIM_AHEAD` steer-toward-target
- * rotation — exercised by `tests/core/tie-vm-flight.test.ts`. (`tie-status.ts`'s `computeStatus`
- * derives `C_AS`/`C_PN` from an equivalent inline `normalize(sub(COCKPIT, e.pos))`, not a call to
- * this function — same math, separate copy; see `tests/core/tie-status.test.ts`.) `spawnTie`'s use
- * of `toCockpit` for the initial `dir` remains unguarded by any test in the repo, as before. */
-function toCockpit(pos: Vec3): Vec3 {
-  return normalize(sub(COCKPIT, pos))
-}

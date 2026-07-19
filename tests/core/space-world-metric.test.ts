@@ -52,7 +52,6 @@ import {
   initialState,
   TIE_SPAWN_DISTANCE,
   TIE_NEAR_BOUND,
-  TIE_EXIT_RANGE,
   PROJECTILE_SPEED,
   PROJECTILE_TTL,
   STARTING_LIVES,
@@ -86,11 +85,10 @@ const AUTHENTIC_PAIR_KEYS = new Set(['0:1024', '1024:0', '2048:0', '0:2048'])
 //
 // The space step spawns at most one TIE per frame, placing it at exactly
 // pos = [x, y, -TIE_SPAWN_DISTANCE] (sim.ts spawnTie), and only THEN, on later
-// frames, does moveEnemy advance it inward. So a fresh spawn is the unique enemy
-// whose z equals -TIE_SPAWN_DISTANCE exactly; every moved TIE has a fractional,
-// closer z that never returns to the spawn plane (it homes toward 0, and a peeling
-// TIE is culled at TIE_EXIT_RANGE ≪ spawn depth). Exact-equality detection is thus
-// robust to whatever approach speed GREEN sets.
+// frames, does the VM-driven flight (applyManeuver) advance it inward. So a fresh
+// spawn is the unique enemy whose z equals -TIE_SPAWN_DISTANCE exactly; every moved
+// TIE has a fractional, closer z that never returns to the spawn plane. Exact-equality
+// detection is thus robust to whatever the flight model does after spawn.
 
 interface Spawn {
   x: number
@@ -135,19 +133,11 @@ describe('sw4-1 §A — restored geometry constants (exact ROM integers)', () =>
   })
 })
 
-// --- AC#4 — TIE_EXIT_RANGE: tuning latitude, but bounded by the metric --------
-
-describe('sw4-1 §A — exit range bounds the peel recession within the new world', () => {
-  it('sits beyond the near bound and well inside the spawn distance', () => {
-    // "~8000, must exceed near bound" — a tuning value, so this asserts the band,
-    // not an exact figure. RED today: 1800 is below the 4000 floor (scaled to the
-    // old world). The invariants (> near bound, < spawn) hold in both worlds and
-    // guard against a rescale that inverts them.
-    expect(TIE_EXIT_RANGE).toBeGreaterThan(TIE_NEAR_BOUND)
-    expect(TIE_EXIT_RANGE).toBeLessThan(TIE_SPAWN_DISTANCE)
-    expect(TIE_EXIT_RANGE).toBeGreaterThanOrEqual(4000) // in the ~8000 neighbourhood
-  })
-})
+// --- AC#4 — TIE_EXIT_RANGE: RETIRED (sw7-23) ----------------------------------
+//
+// The "exit range bounds the peel recession" block was removed in sw7-23. TIE_EXIT_RANGE
+// was the peel-away recession cull's threshold; the cull (Enemy.peeling) was retired
+// once flight became VM-driven (PR #110), so the constant is gone with it.
 
 // --- AC#5 / AC#12 — bolt reach must cover the far plane + lateral spread -------
 
@@ -169,7 +159,7 @@ describe('sw4-1 §A — player bolt reach covers the restored approach volume', 
     // model. Depth 24000 is beyond the pre-sw4-1 ~10000 reach yet comfortably inside
     // the restored 32000 reach — RED today (the bolt expires short; the TIE lives).
     const DEEP = 24000
-    const tie: Enemy = { pos: [0, 0, -DEEP], vel: [0, 0, 0], kind: 'tie', orient: IDENTITY }
+    const tie: Enemy = { pos: [0, 0, -DEEP], kind: 'tie', orient: IDENTITY }
     const proj = perspective(Math.PI / 3, 16 / 9, 1, 5000)
     const ndc = transform(proj, tie.pos) // crosshairNdc is identity: aim = projected NDC
     const fire: Input = { aimX: ndc[0], aimY: ndc[1], fire: true }

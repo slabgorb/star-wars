@@ -56,7 +56,7 @@ const wave = (seed = 1983): GameState => initialState(seed)
 const TICK = 0.001
 const DOWNRANGE: Vec3 = [0, 0, -400] // well outside the cockpit hit sphere
 const fireball = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, 1], ttl: ENEMY_SHOT_TTL })
-const tie = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
+const tie = (pos: Vec3): Enemy => ({ pos, kind: 'tie', orient: IDENTITY })
 
 /** A port kill lands only inside the narrow approach window (sw3-15: the ROM
  *  `$800` window near the end wall). `spawnPort` seeds the port far downrange at
