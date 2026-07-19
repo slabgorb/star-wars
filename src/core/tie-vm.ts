@@ -129,11 +129,19 @@ export function tickChoreo(vm: Readonly<ChoreoVm>, prog: readonly ChoreoInstr[],
   let untilMask = vm.untilMask
 
   if (untilMask !== 0 && (status & untilMask) !== 0) {
-    // Armed gate fired — abandon the current maneuver and skip forward to the
-    // next control record, which re-arms with its mask (CHCN.E, WSCPU.MAC:854–860).
+    // Armed gate fired — abandon the current maneuver and skip forward to the next
+    // control record, which re-arms with its mask (CHCN.E, WSCPU.MAC:854–860). The
+    // scan is INCLUSIVE of the current pc: CHCN.E reads `LDA 0(U)` AT A$CHPC before
+    // any `LEAU 3(U)` advance, so a `.CUNTIL` (opcode byte 0, WSCPU.MAC:933–935)
+    // already sitting at pc stops the scan immediately. A pre-increment here would
+    // skip that CUNTIL — and, in the last loiter script (TCH1DZ, whose final CUNTIL
+    // is the physical end of the program), run the scan off the end. This path went
+    // unexercised until the C_AG fire flag was wired (sw7 Task 5): the `.CUNTIL C_AG`
+    // gates never fired before, so the roll-away-after-shooting transitions that reach
+    // it are new. (The C_AS-only gates the earlier tasks exercised happen not to sit
+    // one-before a trailing CUNTIL, so the pre-increment bug stayed latent.)
     untilMask = 0
     waitFrames = 0
-    pc = pc + 1
     while (prog[pc] && prog[pc].op !== 'until') pc = pc + 1
   } else if (waitFrames > 0) {
     // Maneuver still running: DEC the frame timer and hold (CHTW.E, WSCPU.MAC:925).

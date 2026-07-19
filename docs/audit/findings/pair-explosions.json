@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 440,
+      "line": 485,
       "verbatim": "        drawWireframe(ctx, TIE_WING_FRAG_1, at(-ws, 0, 0), proj, w, h, wc)"
     },
     "verdict": "CONFIRMED",
@@ -76,7 +76,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 438,
+      "line": 483,
       "verbatim": "        const ws = wf * TIE_DEATH_SPREAD"
     },
     "recommendation": "accept"
@@ -115,7 +115,8 @@
     },
     "recommendation": "fix",
     "size": "l",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-15"
   },
   {
     "id": "X-007",
@@ -153,7 +154,8 @@
     "refutation_corrections": {
       "exact_frame_count_now_decoded": "The finding declined an exact figure, citing the PH0 IFLO/IFHS anomaly. That anomaly is real but immaterial: PH0's IFLO block (WSXPLD.MAC:824-828) ADVANCES the phase (resets XP.CNT=1, INC XP.PHS) whenever XP.CNT<0x3F, so with XP.CNT seeded below 0x3F it advances after ~1 frame — PH0 contributes only ~1 frame, not a long red-circle phase. PH1/PH2/PH3 use the clean IFLO-draw / IFHS-advance pattern and give 31/27/31 = 89 frames. So the ring animation is ~89-90 frames ~= 4.3 s at 20.508 Hz (assuming one dispatch per game frame), refining the finding's 'order of several seconds' to a concrete value and reinforcing '> 2.5 s'.",
       "comment_is_overbroad_not_simply_absent": "'no ROM timing exists' is defensible for a text 'DESTROYED' banner dwell (the ROM has no such banner), but DEATH_STAR_BOOM_SECONDS also governs the explosion ANIMATION, which DOES have a ROM counterpart (the 4-phase ring sequence). The comment is overbroad rather than merely a UX guess."
-    }
+    },
+    "remediated_by": "sw7-15"
   },
   {
     "id": "X-009",
@@ -168,7 +170,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 417,
+      "line": 475,
       "verbatim": "  const dyingTies: DyingTie[] = ["
     },
     "recommendation": "accept"

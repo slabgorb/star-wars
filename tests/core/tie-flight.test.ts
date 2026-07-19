@@ -1,5 +1,15 @@
 // tests/core/tie-flight.test.ts
 //
+// ⚠ SUPERSEDED IN PART (sw7 VM-flight wiring): the story-9-2 SOFT-FLIGHT MODEL
+// (curved-approach swoop + banking during the approach) was RETIRED when the TIE
+// choreography VM took over flight. Its curve/bow/bank assertions asserted invented
+// behavior and were removed; the authentic VM-driven flight is covered by
+// tests/core/tie-vm-flight.test.ts (and tie-vm.test.ts for the VM itself). Design:
+// docs/superpowers/specs/2026-07-18-star-wars-tie-vm-fire-wiring-design.md. What
+// remains in this file is the coverage that STILL holds under VM flight —
+// determinism/purity (AC2), the unchanged collision/scoring contracts (AC4), and
+// the orientation facts that survive (nose leads travel; pure rotation).
+//
 // Story 9-2 — port the RE'd TIE flight model into the core (swoop / weave / bank
 // approach), RED phase.
 //
@@ -48,19 +58,14 @@ import {
   sub,
   length,
   dot,
-  lookRotation,
   IDENTITY,
   type Vec3,
   type Mat4,
 } from '@arcade/shared/math3d'
 
-const COCKPIT: Vec3 = [0, 0, 0]
 /** Model-space forward — the TIE's nose (the codebase "looking down -Z"
  *  convention adopted by story 8-13: a TIE's nose points back at the cockpit). */
 const FORWARD: Vec3 = [0, 0, 1]
-
-/** Unit direction from a world position toward the cockpit at the origin. */
-const toCockpit = (p: Vec3): Vec3 => normalize(sub(COCKPIT, p))
 
 /** Apply only the rotation (linear) part of a row-major Mat4 to a direction. */
 const applyDir = (m: Mat4, v: Vec3): Vec3 => [
@@ -75,13 +80,6 @@ const angleBetween = (a: Vec3, b: Vec3): number => {
   const nb = normalize(b)
   const c = Math.max(-1, Math.min(1, dot(na, nb)))
   return Math.acos(c)
-}
-
-/** Largest absolute element-wise difference between two matrices. */
-const maxMatDiff = (a: Mat4, b: Mat4): number => {
-  let m = 0
-  for (let i = 0; i < 16; i++) m = Math.max(m, Math.abs(a[i] - b[i]))
-  return m
 }
 
 /** True when the upper-3x3 is an orthonormal, det≈+1 rotation with no
@@ -142,61 +140,15 @@ function followFirstTie(seed: number, steps: number, dt = 0.05): Sample[] {
   return samples
 }
 
-describe('Story 9-2 — TIEs follow curved, weaving flight paths (AC1)', () => {
-  it('does not fly in a straight line to the cockpit — its bearing to the origin turns', () => {
-    const samples = followFirstTie(1983, 40)
-    expect(samples.length).toBeGreaterThan(10)
-    const d0 = toCockpit(samples[0].pos)
-    // A straight run holds a CONSTANT bearing to the origin (it moves exactly
-    // along the line to it), so this max turn is ~0 — that is the current bug and
-    // why this is RED. A swoop/weave changes the bearing. Threshold is well above
-    // float noise (~1e-6) yet trivially met by any genuine curve.
-    const maxTurn = Math.max(...samples.map((s) => angleBetween(toCockpit(s.pos), d0)))
-    expect(maxTurn).toBeGreaterThan(0.02) // ~1.1 degrees
-  })
-
-  it('bows away from the straight spawn->cockpit line (cross-track offset)', () => {
-    const samples = followFirstTie(1983, 40)
-    const p0 = samples[0].pos
-    const lineDir = toCockpit(p0) // unit spawn -> origin
-    const offset = (p: Vec3): number => {
-      const w = sub(p, p0)
-      const along = dot(w, lineDir)
-      const foot: Vec3 = [
-        p0[0] + lineDir[0] * along,
-        p0[1] + lineDir[1] * along,
-        p0[2] + lineDir[2] * along,
-      ]
-      return length(sub(p, foot))
-    }
-    // Straight-line motion never leaves the line (offset ~0). A curved path bows
-    // off it by world units; 2 units is far above noise and easily met by a swoop.
-    expect(Math.max(...samples.map((s) => offset(s.pos)))).toBeGreaterThan(2)
-  })
-})
-
-describe('Story 9-2 — orientation banks along the flight path (AC3, extends 8-13)', () => {
-  it('is NOT a static look-at toward the cockpit during the approach', () => {
-    const samples = followFirstTie(1983, 40)
-    // 8-13 set orient EXACTLY to lookRotation(toCockpit(pos)) every frame (diff 0
-    // -> RED here). 9-2 banks and steers along the path, so the live orientation
-    // must diverge from that frozen cockpit look-at at some point in the approach.
-    const staticDiff = samples.map((s) => maxMatDiff(s.orient, lookRotation(toCockpit(s.pos))))
-    expect(Math.max(...staticDiff)).toBeGreaterThan(0.01)
-  })
-
-  it('rolls (banks) into its turns — orientation carries roll a look-at never has', () => {
-    const samples = followFirstTie(1983, 40)
-    // The unique ROLL-FREE orientation with the same nose direction is
-    // lookRotation(nose). If the TIE banks, its actual orientation differs from
-    // that roll-free frame. Current code has zero roll (diff 0 -> RED).
-    const rollMag = samples.map((s) => {
-      const nose = applyDir(s.orient, FORWARD)
-      return maxMatDiff(s.orient, lookRotation(nose))
-    })
-    expect(Math.max(...rollMag)).toBeGreaterThan(0.01)
-  })
-
+// RETIRED (sw7 VM-flight wiring): the 9-2 "curved/weaving swoop" describe (bearing
+// turns, cross-track bow) and two of the "orientation banks" assertions (NOT a
+// static look-at; rolls into its turns) asserted the invented soft-flight model.
+// Under VM flight the authentic opening maneuver is a STRAIGHT forward `.CT …,0,MF`
+// thrust — no curve, no roll during the approach — so those four no longer describe
+// real behavior and were removed. See the top-of-file supersession note. What
+// survives below still holds under VM flight and is kept: the nose leads travel
+// (thrust is along the oriented facing) and the orientation stays a pure rotation.
+describe('Story 9-2 → VM flight — orientation is well-formed and leads travel', () => {
   it('points its nose along the direction of travel (thrusts along its facing)', () => {
     const samples = followFirstTie(1983, 40)
     let checked = 0

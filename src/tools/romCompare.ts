@@ -75,6 +75,7 @@ export const ROM_TO_PORT: Readonly<Record<string, string>> = {
   BNK: 'Surface Bunker',
   PORT: 'Exhaust Port',
   WFF: 'Trench Catwalk',
+  WGA: 'Trench Turret',
 }
 
 export type Edge = readonly [number, number]

@@ -11,6 +11,7 @@
 
 import type { Vec3, Mat4 } from '@arcade/shared/math3d'
 import type { GameEvent } from './events'
+import type { ChoreoVm } from './tie-vm'
 import { createRng, type Rng } from '@arcade/shared/rng'
 import { mazeForWave } from './surfaceMazes'
 import { TRENCH_EYE_SEAT, TRENCH_FAR } from './trench-channel'
@@ -62,14 +63,6 @@ export interface Enemy {
    * receding out of the play volume. Latched — an approaching TIE omits it (treated
    * as false), so a fighter already peeling never re-homes on the cockpit. */
   peeling?: boolean
-  /** Per-TIE fire cadence countdown (seconds) for strafe-and-fire (story 9-4): each
-   * fighter fires on its OWN clock while it is in its pass window, not on a single
-   * formation timer. Seeded the first time the TIE is seen from the squad clock
-   * (`GameState.enemyFireCooldown`) — so a parked squad clock still suppresses every
-   * fighter — then reset to the wave's fire interval after each shot. Optional:
-   * freshly spawned TIEs and test fixtures omit it (it inherits the squad clock until
-   * the fighter's first shot). */
-  fireCooldown?: number
   /** Post-hit cooldown in seconds — the ROM A$GLW "glowing from a hit" flag
    * (WSCPU.MAC:346-348,371). Set when Darth takes a scoring hit and decays each
    * frame; while it is > 0 CPHTSA leaves him alone, so a burst of fire scores 2,000
@@ -77,6 +70,26 @@ export interface Enemy {
    * omit it (treated as 0). A sim scoring gate, NOT a render field; the visual
    * roll/glow is the deferred A-018. (sw7-13) */
   glow?: number
+  /** True on the decision tick this TIE's gun fired — the ROM's C$AG status bit
+   * ("ALIEN HAS FIRED A GUN", WSCPU.MAC:33,658). Read by `computeStatus`
+   * (tie-status.ts) to feed the choreography VM's status word; the §6 fire gate
+   * (sim.ts's decision tick, sw7, docs 4c93855 Task 5) sets it from the fire step
+   * so the next tick's script runs its authentic roll-away-after-shooting maneuver.
+   * A per-frame flag: like the ROM's A$CHST rebuild (WSCPU.MAC:532-536, which keeps
+   * only C$PV + the random bits each frame), it is re-derived every tick — set true
+   * the tick a TIE fires, false otherwise. Optional — freshly spawned TIEs and every
+   * existing fixture omit it (treated as false via `?? false`). */
+  firedGun?: boolean
+  /** This fighter's own choreography VM (sw7-11 `tie-vm.ts`) — the ROM's per-alien
+   * A$CHPC/A$CHRT/A$CHTM/A$CHTW/A$CHMV/A$CHCN record. `spawnTie` seats it from the
+   * wave's spawn-plan entry (sw7-12 `tie-waves.ts` `choreoPc`) so each TIE runs the
+   * authentic script for its slot. Task 4 of the TIE-VM-wiring plan (sw7, docs
+   * 4c93855) wired this up: `stepGame`'s decision-tick loop ticks each seated VM
+   * (`tickChoreo`) and `applyManeuver` steers/thrusts from its live twist/move
+   * bits every frame — the invented swoop/weave `moveEnemy` is retired for space.
+   * Optional — hand-placed fixtures that only exercise motion/hit-tests
+   * omit it (no VM to tick, no choreography-driven behaviour). */
+  vm?: ChoreoVm
 }
 
 /** A TIE caught mid-death: it has been shot and is drawn as its exploded wing
@@ -262,11 +275,16 @@ export const TIE_SPAWN_DISTANCE = 0x7c00 // 31744 — WSCPU STARTING LOCATIONS d
 /** TIE approach speed (units/second). PROVISIONAL (sw4-1, spec §A): the cabinet
  * advances the range by $200/tick, but that per-tick delta is NOT pinned to a
  * source-true units/second figure (docs/tie-flight-ai-model.md porting caveat).
- * This is applied as a units/second rate — moveEnemy (sim.ts) steps pos by
- * ENEMY_SPEED × dt — so it is frame-rate independent of TICK_HZ. It is tuned
- * to the spec's design target — a playable ~2.5–4 s spawn→near-bound transit across
- * the restored world: (31744 − 2048) / 10000 ≈ 3.0 s. Retune in playtest; the 8-6
- * difficulty ramp still rides this as the wave-1 base. */
+ * This was applied as a units/second rate — the retired `moveEnemy` (sim.ts)
+ * stepped pos by ENEMY_SPEED × dt — so it was frame-rate independent of TICK_HZ.
+ * sw7 Task 4 retired `moveEnemy` for space: flight is now VM-driven (`applyManeuver`
+ * thrusts at the §5.3 `TIE_THRUST_RATE`/`TIE_THRUST_RATE_SLOW` rates, gated by the
+ * VM's FWD/FWD2 bits), so ENEMY_SPEED no longer drives ongoing motion — `spawnTie`
+ * still threads it through as `speed` to seed the initial (now-vestigial, unread)
+ * `Enemy.vel`. Kept at its tuned value pending a follow-up that either retires it
+ * or re-derives an equivalent approach-speed target from the VM rates. The design
+ * target below (spawn→near-bound transit time) is stale for the same reason;
+ * retune in playtest. The 8-6 difficulty ramp still rides this as the wave-1 base. */
 export const ENEMY_SPEED = 10000
 /** Cabinet game-frame rate (Hz) — the shared basis for every ROM per-game-frame
  *  rate ported from the 1983 source, which counts in game frames (fireball life
@@ -313,6 +331,75 @@ export const DARTH_GLOW_SECONDS = 0x1f / TICK_HZ
 export const ENEMY_FIRE_INTERVAL = 1
 /** Maximum enemy fireballs on screen at once — authentic "6 fireball slots". */
 export const MAX_FIREBALL_SLOTS = 6
+
+// --- TIE fire cadence: the TGPROB probability table (sw7, docs 4c93855 Task 5) --
+//
+// The 1983 cabinet governs TIE fire rate with NO per-fighter reload timer — it is
+// entirely a global frame-mask + PRNG threshold + slot cap (docs/tie-flight-ai-model.md
+// §6). WSCPU.MAC:646-651 gates each shot on `(FRAME & mask) == 0` (the cadence WINDOW)
+// then `P.RND1 > threshold` (the probability ROLL), reading a per-wave `[mask, threshold,
+// guns]` row from `TGPROB` (WSCPU.MAC:736). The GUNS column is already ported as
+// `FIRE_CONCURRENCY` (gameRules.ts); these are the two columns that were missing.
+//
+// Verbatim from the `.PROB mask,threshold,guns` rows of `TGPROB` (WSCPU.MAC:736), the
+// first 8 rows (fire-index 0..7) the design §6 table pins:
+//   0F,80 · 0F,80 · 0F,80 · 0F,40 · 07,80 · 07,20 · 07,20 · 03,80
+// `mask` is ANDed with the low frame byte, so 0F opens a window every 16 game frames
+// (≈0.78 s at TICK_HZ), 07 every 8 (≈0.39 s), 03 every 4 (≈0.20 s). `threshold` is the
+// unsigned `CMPA/BLS` compare against P.RND1: a shot fires when the draw is STRICTLY
+// GREATER, so P(fire | window open) = (255 − threshold)/256 (80 ≈ 50 %, 40 ≈ 75 %,
+// 20 ≈ 87 %). Aggression ramps three ways at once — shorter window, lower threshold,
+// more slots.
+//
+// Length 16 with the SAME fire-index as `FIRE_CONCURRENCY` (min(wave-1, 15)), so
+// `waveParams` addresses all three columns with one index. Indices 8..15 SATURATE the
+// last ported row (03,80), matching FIRE_CONCURRENCY's own saturation; the ROM's deeper
+// TGPROB rows 8..10 (03,60 · 03,40 · 03,30) are not ported — the design pins 8 rows.
+
+/** TGPROB cadence-window MASK per fire-index (WSCPU.MAC:736). ANDed with the frame
+ *  counter: a fire opening is when `(frame & mask) === 0`. */
+export const FIRE_MASK: readonly number[] = [
+  0x0f, 0x0f, 0x0f, 0x0f, 0x07, 0x07, 0x07, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
+]
+/** TGPROB probability THRESHOLD per fire-index (WSCPU.MAC:736). A shot fires when
+ *  `nextInt(rng, 256) > threshold`; P(fire | window) = (255 − threshold)/256. */
+export const FIRE_THRESHOLD: readonly number[] = [
+  0x80, 0x80, 0x80, 0x40, 0x80, 0x20, 0x20, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+]
+
+// --- Trench wall-gun fire cadence: the base-gun TGPROB (B-017, WSBASE.MAC) -----
+//
+// The trench wall guns (DOBASE → BSGUN, WSBASE.MAC:1200-1330) fire back on their
+// OWN throttle table — a SEPARATE `TGPROB` (WSBASE.MAC:1224) from the space TIE
+// table (WSCPU.MAC:736, `FIRE_MASK`/`FIRE_THRESHOLD` above), with different
+// values. DOBASE gates each opening on `FRAME+1 & mask == 0`, then BSGUN rolls
+// each in-range gun `P.RND1 >= BS.PRB`. Indexed by difficulty `WV.HRD` clamped
+// 0..7 (`LDB WV.HRD / CMPB #7. / IFHI / LDB #7.`).
+//
+// Verbatim from the `.BYTE mask,prob` rows of `TGPROB` (WSBASE.MAC:1224),
+// difficulty 0..7:
+//   0F,80 · 0F,60 · 0F,40 · 0F,20 · 07,60 · 07,20 · 03,60 · 03,20
+// `mask` (comment "0F = 1 SEC") ANDs the frame counter — 0F opens a fire opening
+// every 16 game frames, 07 every 8, 03 every 4. `prob` (comment "0C0 = 25%") is
+// the unsigned compare; a gun fires when the draw is STRICTLY GREATER, so
+// P(fire | opening) = (255 − prob)/256 (80 ≈ 50 %, 20 ≈ 87 %). Aggression ramps
+// two ways at once — shorter opening, lower threshold.
+
+/** Base-gun TGPROB cadence MASK per difficulty 0..7 (WSBASE.MAC:1224). ANDed with
+ *  the trench game-frame: a fire opening is when `(frame & mask) === 0`. */
+export const TRENCH_GUN_FIRE_MASK: readonly number[] = [
+  0x0f, 0x0f, 0x0f, 0x0f, 0x07, 0x07, 0x03, 0x03,
+]
+/** Base-gun TGPROB probability THRESHOLD per difficulty 0..7 (WSBASE.MAC:1224). A
+ *  gun fires when `nextInt(rng, 256) > threshold`; P(fire | opening) = (255 − threshold)/256. */
+export const TRENCH_GUN_FIRE_THRESHOLD: readonly number[] = [
+  0x80, 0x60, 0x40, 0x20, 0x60, 0x20, 0x60, 0x20,
+]
+/** How far downrange a wall gun can still fire at the player — the ROM's BSGUN
+ *  loop terminator `SUBD #6000 ;FURTHEST AWAY FIRING BUNKER` (WSBASE.MAC:1330). A
+ *  gun scrolls through this approach range and fires while inside it; its slow
+ *  (ENEMY_SHOT_SPEED) shot only reaches the cockpit when fired near abreast. */
+export const TRENCH_GUN_FIRE_RANGE = 0x6000
 /** Hit sphere around an enemy fireball for player bolts. A LARGE target (story
  * sw2-2): the fireball renders as a big glowing orb, so it must be a big thing to
  * shoot — what you see is what you shoot. Sized at 0.6× the TIE sphere — smaller
@@ -359,24 +446,35 @@ export const COCKPIT_HIT_RADIUS = 80
  */
 export const CATWALK_HIT_RADIUS = 240
 
-// --- Wave 1 — TIE flight model (story 9-2) ----------------------------------
+// --- Wave 1 — TIE choreography maneuver RATES (sw7, docs 4c93855, task 4) ----
 //
-// The RE'd cabinet TIE does not fly dead-straight at the cockpit: it thrusts
-// along its own heading while banking + steering toward the player, tracing a
-// swooping arc (docs/tie-flight-ai-model.md §5). We port the confirmed
-// kinematics at a CONSTANT approach speed (|vel| is preserved as the heading
-// turns, so the 8-6 difficulty ramp still rides spawn speed); the full
-// accelerate-from-rest + per-fighter script VM (§5.1/§5.3) is deferred. These are
-// authentic-FEEL tuning values — the disassembly's rates are per cabinet-tick and
-// not yet pinned to our dt (model §5.3 caveat) — single-sourced here for easy
-// correction, like the rest of the Wave-1 constants.
+// The choreography VM (tie-vm.ts) emits per-game-frame `twist` (roll/yaw/pitch)
+// and `move` (thrust) BITS; docs/tie-flight-ai-model.md §5.3 pins each bit's
+// authentic per-GAME-FRAME delta. `applyManeuver` (sim.ts) integrates whichever
+// bits are ACTIVE by `dt` as continuous RATES, so a maneuver held for its N-frame
+// `.CT` count turns exactly `N × per-frame delta` at any render dt — the same
+// "ROM per-frame count → seconds via TICK_HZ" idiom the durations use
+// (ENEMY_SHOT_TTL = 64/TICK_HZ, DARTH_GLOW_SECONDS = 0x1f/TICK_HZ). This RETIRES
+// the invented swoop/weave feel-constants (TIE_SWOOP_BIAS/TIE_BANK_ANGLE, story
+// 9-2): the rates below are source-pinned, not tuned. §5.3's porting caveat
+// (don't apply °/frame at an arbitrary fps) is discharged by × TICK_HZ.
 
-/** Lateral bias blended into a TIE's homing heading, as a fraction of its forward
- * approach. 0 = the old beeline; >0 curves the path into a banking swoop arc. */
-export const TIE_SWOOP_BIAS = 0.5
-/** Roll angle (radians) a TIE holds while banking into its swoop (~34°), so the
- * orientation leans into the turn rather than sitting level (extends story 8-13). */
-export const TIE_BANK_ANGLE = 0.6
+/** Roll rate (rad/s) for a `ROLL_L`/`ROLL_R` twist bit — §5.3's ROLL-BURST
+ *  `Sine=$1640/$4000` ≈ 20.3°/frame (ROM:8C03), ported to rad/s via × TICK_HZ. */
+export const TIE_ROLL_RATE = ((20.3 * Math.PI) / 180) * TICK_HZ
+/** Yaw rate (rad/s) for a `YAW_L`/`YAW_R` twist bit — §5.3's scripted-turn
+ *  `sin $4FF/$4000` ≈ 4.48°/frame (`word_89A8[#$14]`), × TICK_HZ. */
+export const TIE_YAW_RATE = ((4.48 * Math.PI) / 180) * TICK_HZ
+/** Pitch rate (rad/s) for a `PITCH_U`/`PITCH_D` twist bit — the SAME §5.3
+ *  4.48°/frame scripted-turn step as yaw (`word_89A8[#$14]`), × TICK_HZ. */
+export const TIE_PITCH_RATE = ((4.48 * Math.PI) / 180) * TICK_HZ
+/** Fast thrust rate (units/s) for the `FWD2`/`UP2`/`DOWN2` move bits — §5.3's
+ *  thrust basis scaled ÷32 = `$200` (512) per game frame (`sub_8D9D`+`sub_8AB6`),
+ *  × TICK_HZ. Frame-true like SURFACE_SEED_SPEED (`$100 × TICK_HZ`). */
+export const TIE_THRUST_RATE = 0x200 * TICK_HZ
+/** Slow thrust rate (units/s) for the `FWD`/`UP`/`DOWN` move bits — §5.3's thrust
+ *  basis scaled ÷64 = `$100` (256) per game frame (`sub_8D9D`+`sub_8AB6`), × TICK_HZ. */
+export const TIE_THRUST_RATE_SLOW = 0x100 * TICK_HZ
 
 // --- Wave 1 — TIE peel-away / fly-past lifecycle (story 9-3) -----------------
 //
@@ -407,11 +505,9 @@ export const TIE_NEAR_BOUND = 0x800 // 2048 — WSCPU "not too close" fire/peel 
  * Rescaled to the restored world (sw4-1): ~8000, comfortably above the 2048 near
  * bound and well inside the 31744 spawn depth. Tuning latitude (spec §A). */
 export const TIE_EXIT_RANGE = 8000
-
-/** How hard a peeling TIE sweeps sideways as it departs — the tangential blend
- * against the straight-outward radial. 0 = straight back out; 1 ≈ a 45° peel-off
- * to the side (the banking fly-past look). */
-export const TIE_PEEL_SWEEP = 1
+// TIE_PEEL_SWEEP (the departing tangential sweep) was retired with `moveEnemy` in
+// the sw7 VM-flight wiring (task 4): the choreography VM now governs the approach,
+// so the invented peel-away sweep no longer exists.
 
 // --- Wave 2 surface constants -----------------------------------------------
 //
@@ -960,6 +1056,20 @@ export interface GameState {
    * to (story 8-7). A fresh list every frame — never carried between frames —
    * so the channel stays pure DATA and replays identically from a seed. */
   events: GameEvent[]
+  /** Monotonic SPACE-phase game-frame counter — the discrete-tick timebase the
+   * TIE choreography VM and authentic fire cadence hang off (sw7, docs 4c93855).
+   * Advanced by the `frameAcc` accumulator below at TICK_HZ, independent of the
+   * render dt: WSINT.MAC:145-149 (GMTIMR reloads 12 IRQs per game frame — the
+   * source of TICK_HZ) and WSMAIN.MAC:271 (WAITFRAME — the mainline's own
+   * once-per-game-frame gate). Required (not optional) so `tsc` flags every
+   * GameState construction site until it is initialised — no return path can
+   * silently drop it. This task only advances it; the decision-tick body it
+   * will drive is wired by a later task in the plan. */
+  frame: number
+  /** Carried remainder seconds toward the next `frame` tick — the fractional
+   * game-frame `frameAcc` didn't consume yet. Required alongside `frame` for the
+   * same tsc-exhaustiveness reason. Same citations as `frame`. */
+  frameAcc: number
 }
 
 export function initialState(seed = 1983): GameState {
@@ -1013,5 +1123,7 @@ export function initialState(seed = 1983): GameState {
     spawnCount: 0,
     enemyFireCooldown: ENEMY_FIRE_INTERVAL,
     events: [],
+    frame: 0,
+    frameAcc: 0,
   }
 }

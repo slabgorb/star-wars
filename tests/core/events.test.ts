@@ -206,13 +206,21 @@ describe('event emission — space phase gameplay moments (AC1)', () => {
     expect(out.events).toContainEqual({ type: 'enemy-death', enemyType: 'tie', pos: [0, 0, -300] })
   })
 
-  it("emits 'enemy-fire' carrying the bolt's spawn position when the formation fires", () => {
-    // In its pass window: range > TIE_NEAR_BOUND (2048, the restored fire floor,
-    // sw4-1) so the fighter is "not too close" and strafes. A stationary fixture
-    // (vel 0) holds station, so the shot launches from its exact spot.
+  it("emits 'enemy-fire' carrying the bolt's spawn position when a TIE fires", () => {
+    // Re-baselined for the §6 fire cadence (sw7 Task 5): space fire is no longer an
+    // unconditional cooldown tick — a TIE fires only when an open cadence gate
+    // `(frame & mask) === 0` coincides with a passing PRNG roll (WSCPU.MAC:646-651).
+    // The event contract is unchanged, so we step until the TIE DOES fire and assert
+    // the payload. A dead-in-sights stationary fixture (vel 0, no VM ⇒ no motion,
+    // range > TIE_NEAR_BOUND so it is "not too close") holds its exact spot, so
+    // whenever it fires the shot still launches from there.
     const tie: Enemy = { pos: [100, 0, -3000], vel: [0, 0, 0], kind: 'tie', orient: IDENTITY }
-    const out = stepGame(playing({ enemies: [tie], enemyFireCooldown: 0 }), NO_INPUT, DT)
-    const fire = out.events.find((e) => e.type === 'enemy-fire')
+    let s = playing({ enemies: [tie] })
+    let fire: GameEvent | undefined
+    for (let i = 0; i < 600 && fire === undefined; i++) {
+      s = stepGame(s, NO_INPUT, DT)
+      fire = s.events.find((e) => e.type === 'enemy-fire')
+    }
     expect(fire).toBeDefined()
     // pos is a world-space Vec3 (for future panning); here it is the shooter's.
     expect(fire).toMatchObject({ type: 'enemy-fire', pos: [100, 0, -3000] })

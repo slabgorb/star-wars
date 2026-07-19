@@ -241,7 +241,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 646,
+      "line": 742,
       "verbatim": "export const PORT_APPROACH_WINDOW = 800"
     }
   },
@@ -258,7 +258,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1498,
+      "line": 1613,
       "verbatim": "  return { pos: [0, 0, -Math.min(trenchPortDistance(baseWave, rng), TRENCH_FAR)] }"
     }
   },
@@ -275,7 +275,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 637,
+      "line": 733,
       "verbatim": "export const PORT_HIT_RADIUS = 108"
     },
     "recommendation": "accept"
@@ -293,7 +293,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1110,
+      "line": 1225,
       "verbatim": "  const detonates = armed && inApproachWindow"
     }
   },
@@ -310,7 +310,8 @@
     },
     "ours": null,
     "recommendation": "fix",
-    "size": "l"
+    "size": "l",
+    "remediated_by": "sw7-20"
   },
   {
     "id": "B-018",
@@ -325,7 +326,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1176,
+      "line": 1291,
       "verbatim": "  if (reachedCockpit) {"
     },
     "recommendation": "accept",

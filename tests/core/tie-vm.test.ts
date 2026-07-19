@@ -227,6 +227,36 @@ describe('sw7-11 TIE choreography VM — .CUNTIL event mask load (AC2, partial)'
   })
 })
 
+describe('sw7-11 TIE choreography VM — .CUNTIL FIRED scan is inclusive (CHCN.E, sw7 Task 5 regression)', () => {
+  // Task 5 (finding A-009 follow-on) found the fired-gate forward scan pre-incremented
+  // pc before searching for the next `.CUNTIL`, unfaithful to CHCN.E's `LDA 0(U)` AT
+  // A$CHPC (WSCPU.MAC:854–858) — a `.CUNTIL` already sitting at pc must stop the scan
+  // immediately, not be skipped. That bug was latent because nothing exercised the
+  // C_AG-gated scan until firedGun was wired; these pin the fix directly so a future
+  // refactor can't silently reintroduce the pre-increment.
+  it('a fired .CUNTIL stops the forward scan INCLUSIVELY at a trailing .CUNTIL (CHCN.E)', () => {
+    const prog: ChoreoInstr[] = [cuntil(Status.C_AS), twirl(10, 0, Move.FWD), cuntil(Status.C_AG), twirl(10, 0, Move.UP)]
+    let vm = tickChoreo(initVm(0), prog, 0) // [0] arms C_AS, [1] decodes the FWD maneuver -> pc lands on [2]
+    vm = tickChoreo(vm, prog, Status.C_AS) // gate fires mid-maneuver; scan from pc=2 must stop AT [2], not skip it
+    expect(vm.untilMask).toBe(Status.C_AG) // re-armed by the trailing .CUNTIL sitting AT pc, inclusive
+    expect(vm.move).toBe(Move.UP) // and control fell through to decode the maneuver right after it
+  })
+
+  it('a fired .CUNTIL whose scan lands on a trailing .CUNTIL at the physical end of the program does not throw (the exact TCH1DZ crash Task 5 hit)', () => {
+    // Same shape, but framed as the crash: a pre-increment here overshoots the [2]
+    // .CUNTIL, finds no other 'until' record before running off the true end of this
+    // 4-element program, and throws "program counter out of range" — the failure mode
+    // that surfaced once C_AG started firing in TCH1DZ's loiter loop.
+    const prog: ChoreoInstr[] = [cuntil(Status.C_AS), twirl(10, 0, Move.FWD), cuntil(Status.C_AG), twirl(10, 0, Move.DOWN)]
+    let vm = initVm(0)
+    expect(() => {
+      vm = tickChoreo(vm, prog, 0)
+      vm = tickChoreo(vm, prog, Status.C_AS)
+    }).not.toThrow()
+    expect(vm.move).toBe(Move.DOWN) // completed the tick by decoding the maneuver after the re-armed gate
+  })
+})
+
 describe('sw7-11 TIE choreography VM — robustness & purity (rules)', () => {
   it('dispatching an unknown opcode throws rather than silently continuing (exhaustive dispatch)', () => {
     // TS checklist #3: a switch on the opcode must assertNever, not fall through.

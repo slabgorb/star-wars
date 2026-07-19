@@ -31,6 +31,8 @@ import {
   TIE_WING_FRAG_3,
   DEATH_STAR_SURFACE,
   DEATH_STAR,
+  DEATH_STAR_TRENCH,
+  DEATH_STAR_DISH,
   SURFACE_TOWER,
   TOWER_CAP,
   SURFACE_BUNKER,
@@ -96,7 +98,12 @@ const TURRET_GLOW = GLOW_FOR['Surface Tower'] // vector red (shared) — trench 
 const TOWER_GLOW = '#ffd60a' // tower yellow column (VGCYLW; the sw2-3 cabinet yellow)
 const CAP_GLOW = '#f4f4ff' // tower white cap (VGCWHT, faint vector-blue cast)
 const SURFACE_GLOW = GLOW_FOR['Death Star Surface'] // death star steel (shared)
-const DEATH_STAR_GLOW = GLOW_FOR['Death Star'] // death star body hull (shared)
+// sw7-15 / M-010: the authentic 2D vector picture is three coloured parts (WSVROM.MAC
+// DEATH STAR PICS): a GREEN disc (BSCIR, VGCGRN), a WHITE equatorial trench chord (BSTRN,
+// VGCWHT), and a RED superlaser dish (BSDSH, VGCRED) — not one steel hull.
+const DEATH_STAR_BODY_GLOW = '#22e600' // VGCGRN — the green base disc + farmland
+const DEATH_STAR_TRENCH_GLOW = '#ffffff' // VGCWHT — the equatorial trench line
+const DEATH_STAR_DISH_GLOW = '#ff3b30' // VGCRED — the superlaser dish
 const BOLT_GLOW = '#9dff00' // player laser green
 const FIRE_GLOW = '#ffd60a' // enemy muzzle-flash amber (the firing tell)
 const FIREBALL_GLOW = '#ff3b30' // enemy fireball red — VGCRED, the cabinet vector red
@@ -271,6 +278,45 @@ export function deathStarPlacement(state: GameState): { pos: Vec3; scale: number
   return { pos: [0, 0, z], scale }
 }
 
+// sw7-15 / M-010: the picture is in raw ROM units (radius 50); scale it up so the body
+// reads at its on-screen size (~the retired sphere's R=520): 50 × 10.4 ≈ 520.
+const DEATH_STAR_PIC_SCALE = 10.4
+
+// sw7-15 / X-007: the finale PRELIM (PH$DX1, WSMAIN.MAC:3386 "VIEW DETH STAR, ENLARGING").
+// After the winning port kill the station looms very large and ENLARGES toward the viewer
+// over the prelim, instead of snapping to the next wave's far seed.
+const DEATH_STAR_LOOM_SECONDS = 1.2
+const DEATH_STAR_LOOM_MAX_SCALE = 4.0
+
+/**
+ * Where the shell draws the Death Star: normally `deathStarPlacement` (the space-phase
+ * approach), but through the finale the DX1 loom overrides it — the station is seated
+ * NEAR and enlarges toward the viewer (X-007). Pure: reads state, mutates nothing.
+ */
+function deathStarSeat(state: GameState): { pos: Vec3; scale: number } {
+  if (state.mode === 'playing' && state.deathStarDestroyedAt !== null) {
+    const age = state.t - state.deathStarDestroyedAt
+    if (age >= 0 && age <= DEATH_STAR_BOOM_SECONDS) {
+      const loomT = Math.min(1, age / DEATH_STAR_LOOM_SECONDS)
+      const scale = DEATH_STAR_SCALE_NEAR + (DEATH_STAR_LOOM_MAX_SCALE - DEATH_STAR_SCALE_NEAR) * loomT
+      return { pos: [0, 0, DEATH_STAR_Z_NEAR], scale }
+    }
+  }
+  return deathStarPlacement(state)
+}
+
+/**
+ * Draw the authentic 2D vector Death Star (M-010): a GREEN disc, a WHITE equatorial
+ * trench chord and a RED superlaser dish, each stroked in its own colour — replacing
+ * the story-11-7 single-steel UV sphere. The picture is a flat billboard at `seat`.
+ */
+function drawDeathStar(ctx: CanvasRenderingContext2D, seat: { pos: Vec3; scale: number }, view: Mat4, proj: Mat4, w: number, h: number): void {
+  const mv = multiply(view, modelMatrix(seat.pos, IDENTITY, seat.scale * DEATH_STAR_PIC_SCALE))
+  drawWireframe(ctx, DEATH_STAR, mv, proj, w, h, DEATH_STAR_BODY_GLOW)
+  drawWireframe(ctx, DEATH_STAR_TRENCH, mv, proj, w, h, DEATH_STAR_TRENCH_GLOW)
+  drawWireframe(ctx, DEATH_STAR_DISH, mv, proj, w, h, DEATH_STAR_DISH_GLOW)
+}
+
 /**
  * The camera (view matrix) derived PURELY from sim state — the cockpit IS the
  * camera. Space looks from the origin down −Z; the surface and trench lift the eye
@@ -412,8 +458,7 @@ export function render(
     // Wave 1 — the space phase. The Death Star body looms far down −Z and grows as
     // the player closes on it (deathStarPlacement). Draw it FIRST so it sits BEHIND
     // the TIEs (painter's order) and never intrudes on a fighter's hit-test.
-    const body = deathStarPlacement(state)
-    drawWireframe(ctx, DEATH_STAR, multiply(view, modelMatrix(body.pos, IDENTITY, body.scale)), proj, w, h, DEATH_STAR_GLOW)
+    drawDeathStar(ctx, deathStarSeat(state), view, proj, w, h)
     // Each TIE banks at the player: its per-enemy look-at `orient` (core) turned
     // upright by the fixed TIE_ORIENT display correction (display first, then look
     // => multiply(orient, TIE_ORIENT)), placed in the world by its model matrix.
@@ -585,43 +630,41 @@ function drawMuzzleFlash(
   ctx.shadowBlur = 0
 }
 
-// The Death-Star explosion burst (sw2-4): concentric rings + a ray starburst,
-// SCREEN-SPACE and centred so it survives the same-frame warp to space that a
-// port kill triggers (the trench and its port are gone by the next frame, so a
-// world-anchored effect would vanish instantly). `progress` runs 0 → 1 across
-// DEATH_STAR_BOOM_SECONDS: the rings expand outward while the glow fades, so the
-// blast flares then dissipates — the vector-arcade "it blew up" idiom.
-const BOOM_RINGS = 3
-const BOOM_RAYS = 16
+// The Death-Star finale (sw7-15 / X-006): the ROM's VWXPLN four-phase ring animation
+// (WSXPLD.MAC) — concentric circles (DCIRCL) and smoothly-scaling rings (DRING) that
+// cycle colour RED → BLUE → WHITE (PH0/PH1 VGCRED, PH2 VGCBLU, PH3 VGCWHT), with NO
+// radial rays. SCREEN-SPACE and centred so it survives the same-frame warp to space a
+// port kill triggers. `progress` runs 0 → 1 across DEATH_STAR_BOOM_SECONDS; the three
+// colour windows OVERLAP so the blast cross-fades red→blue→white as its rings expand.
+const BOOM_BLUE_GLOW = '#3355ff' // VGCBLU — the PH1/PH2 blue rings (a true blue, not teal)
 function drawDeathStarBoom(ctx: CanvasRenderingContext2D, progress: number, w: number, h: number): void {
   const cx = w / 2
   const cy = h / 2
-  const life = 1 - progress // 1 at the blast → 0 as it clears
-  const maxR = Math.min(w, h) * 0.42
-  ctx.strokeStyle = '#ffdd66'
-  ctx.shadowColor = '#ffdd66'
-  ctx.shadowBlur = 20 * life
+  const maxR = Math.min(w, h) * 0.46
   ctx.lineWidth = 2
-  // Expanding concentric rings, each trailing the leading edge slightly.
-  for (let i = 0; i < BOOM_RINGS; i++) {
-    const r = maxR * progress * (1 - i * 0.22)
-    if (r <= 0) continue
-    ctx.globalAlpha = life * (1 - i * 0.25)
-    ctx.beginPath()
-    ctx.arc(cx, cy, r, 0, Math.PI * 2)
-    ctx.stroke()
+  // A triangular fade window: 0 outside [start,end], peaking at `peak`.
+  const bump = (start: number, peak: number, end: number): number => {
+    if (progress <= start || progress >= end) return 0
+    return progress < peak ? (progress - start) / (peak - start) : (end - progress) / (end - peak)
   }
-  // A ray starburst that flares out with the leading ring.
-  ctx.globalAlpha = life
-  ctx.beginPath()
-  const inner = maxR * 0.12
-  const outer = maxR * (0.3 + 0.7 * progress)
-  for (let i = 0; i < BOOM_RAYS; i++) {
-    const a = (i / BOOM_RAYS) * Math.PI * 2
-    ctx.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner)
-    ctx.lineTo(cx + Math.cos(a) * outer, cy + Math.sin(a) * outer)
+  // One colour phase: three concentric circles expanding outward, faded by `alpha`.
+  const phase = (color: string, alpha: number): void => {
+    if (alpha <= 0.02) return
+    ctx.strokeStyle = color
+    ctx.shadowColor = color
+    ctx.shadowBlur = 16 * alpha
+    for (let i = 0; i < 3; i++) {
+      const r = maxR * (0.2 + progress) * (1 - i * 0.22)
+      if (r <= 8) continue
+      ctx.globalAlpha = Math.min(1, alpha * (1 - i * 0.2))
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      ctx.stroke()
+    }
   }
-  ctx.stroke()
+  phase(DEATH_STAR_DISH_GLOW, bump(-0.2, 0.15, 0.55)) // PH0/PH1 red (VGCRED)
+  phase(BOOM_BLUE_GLOW, bump(0.3, 0.5, 0.82)) // PH2 blue (VGCBLU)
+  phase(DEATH_STAR_TRENCH_GLOW, bump(0.55, 0.85, 1.1)) // PH3 white (VGCWHT)
   ctx.globalAlpha = 1
   ctx.shadowBlur = 0
 }
@@ -881,10 +924,12 @@ const FORCE_BANNER_SECONDS = 3
 // beats, which our sim has no distinct screen for.
 const REWARD_BANNER_SECONDS = 3
 
-// How long the Death-Star explosion beat (flash + "DESTROYED" banner) plays after
-// a port kill, and how long the "MISSED" banner shows after a slipped-past port
-// (sw2-4). Tuned UX dwell times like FORCE_BANNER_SECONDS — no ROM timing exists.
-const DEATH_STAR_BOOM_SECONDS = 2.5
+// How long the Death-Star finale plays after a port kill. sw7-15 / X-008: this is
+// ROM-DEFINED, not a UX guess — VWXPLN advances XP.CNT through PH1/PH2/PH3 = 31+27+31
+// = 89 game frames at 20.508 Hz (WSXPLD.MAC), ≈ 4.34 s, materially longer than the old
+// 2.5 s. Derived from the game frame (TICK_HZ) so it stays true if the timebase moves.
+const DEATH_STAR_BOOM_SECONDS = 89 / TICK_HZ
+// The slipped-past-port "MISSED" banner (sw2-4) — a UX dwell, no ROM counterpart.
 const MISS_BANNER_SECONDS = 2
 
 /**
