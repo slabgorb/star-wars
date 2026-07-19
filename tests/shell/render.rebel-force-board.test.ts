@@ -67,7 +67,15 @@ function makeCtx(): CanvasRenderingContext2D {
 }
 
 const texts = (): string[] => font.calls.map((c) => c.text)
-const attract = (): GameState => ({ ...initialState(1983), mode: 'attract' })
+// sw7-10 / H-017 re-seat: the hi-score board is no longer painted under the marquee —
+// it is its OWN page in the attract rotation (PH$HIS, WSMAIN.MAC:338), so a board
+// fixture has to sit on that page. Every assertion below is unchanged; only the page
+// the board lives on moved.
+const attract = (): GameState => ({
+  ...initialState(1983),
+  mode: 'attract',
+  attract: { page: 'hiscore', pageAge: 0, crawl: [] },
+})
 
 // The authentic top + bottom seed rows — enough to exercise the title, the name
 // display, and comma grouping without importing the (RED, not-yet-created) core

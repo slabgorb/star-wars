@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1695,
+      "line": 1730,
       "verbatim": "  const decay = Math.pow(7 / 8, dt * TICK_HZ)"
     },
     "verdict": "CONFIRMED",
@@ -33,7 +33,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 310,
+      "line": 315,
       "verbatim": "export const MAX_FIREBALL_SLOTS = 6"
     }
   },
@@ -91,7 +91,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1031,
+      "line": 1066,
       "verbatim": "      ? beamHit(beamOrigin, beamDir, portPos, PORT_HIT_RADIUS, TRENCH_FAR)"
     },
     "recommendation": "accept"
@@ -151,7 +151,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 501,
+      "line": 514,
       "verbatim": "    if (collides(s.pos, ship, COCKPIT_HIT_RADIUS)) {"
     },
     "recommendation": "accept",
@@ -170,7 +170,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 493,
+      "line": 506,
       "verbatim": "    if (collides(e.pos, ship, COCKPIT_HIT_RADIUS)) {"
     },
     "recommendation": "accept",
@@ -190,7 +190,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 343,
+      "line": 356,
       "verbatim": "          enemyShots.push({ pos: [...e.pos] as Vec3, vel: [0, 0, 0], ttl: ENEMY_SHOT_TTL })"
     }
   },

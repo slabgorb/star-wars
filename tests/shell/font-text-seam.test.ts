@@ -106,6 +106,13 @@ const trenchBanners = (): GameState =>
   })
 
 const attractState = (): GameState => ({ ...initialState(1983), mode: 'attract' })
+// sw7-10 / H-017: the attract screen ROTATES (PH$BNR→INS→SCR→HIS, WSMAIN.MAC:335-338),
+// so the marquee and the hi-score board are now on DIFFERENT pages. `attractState()`
+// lands on the banner (the page initialState seats); this seats the board's page.
+const hiscoreState = (): GameState => ({
+  ...attractState(),
+  attract: { page: 'hiscore', pageAge: 0, crawl: [] },
+})
 const gameOverState = (): GameState => ({
   ...initialState(1983),
   mode: 'gameover',
@@ -155,11 +162,15 @@ describe('SH2-5 — the trench banners flow through layoutText', () => {
 })
 
 describe('SH2-5 — the framing screens flow through layoutText', () => {
-  it('attract: marquee, start prompt, and the high-score board', () => {
+  it('attract banner page: marquee and start prompt', () => {
     render(makeCtx(), attractState(), W, H, SCORES)
     expect(texts()).toContain('STAR WARS')
     // sw7-3 H-010 re-seat: the start prompt is the ROM's STR, not 'PRESS START'.
     expect(texts()).toContain('PULL TRIGGER TO START')
+  })
+
+  it('attract hiscore page: the board title and its rows', () => {
+    render(makeCtx(), hiscoreState(), W, H, SCORES)
     // sw7-3 H-011 re-seat: the board title is the ROM's RF2, not 'HIGH SCORES'
     // (accepts LEIA'S or LEIAS — the shared font has no apostrophe glyph).
     expect(texts().some((t) => /^PRINCESS LEIA'?S REBEL FORCE$/.test(t))).toBe(true)
@@ -169,8 +180,8 @@ describe('SH2-5 — the framing screens flow through layoutText', () => {
     expect(row).toContain('WAVE 6')
   })
 
-  it('attract with an empty board: the NO SCORES YET placeholder', () => {
-    render(makeCtx(), attractState(), W, H, [])
+  it('attract hiscore page with an empty board: the NO SCORES YET placeholder', () => {
+    render(makeCtx(), hiscoreState(), W, H, [])
     expect(texts()).toContain('NO SCORES YET')
   })
 
