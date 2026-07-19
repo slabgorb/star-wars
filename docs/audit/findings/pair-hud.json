@@ -29,7 +29,7 @@
     },
     "ours": {
       "file": "src/core/gameRules.ts",
-      "line": 45,
+      "line": 47,
       "verbatim": "  return [clamp(aimX, -1, 1), clamp(aimY, -1, 1)]"
     },
     "recommendation": "accept"
@@ -284,7 +284,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 535,
+      "line": 592,
       "verbatim": "const MAX_INITIALS = 3"
     }
   },
