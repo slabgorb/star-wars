@@ -30,6 +30,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { render } from '../../src/shell/render'
+import { DEATH_STAR } from '../../src/core/models'
 import { initialState, SPACE_WAVE_QUOTA, type GameState } from '../../src/core/state'
 import {
   makeRecorder,
@@ -154,5 +155,34 @@ describe('sw7-15 / M-010 — the space-phase Death Star is the authentic multi-c
     expect(Math.hypot(rcx - CX, rcy - CY)).toBeGreaterThan(10)
     // …and SMALL: a dish, not the whole body.
     expect(dishSpan).toBeLessThan(0.6 * discSpan)
+  })
+})
+
+describe('sw7-15 / M-010 — the body circle (BSCIR) is a smooth loop, no transcription kink', () => {
+  // The seam-agnostic palette/span tests above cannot see a WRONG POINT ORDER — a
+  // pair of swapped vertices leaves the disc's x/y span unchanged but crosses one
+  // rim edge over its neighbour (a kink). A radius-50 circle traversed in ROM order
+  // winds ONE way, so every consecutive step must turn the SAME direction; a swap
+  // flips one step's sign. This pins the BSCIR sequence against exactly that class
+  // of error (caught in review: indices 26/27 were (-50,0),(-49,10) instead of
+  // (-49,10),(-50,0), a self-crossing on the left rim).
+  it('winds monotonically around the centre — every rim step turns the same way', () => {
+    const v = DEATH_STAR.vertices
+    expect(v.length).toBeGreaterThanOrEqual(8)
+    // Signed turn from vertex i to i+1 about the origin (the picture is centred there).
+    const cross = (a: readonly number[], b: readonly number[]): number => a[0] * b[1] - a[1] * b[0]
+    let pos = 0
+    let neg = 0
+    for (let i = 0; i < v.length; i++) {
+      const a = v[i]
+      const b = v[(i + 1) % v.length]
+      const c = cross(a, b)
+      if (c > 1e-6) pos++
+      else if (c < -1e-6) neg++
+    }
+    // A convex loop in ROM order: all turns one sign, none the other. A swapped
+    // pair produces at least one opposite-sign step.
+    expect(Math.min(pos, neg)).toBe(0)
+    expect(Math.max(pos, neg)).toBe(v.length)
   })
 })
