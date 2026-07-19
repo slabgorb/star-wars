@@ -47,17 +47,11 @@ const DT = 1 / 60
 const FOV_Y = Math.PI / 3
 const proj = (aspect = 16 / 9): ReturnType<typeof perspective> => perspective(FOV_Y, aspect, 1, 5000)
 
-/** A TIE holding station at `pos` (vel 0). A real fighter flies straight at the
- * cockpit, holding the same line of sight the whole way in; a stationary stand-in is
- * that target without the timing and ram noise, so the only thing that can remove it
- * is the player's own fire. `over` sets extra flags (e.g. `peeling`). */
-const tieStill = (pos: Vec3, over: Partial<Enemy> = {}): Enemy => ({
-  pos,
-  vel: [0, 0, 0],
-  kind: 'tie',
-  orient: IDENTITY,
-  ...over,
-})
+/** A TIE holding station at `pos`. A real fighter flies straight at the cockpit,
+ * holding the same line of sight the whole way in; a stationary stand-in is that
+ * target without the timing and ram noise, so the only thing that can remove it is
+ * the player's own fire. */
+const tieStill = (pos: Vec3): Enemy => ({ pos, kind: 'tie', orient: IDENTITY })
 
 /** The yoke deflection that puts the crosshair ON a world point (crosshairNdc is
  * identity, so aiming at a point = setting the yoke to that point's projected NDC). */
@@ -112,11 +106,11 @@ describe('Story sw2-1 — inbound TIEs are hittable on the way in', () => {
 })
 
 describe('Story sw2-1 — the retreat path and aim precision must survive the reach fix', () => {
-  it('still destroys a TIE that has peeled away and is retreating close in (regression — the path that already works)', () => {
-    // "After the attack run, turned back, very close": a peeling fighter recedes and is
-    // culled at TIE_EXIT_RANGE (1800), so it lives inside a bolt's reach — the one
-    // window the player can hit today. Passes now; the GREEN reach fix must NOT break it.
-    const tie = tieStill([0, 0, -900], { peeling: true })
+  it('still destroys a TIE that is very close in (regression — the path that already works)', () => {
+    // "After the attack run, turned back, very close": a fighter that has closed in
+    // lives well inside a bolt's reach — the one window the player can hit today.
+    // Passes now; the GREEN reach fix must NOT break it.
+    const tie = tieStill([0, 0, -900])
     const s = fireUntilClear(loneWave(tie), tie.pos, 300)
     expect(s.enemies).toHaveLength(0)
     expect(s.score).toBe(TIE_SCORE)

@@ -17,10 +17,9 @@
 
 import { Status } from './tie-vm'
 import type { Enemy, GameState } from './state'
+import { toCockpit } from './gameRules'
 import { nextInt, type Rng } from '@arcade/shared/rng'
-import { length, normalize, dot, sub, IDENTITY, type Vec3 } from '@arcade/shared/math3d'
-
-const COCKPIT: Vec3 = [0, 0, 0]
+import { length, dot, IDENTITY, type Vec3 } from '@arcade/shared/math3d'
 
 /**
  * C_AS's fire-cone half-angle, as a cosine threshold. The ROM's own C$AS gate
@@ -62,8 +61,8 @@ export function computeStatus(e: Enemy, state: GameState, rng: Rng): number {
   // `applyManeuver` does, rather than reading off `undefined[2]`.
   const orient = e.orient ?? IDENTITY
   const nose: Vec3 = [orient[2], orient[6], orient[10]]
-  const toCockpit = normalize(sub(COCKPIT, e.pos))
-  if (dot(nose, toCockpit) >= FIRE_CONE_COS) status |= Status.C_AS
+  const toCockpitDir = toCockpit(e.pos)
+  if (dot(nose, toCockpitDir) >= FIRE_CONE_COS) status |= Status.C_AS
 
   // C_PN (0x400) — "PLAYER IS NEAR THE ALIEN" (WSCPU.MAC:35; CHSET C$PN at
   // WSMAIN.MAC:3787). The TIE is within PLAYER_NEAR_RANGE of the cockpit.

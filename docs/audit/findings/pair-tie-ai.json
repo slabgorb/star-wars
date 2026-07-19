@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 274,
+      "line": 262,
       "verbatim": "export const TIE_SPAWN_DISTANCE = 0x7c00 // 31744 — WSCPU STARTING LOCATIONS depth word"
     }
   },
@@ -29,7 +29,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1800,
+      "line": 1798,
       "verbatim": "const ROM_LATERAL_UNIT = 0x400 // 1024 — the ×$400 STARTING-LOCATION lateral step"
     }
   },
@@ -46,7 +46,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1811,
+      "line": 1809,
       "verbatim": "  [-2 * ROM_LATERAL_UNIT, 0], // 1D1"
     }
   },
@@ -63,7 +63,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 232,
+      "line": 220,
       "verbatim": "export const WAVE_SIZE = 3"
     }
   },
@@ -80,7 +80,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 457,
+      "line": 455,
       "verbatim": "        killedTie.add(hitTie)"
     }
   },
@@ -97,8 +97,8 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 499,
-      "verbatim": "export const TIE_NEAR_BOUND = 0x800 // 2048 — WSCPU \"not too close\" fire/peel floor"
+      "line": 473,
+      "verbatim": "export const TIE_NEAR_BOUND = 0x800 // 2048 — WSCPU \"not too close\" fire floor"
     }
   },
   {
@@ -114,7 +114,7 @@
     },
     "ours": {
       "file": "src/core/gameRules.ts",
-      "line": 200,
+      "line": 212,
       "verbatim": "const FIRE_CONCURRENCY: readonly number[] = [1, 1, 2, 3, 4, 5, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]"
     }
   },
@@ -123,7 +123,7 @@
     "class": "CONFIRMED",
     "title": "A TIE spawns facing the player",
     "claim": "NWASHP orients a fresh alien to face the player: `LDA #0C0 ;FACE ALIEN TOWARDS PLAYER` written into M$AX and M$BY ($C0 → −1.0 on the depth/lateral diagonal) (WSCPU.MAC:1028–1030). Our spawnTie sets `orient: lookRotation(dir)` where dir = toCockpit(pos) (sim.ts:1187,1189) — the model's forward axis is turned onto the cockpit. Same result: the TIE looks at the player at spawn.",
-    "reasoning": "$C0 is the high byte of $C000 = −1.0 in $4000=1.0 fixed point, flipping the identity orientation's Ax/By to point the model back down-range at the ship (flight-AI model §4 'turned to face the player'). lookRotation(toCockpit) is the float equivalent. Difference: the ROM starts at ZERO velocity and accelerates along that facing; ours starts at full |vel| along it (see A-014) — the FACING at spawn, however, matches.",
+    "reasoning": "$C0 is the high byte of $C000 = −1.0 in $4000=1.0 fixed point, flipping the identity orientation's Ax/By to point the model back down-range at the ship (flight-AI model §4 'turned to face the player'). lookRotation(toCockpit) is the float equivalent. Difference: the ROM starts at ZERO velocity and accelerates along that facing; ours now starts VM-driven from rest as well (sw7-23 retired the |vel| seed; see A-014) — the FACING at spawn matches either way.",
     "source": {
       "file": "WSCPU.MAC",
       "line": 1028,
@@ -131,8 +131,8 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1839,
-      "verbatim": "  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), vm, firedGun: false }"
+      "line": 1837,
+      "verbatim": "  return { pos, kind, orient: lookRotation(dir), vm, firedGun: false }"
     }
   },
   {
@@ -170,7 +170,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 494,
+      "line": 492,
       "verbatim": "  const liveEnemies = standingEnemies.filter((e) => {"
     },
     "recommendation": "fix",
@@ -231,7 +231,7 @@
     },
     "ours": {
       "file": "src/core/gameRules.ts",
-      "line": 169,
+      "line": 181,
       "verbatim": "const RAMP_PER_WAVE = 0.15"
     },
     "recommendation": "accept",
@@ -254,7 +254,8 @@
       "verbatim": "export const ENEMY_SPEED = 10000"
     },
     "recommendation": "accept",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-23"
   },
   {
     "id": "A-015",
@@ -269,7 +270,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1823,
+      "line": 1821,
       "verbatim": "  const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]"
     },
     "recommendation": "accept",
@@ -338,7 +339,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 829,
+      "line": 796,
       "verbatim": "export const SPACE_WAVE_QUOTA = 6"
     },
     "recommendation": "accept",

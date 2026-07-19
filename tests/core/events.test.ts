@@ -200,7 +200,7 @@ describe('event emission — space phase gameplay moments (AC1)', () => {
     // hand-placed on top of it (nothing the player fires exists as an object any more)
     // — it is AIM AT IT AND PULL THE TRIGGER, resolved in the same frame. The event
     // under test is unchanged; only the way the kill is caused is.
-    const tie: Enemy = { pos: [0, 0, -300], vel: [0, 0, 0], kind: 'tie', orient: IDENTITY }
+    const tie: Enemy = { pos: [0, 0, -300], kind: 'tie', orient: IDENTITY }
     const s0 = playing({ enemies: [tie] })
     const out = stepGame(s0, fireAt(s0, tie.pos), DT)
     expect(out.events).toContainEqual({ type: 'enemy-death', enemyType: 'tie', pos: [0, 0, -300] })
@@ -214,7 +214,7 @@ describe('event emission — space phase gameplay moments (AC1)', () => {
     // the payload. A dead-in-sights stationary fixture (vel 0, no VM ⇒ no motion,
     // range > TIE_NEAR_BOUND so it is "not too close") holds its exact spot, so
     // whenever it fires the shot still launches from there.
-    const tie: Enemy = { pos: [100, 0, -3000], vel: [0, 0, 0], kind: 'tie', orient: IDENTITY }
+    const tie: Enemy = { pos: [100, 0, -3000], kind: 'tie', orient: IDENTITY }
     let s = playing({ enemies: [tie] })
     let fire: GameEvent | undefined
     for (let i = 0; i < 600 && fire === undefined; i++) {
@@ -227,7 +227,7 @@ describe('event emission — space phase gameplay moments (AC1)', () => {
   })
 
   it("emits 'player-death' (cause 'enemy') and spends a shield when a TIE reaches the cockpit", () => {
-    const tie: Enemy = { pos: [0, 0, 0], vel: [0, 0, 0], kind: 'tie', orient: IDENTITY } // already at the cockpit
+    const tie: Enemy = { pos: [0, 0, 0], kind: 'tie', orient: IDENTITY } // already at the cockpit
     const out = stepGame(playing({ enemies: [tie], lives: 6 }), NO_INPUT, DT)
     expect(out.events).toContainEqual({ type: 'player-death', cause: 'enemy' })
     expect(out.lives).toBe(5)

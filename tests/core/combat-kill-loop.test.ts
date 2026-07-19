@@ -57,7 +57,7 @@ const proj = (aspect = 16 / 9): ReturnType<typeof perspective> => perspective(FO
  * cockpit, which keeps it on the same line of sight — under the same crosshair —
  * the whole way in; a stationary stand-in is the same target without the timing
  * and ram noise, so the only thing that can remove it is the player's own fire. */
-const tieStill = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
+const tieStill = (pos: Vec3): Enemy => ({ pos, kind: 'tie', orient: IDENTITY })
 
 /** The yoke deflection that puts the crosshair ON a world point. The crosshair is
  * drawn at NDC [aimX, aimY] (crosshairNdc is identity), so aiming at a point means

@@ -44,7 +44,7 @@ import { IDENTITY, type Vec3 } from '@arcade/shared/math3d'
 const AT: Vec3 = [0, 0, -100]
 const TICK = 1 / 60
 const wave = (seed = 1983): GameState => initialState(seed)
-const tie = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
+const tie = (pos: Vec3): Enemy => ({ pos, kind: 'tie', orient: IDENTITY })
 
 /** A playing space state seeded with `score`/`lives`, ready to have one TIE
  *  killed on the next step. `spawnTimer` is parked far in the future so no fresh

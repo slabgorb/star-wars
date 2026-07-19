@@ -216,7 +216,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 528,
+      "line": 495,
       "verbatim": "export const SKIM_ALTITUDE = 128"
     },
     "verdict": "CONFIRMED",
@@ -294,7 +294,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 817,
+      "line": 815,
       "verbatim": "      vel: scale(normalize(sub(ship, muzzle)), ENEMY_SHOT_SPEED),"
     },
     "recommendation": "accept",
@@ -364,7 +364,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 718,
+      "line": 716,
       "verbatim": "  if (altitude < MIN_SKIM_ALTITUDE) {"
     },
     "recommendation": "accept",

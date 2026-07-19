@@ -14,7 +14,7 @@
 
 import { createRng, type Rng } from '@arcade/shared/rng'
 import { lookRotation, normalize, scale, sub, dot, length, IDENTITY, type Vec3, type Mat4 } from '@arcade/shared/math3d'
-import { initialState, TIE_SPAWN_DISTANCE, ENEMY_SPEED, TICK_HZ, type GameState, type Enemy } from '../../../src/core/state'
+import { initialState, TIE_SPAWN_DISTANCE, TICK_HZ, type GameState, type Enemy } from '../../../src/core/state'
 import { spawnTie, applyManeuver, stepGame } from '../../../src/core/sim'
 import { Twist, Move, type ChoreoVm } from '../../../src/core/tie-vm'
 import { NO_INPUT } from '../../../src/core/input'
@@ -41,7 +41,6 @@ export function makeSpaceState(seed = 1983): GameState {
 export function makeTie(overrides: Partial<Enemy> = {}): Enemy {
   return {
     pos: [0, 0, -TIE_SPAWN_DISTANCE],
-    vel: [0, 0, 0],
     kind: 'tie',
     orient: IDENTITY,
     ...overrides,
@@ -70,9 +69,9 @@ export function rngSeed(seed: number): Rng {
  *  path (VM seating, shape/kind, lateral slot) instead of reconstructing it here.
  *  `wave` is the spaceWave arg spawnTie reads the TSPWAV plan with; `slot` is the
  *  spawnIndex into that plan (Task 3, sw7 TIE-VM-wiring plan, docs 4c93855). */
-export function spawnTieForTest(opts: { wave: number; slot: number; speed?: number; seed?: number }): Enemy {
+export function spawnTieForTest(opts: { wave: number; slot: number; seed?: number }): Enemy {
   const rng = rngSeed(opts.seed ?? 1983)
-  return spawnTie(rng, opts.speed ?? ENEMY_SPEED, opts.slot, opts.wave)
+  return spawnTie(rng, opts.slot, opts.wave)
 }
 
 // --- Task 4: VM-driven flight helpers ---------------------------------------
@@ -102,7 +101,7 @@ const TWIST_BY_NAME: Record<string, number> = {
 export function runScript(maneuver: string, frames: number, dt: number, start: Partial<Enemy> = {}): Enemy {
   const bit = TWIST_BY_NAME[maneuver]
   if (bit === undefined) throw new Error(`runScript: unknown maneuver ${maneuver}`)
-  let e = makeTie({ orient: IDENTITY, vel: [0, 0, 0], ...start })
+  let e = makeTie({ orient: IDENTITY, ...start })
   let remaining = frames / TICK_HZ
   // `1e-12` swallows FP dust so the loop doesn't take a spurious sliver step.
   while (remaining > 1e-12) {
@@ -129,7 +128,7 @@ export function tieRunning(maneuver: string, offset: Vec3, seed = 1983): GameSta
   const bit = TWIST_BY_NAME[maneuver]
   if (bit === undefined) throw new Error(`tieRunning: unknown maneuver ${maneuver}`)
   const vm: ChoreoVm = { pc: 0, savedPc: -1, waitFrames: 1000, twist: bit, move: 0, untilMask: 0 }
-  const tie = makeTie({ pos: offset, orient: IDENTITY, vel: [0, 0, 0], vm })
+  const tie = makeTie({ pos: offset, orient: IDENTITY, vm })
   return {
     ...initialState(seed),
     enemies: [tie],
