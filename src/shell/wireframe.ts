@@ -28,7 +28,7 @@ export const GLOW_FOR: Record<string, string> = {
   'TIE Fragment Right Wing': '#30d158', // exploded TIE piece, enemy green
   'TIE Fragment Cabin': '#30d158', // exploded TIE piece, enemy green
   'Death Star Surface': '#5a6b8c', // death star steel
-  'Death Star': '#8a93a8', // death star body (lighter steel, distant hull)
+  'Death Star': '#22e600', // death star body — VGCGRN green disc (sw7-15 / M-010); shown by the contact sheet
   'Surface Tower': '#ff3b30', // surface turret red
   'Trench': '#5a6b8c', // death star steel
   'Exhaust Port': '#ff9f0a', // target amber

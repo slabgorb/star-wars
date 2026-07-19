@@ -131,7 +131,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 639,
+      "line": 682,
       "verbatim": "const FIREBALL_FRAMES: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = ["
     }
   },
@@ -148,7 +148,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 865,
+      "line": 830,
       "verbatim": "export const MODELS: readonly Model3D[] = ["
     }
   },
@@ -171,7 +171,8 @@
     "recommendation": "fix",
     "size": "l",
     "verdict": "CONFIRMED",
-    "refutation_corrections": "Minor terminology: the authentic scale factor is the AVG-picture multiplier `M.=32.` (detailed) / `M.=1` (BMIN miniature), not `.S` (`.S` is the 3D `.WP`-object scale). Value 32 and its role as the picture scale are correct; the finding's `.S=32` label is imprecise, not wrong in magnitude. Also note the ROM object is literally a 2D vector PICTURE (no 3D vertex table), so our comment's phrase 'no vertex table' is narrowly true yet misleading, since authentic Death Star art is present."
+    "refutation_corrections": "Minor terminology: the authentic scale factor is the AVG-picture multiplier `M.=32.` (detailed) / `M.=1` (BMIN miniature), not `.S` (`.S` is the 3D `.WP`-object scale). Value 32 and its role as the picture scale are correct; the finding's `.S=32` label is imprecise, not wrong in magnitude. Also note the ROM object is literally a 2D vector PICTURE (no 3D vertex table), so our comment's phrase 'no vertex table' is narrowly true yet misleading, since authentic Death Star art is present.",
+    "remediated_by": "sw7-15"
   },
   {
     "id": "M-011",
@@ -249,7 +250,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 224,
+      "line": 231,
       "verbatim": "const PORT_GLOW = GLOW_FOR['Exhaust Port'] // exhaust-port target amber (shared)"
     },
     "recommendation": "wont_fix",
