@@ -366,6 +366,40 @@ export const FIRE_MASK: readonly number[] = [
 export const FIRE_THRESHOLD: readonly number[] = [
   0x80, 0x80, 0x80, 0x40, 0x80, 0x20, 0x20, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
 ]
+
+// --- Trench wall-gun fire cadence: the base-gun TGPROB (B-017, WSBASE.MAC) -----
+//
+// The trench wall guns (DOBASE → BSGUN, WSBASE.MAC:1200-1330) fire back on their
+// OWN throttle table — a SEPARATE `TGPROB` (WSBASE.MAC:1224) from the space TIE
+// table (WSCPU.MAC:736, `FIRE_MASK`/`FIRE_THRESHOLD` above), with different
+// values. DOBASE gates each opening on `FRAME+1 & mask == 0`, then BSGUN rolls
+// each in-range gun `P.RND1 >= BS.PRB`. Indexed by difficulty `WV.HRD` clamped
+// 0..7 (`LDB WV.HRD / CMPB #7. / IFHI / LDB #7.`).
+//
+// Verbatim from the `.BYTE mask,prob` rows of `TGPROB` (WSBASE.MAC:1224),
+// difficulty 0..7:
+//   0F,80 · 0F,60 · 0F,40 · 0F,20 · 07,60 · 07,20 · 03,60 · 03,20
+// `mask` (comment "0F = 1 SEC") ANDs the frame counter — 0F opens a fire opening
+// every 16 game frames, 07 every 8, 03 every 4. `prob` (comment "0C0 = 25%") is
+// the unsigned compare; a gun fires when the draw is STRICTLY GREATER, so
+// P(fire | opening) = (255 − prob)/256 (80 ≈ 50 %, 20 ≈ 87 %). Aggression ramps
+// two ways at once — shorter opening, lower threshold.
+
+/** Base-gun TGPROB cadence MASK per difficulty 0..7 (WSBASE.MAC:1224). ANDed with
+ *  the trench game-frame: a fire opening is when `(frame & mask) === 0`. */
+export const TRENCH_GUN_FIRE_MASK: readonly number[] = [
+  0x0f, 0x0f, 0x0f, 0x0f, 0x07, 0x07, 0x03, 0x03,
+]
+/** Base-gun TGPROB probability THRESHOLD per difficulty 0..7 (WSBASE.MAC:1224). A
+ *  gun fires when `nextInt(rng, 256) > threshold`; P(fire | opening) = (255 − threshold)/256. */
+export const TRENCH_GUN_FIRE_THRESHOLD: readonly number[] = [
+  0x80, 0x60, 0x40, 0x20, 0x60, 0x20, 0x60, 0x20,
+]
+/** How far downrange a wall gun can still fire at the player — the ROM's BSGUN
+ *  loop terminator `SUBD #6000 ;FURTHEST AWAY FIRING BUNKER` (WSBASE.MAC:1330). A
+ *  gun scrolls through this approach range and fires while inside it; its slow
+ *  (ENEMY_SHOT_SPEED) shot only reaches the cockpit when fired near abreast. */
+export const TRENCH_GUN_FIRE_RANGE = 0x6000
 /** Hit sphere around an enemy fireball for player bolts. A LARGE target (story
  * sw2-2): the fireball renders as a big glowing orb, so it must be a big thing to
  * shoot — what you see is what you shoot. Sized at 0.6× the TIE sphere — smaller

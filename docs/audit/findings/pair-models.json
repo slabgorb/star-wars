@@ -148,7 +148,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 859,
+      "line": 865,
       "verbatim": "export const MODELS: readonly Model3D[] = ["
     }
   },
@@ -165,7 +165,7 @@
     },
     "ours": {
       "file": "src/core/models.ts",
-      "line": 775,
+      "line": 781,
       "verbatim": "export function buildDeathStar(): Model3D {"
     },
     "recommendation": "fix",
@@ -191,7 +191,8 @@
     },
     "recommendation": "fix",
     "size": "m",
-    "verdict": "CONFIRMED"
+    "verdict": "CONFIRMED",
+    "remediated_by": "sw7-20"
   },
   {
     "id": "M-012",

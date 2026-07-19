@@ -63,6 +63,9 @@ import {
   towersForWave,
   SURFACE_CLEAR_BONUS,
   TRENCH_SCROLL_SPEED,
+  TRENCH_GUN_FIRE_MASK,
+  TRENCH_GUN_FIRE_THRESHOLD,
+  TRENCH_GUN_FIRE_RANGE,
   TRENCH_BONUS,
   PORT_HIT_RADIUS,
   PORT_APPROACH_WINDOW,
@@ -1089,13 +1092,68 @@ function stepTrench(state: GameState, common: StepCommon, dt: number): GameState
     if (pos[2] > 0) continue // scrolled past the cockpit — despawn
     survivors.push({ kind: o.kind, pos })
   }
+
+  // --- Trench wall guns fire back (B-017; DOBASE/BSGUN, WSBASE.MAC:1200-1330) ---
+  // The wall guns (the turrets) return fire on their own per-difficulty TGPROB
+  // throttle: on a timer-mask opening each in-range gun rolls the probability and,
+  // if it passes, fires a shot AT THE SHIP POINT (trenchView, sw7-16 — the flying
+  // ship, not a detached floor origin). A shot that reaches the cockpit costs a
+  // shield (loseShield / S-016), unlike the force-field GRAZE above. The cadence
+  // keys off the integer game-frame — `stepTrench` never advances `state.frame`, so
+  // the ROM's FRAME counter is `Math.floor(trenchTimer)` (game frames elapsed).
+  const gunDiff = Math.max(0, Math.min(romWave0(state.wave), TRENCH_GUN_FIRE_MASK.length - 1))
+  const gunMask = TRENCH_GUN_FIRE_MASK[gunDiff]
+  const gunThreshold = TRENCH_GUN_FIRE_THRESHOLD[gunDiff]
+  const gameFrame = Math.floor(trenchTimer)
+  const fireOpening = gameFrame > Math.floor(state.trenchTimer) && ((gameFrame + 1) & gunMask) === 0
+
+  // Incoming shots (already advanced by the prologue) that reach the cockpit spend
+  // a shield. Centred on this frame's `trenchView`, the ship the guns aim at.
+  let gunDamage = 0
+  const standingShots = base.enemyShots.filter((s) => {
+    if (collides(s.pos, trenchView, COCKPIT_HIT_RADIUS)) {
+      gunDamage++
+      events.push({ type: 'player-death', cause: 'turret' })
+      return false
+    }
+    return true
+  })
+
+  // BSGUN: on an opening, each surviving wall gun still on the approach (within the
+  // ROM's furthest-firing range) rolls `nextInt(rng, 256) > threshold` and fires.
+  const firedShots: Projectile[] = []
+  if (fireOpening) {
+    for (const o of survivors) {
+      if (standingShots.length + firedShots.length >= MAX_FIREBALL_SLOTS) break
+      if (o.kind !== 'turret') continue
+      if (o.pos[2] < -TRENCH_GUN_FIRE_RANGE) continue // beyond the furthest firing bunker
+      if (nextInt(rng, 256) > gunThreshold) {
+        firedShots.push({
+          pos: [...o.pos] as Vec3,
+          vel: scale(normalize(sub(trenchView, o.pos)), ENEMY_SHOT_SPEED),
+          ttl: ENEMY_SHOT_TTL,
+        })
+        events.push({ type: 'enemy-fire', pos: [...o.pos] as Vec3 })
+      }
+    }
+  }
+
+  const gunHit = loseShield(base.lives, base.shieldHitAt, gunDamage, t) // S-016 window
+  if (gunHit.lives <= 0 && base.lives > 0) pushFarewell(events, gunHit.lives)
+
   const afterObstacles: GameState = {
     ...base,
     score: base.score + obstacleScore,
     trenchObstacles: survivors,
+    enemyShots: [...standingShots, ...firedShots],
+    lives: gunHit.lives,
+    shieldHitAt: gunHit.shieldHitAt,
+    gameOver: gunHit.lives <= 0 ? true : base.gameOver,
+    mode: gunHit.lives <= 0 ? 'gameover' : base.mode,
   }
 
-  // No active port → safe hold (no score, no damage; the empty channel still scrolls).
+  // No active port → safe hold (no score; the empty channel still scrolls and its
+  // guns still fire).
   if (state.exhaustPort === null) return afterObstacles
 
   // Scroll the port up the channel toward the cockpit (+Z, toward z=0). A fresh
