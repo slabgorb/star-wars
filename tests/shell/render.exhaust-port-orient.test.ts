@@ -61,7 +61,8 @@ vi.mock('../../src/shell/wireframe', async (importOriginal) => {
 import { drawWireframe, project } from '../../src/shell/wireframe'
 import { render } from '../../src/shell/render'
 import { enterPhase } from '../../src/core/sim'
-import { initialState, EXHAUST_PORT_DISTANCE, type GameState } from '../../src/core/state'
+import { initialState, type GameState } from '../../src/core/state'
+import { TRENCH_PORT_OFFSET } from '../../src/core/trench-wedges'
 import { EXHAUST_PORT, type Model3D } from '../../src/core/models'
 import { transform, type Mat4, type Vec3 } from '@arcade/shared/math3d'
 
@@ -246,7 +247,7 @@ describe('sw5-6 — and it is still an aimable target (sw5-4\'s intent, preserve
 })
 
 describe('sw5-6 AC-3 — the port does NOT move', () => {
-  it('the REAL spawnPort seats it dead centre, on the floor, at EXHAUST_PORT_DISTANCE', () => {
+  it('the REAL spawnPort seats it dead centre, on the floor, at its real BS.PLC distance', () => {
     // ⚠ THIS TEST WAS VACUOUS IN ROUND 1 and the Thought Police was right to say so. It asserted
     // `trenchScene(z).exhaustPort.pos` — a literal the FIXTURE ITSELF writes three lines up. It
     // was checking my own hand-written `[0, 0, z]` against `[0, 0, …]`. It could not fail. It
@@ -259,7 +260,8 @@ describe('sw5-6 AC-3 — the port does NOT move', () => {
 
     expect(s.exhaustPort!.pos[0], 'BSVPORT: "Y WIDTH IN CENTER"').toBe(0)
     expect(s.exhaustPort!.pos[1], 'BSVPORT: "Z HITE ON BOTTOM OF TRENCH" — our floor is y=0').toBe(0)
-    expect(s.exhaustPort!.pos[2], 'seated at EXHAUST_PORT_DISTANCE downrange').toBe(-EXHAUST_PORT_DISTANCE)
+    // sw7-22 (R6d): the port spawns at its real BS.PLC distance (≈327,680), un-clamped.
+    expect(s.exhaustPort!.pos[2], 'seated at its BS.PLC distance downrange').toBe(-TRENCH_PORT_OFFSET)
 
     // And the point of AC-3: the ROM never asked for the port to be RAISED, so it did not move.
     // What moved is the PILOT (60 → the ROM's 512..3840 band) — pinned in render.trench-eye.test.ts.

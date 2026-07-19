@@ -258,8 +258,8 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1613,
-      "verbatim": "  return { pos: [0, 0, -Math.min(trenchPortDistance(baseWave, rng), TRENCH_FAR)] }"
+      "line": 1625,
+      "verbatim": "  return { pos: [0, 0, -trenchPortDistance(baseWave, rng)] }"
     }
   },
   {
@@ -293,7 +293,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1225,
+      "line": 1226,
       "verbatim": "  const detonates = armed && inApproachWindow"
     }
   },
@@ -326,7 +326,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1291,
+      "line": 1292,
       "verbatim": "  if (reachedCockpit) {"
     },
     "recommendation": "accept",

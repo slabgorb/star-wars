@@ -39,11 +39,10 @@ import { TRENCH_HALF_W, TRENCH_WALL_H, TRENCH_VIEW_HALF_W } from '../../src/core
 import {
   TRENCH_OBSTACLE_STATIONS,
   OBSTACLE_HIT_RADIUS,
+  streamForceFields,
 } from '../../src/core/trench-obstacles'
 import { trenchWallDetail } from '../../src/core/trench-detail'
-
-const heightsOf = (kind: string) =>
-  TRENCH_OBSTACLE_STATIONS.filter((o) => o.kind === kind).map((o) => o.pos[1])
+import { createRng } from '@arcade/shared/rng'
 
 /** The ROM's reachable eye band, as a height above the trench floor (see
  *  render.trench-eye.test.ts for the WSMAIN.MAC oracle). */
@@ -69,17 +68,18 @@ describe('sw5-6 AC-5 — the furniture is re-anchored to the pinned trench', () 
       .toBeGreaterThan(0.1)
   })
 
-  it('the catwalk is still an OVERHEAD hazard the pilot must fly around', () => {
-    // The catwalk's whole reason to exist: it spans the channel, so unlike wall furniture
-    // it can actually block the pilot. That only means anything if it sits INSIDE the band
-    // he can reach — a catwalk below his floor clearance is unreachable, and one above his
-    // ceiling is scenery.
-    const catwalks = heightsOf('catwalk')
-    expect(catwalks.length, 'the trench has a catwalk').toBeGreaterThan(0)
-    for (const y of catwalks) {
-      expect(y, 'a catwalk below the pilot\'s floor clearance is not a hazard')
+  it('the streamed wall force fields land INSIDE the pilot\'s reachable band', () => {
+    // MIGRATED (sw7-22 / R6d): the force field ("catwalk") is no longer a furniture station
+    // — force fields are now STREAMED from the wedge grid (`streamForceFields`). Their whole
+    // reason to exist is unchanged: they must sit INSIDE the band the pilot flies, or the
+    // hazard is unreachable (below his floor clearance) or scenery (above his ceiling). BS.WAV
+    // 1 carries force fields (PIE1 is all guns); check every distinct slot height.
+    const heights = new Set(streamForceFields(1, createRng(0)).map((f) => f.pos[1]))
+    expect(heights.size, 'the trench streams force fields').toBeGreaterThan(0)
+    for (const y of heights) {
+      expect(y, 'a field below the pilot\'s floor clearance is not a hazard')
         .toBeGreaterThan(ROM_EYE_MIN)
-      expect(y, 'a catwalk above the pilot\'s ceiling is just scenery')
+      expect(y, 'a field above the pilot\'s ceiling is just scenery')
         .toBeLessThan(ROM_EYE_MAX)
     }
   })

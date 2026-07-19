@@ -33,7 +33,7 @@ import { initialState, TRENCH_SCROLL_SPEED, type GameState } from '../../src/cor
 import { stepGame, enterPhase } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
 import { createRng } from '@arcade/shared/rng'
-import { TRENCH_EYE_SEAT, TRENCH_HALF_W } from '../../src/core/trench-channel'
+import { TRENCH_EYE_SEAT, TRENCH_HALF_W, TRENCH_FAR } from '../../src/core/trench-channel'
 import type { Vec3 } from '@arcade/shared/math3d'
 import { eyeOf, fireAt } from '../support/aim'
 
@@ -101,9 +101,13 @@ describe('trench obstacles — shooting & scoring', () => {
   } {
     const s = { ...enterPhase(initialState(), 'trench'), mode: 'playing' as const }
     const eye = eyeOf(s)
-    const port = [...s.exhaustPort!.pos] as Vec3
+    // sw7-22 un-clamped the port to its real BS.PLC (≈327,680) — far beyond the beam's
+    // $7000 = TRENCH_FAR reach — so the real spawn is no longer a shootable staging point.
+    // Seat a WITHIN-REACH port and park the obstacle halfway along the beam to it, which
+    // keeps this suite's "nearest object takes the one beam" intent directly testable.
+    const port: Vec3 = [0, 0, -TRENCH_FAR / 2]
     const pos: Vec3 = [(eye[0] + port[0]) / 2, (eye[1] + port[1]) / 2, (eye[2] + port[2]) / 2]
-    return { s0: { ...s, trenchObstacles: [{ kind, pos }] }, yoke: fireAt(s, port), port }
+    return { s0: { ...s, exhaustPort: { pos: port }, trenchObstacles: [{ kind, pos }] }, yoke: fireAt(s, port), port }
   }
 
   it('a shot on a TURRET destroys it, scores TRENCH_TURRET_SCORE, emits the event', () => {
@@ -176,7 +180,9 @@ describe('trench obstacles — shooting & scoring', () => {
     expect(OBSTACLE_HIT_RADIUS).toBeGreaterThan(0)
     expect(TRENCH_TURRET_SCORE).toBeGreaterThan(0)
     expect(TRENCH_SQUARE_SCORE).toBeGreaterThan(0)
-    expect(TRENCH_OBSTACLE_STATIONS.length).toBeGreaterThanOrEqual(8) // ≥ the off_7CC0 record count
+    // sw7-22: the placeholder catwalk station moved to the streamed wedge grid, so the
+    // furniture table now holds the turret/square rows only.
+    expect(TRENCH_OBSTACLE_STATIONS.length).toBeGreaterThanOrEqual(7)
     for (const o of TRENCH_OBSTACLE_STATIONS) expect(o.pos[2]).toBeLessThan(0) // all downrange
   })
 

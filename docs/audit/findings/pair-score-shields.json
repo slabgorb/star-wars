@@ -81,7 +81,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 847,
+      "line": 848,
       "verbatim": "      score += TURRET_SCORE"
     }
   },
@@ -98,7 +98,7 @@
     },
     "ours": {
       "file": "src/core/trench-obstacles.ts",
-      "line": 24,
+      "line": 25,
       "verbatim": "export const TRENCH_TURRET_SCORE = 100"
     }
   },
@@ -115,7 +115,7 @@
     },
     "ours": {
       "file": "src/core/trench-obstacles.ts",
-      "line": 33,
+      "line": 34,
       "verbatim": "export const TRENCH_SQUARE_SCORE = 50"
     }
   },
@@ -183,7 +183,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1438,
+      "line": 1439,
       "verbatim": "  return { lives: Math.max(0, lives - 1), shieldHitAt: t }"
     }
   },
@@ -273,7 +273,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 495,
+      "line": 496,
       "verbatim": "      damage++"
     },
     "recommendation": "fix",
