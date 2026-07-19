@@ -108,15 +108,16 @@ describe('sw3-7 trench per-run variation — PRNG fixed-head + picked-tail (sub_
     }
   })
 
-  it('every run keeps at least one CATWALK hazard (the divider skeleton is part of the fixed head)', () => {
-    // The authentic pie's divider panels ("DIVIDER W/ CATWALK", PIEXX format)
-    // are the fixed head, not a picked wedge — so the catwalk hazard survives in
-    // every run AND in the no-arg default that the scene-preset and
-    // catwalk-hazard/viewpoint suites depend on (they call spawnTrenchObstacles()
-    // and .find the catwalk). Guarding it here keeps those siblings honest.
-    expect(spawnTrenchObstacles().some((o) => o.kind === 'catwalk')).toBe(true)
+  it('carries NO force field of its own — they are STREAMED from the wedge grid now (sw7-22)', () => {
+    // MIGRATED (sw7-22 / R6d): force fields (B-012) used to be a single placeholder
+    // "catwalk" injected here on every run. They are now STREAMED from the wave's
+    // wedge grid (`streamForceFields`, tests/core/trench-forcefield-streaming.test.ts),
+    // so this turret/square variation table carries only shootable furniture, and the
+    // DEFAULT trench (PIE1 = all guns) genuinely has no force field until a later pie.
+    expect(spawnTrenchObstacles().some((o) => o.kind === 'catwalk')).toBe(false)
     for (const s of [0, 5, 17, 40]) {
-      expect(chainForSeed(s).some((o) => o.kind === 'catwalk')).toBe(true)
+      // chainForSeed opens the wave-1 (PIE1) trench, whose grid has zero force fields.
+      expect(chainForSeed(s).every((o) => o.kind !== 'catwalk')).toBe(true)
     }
   })
 

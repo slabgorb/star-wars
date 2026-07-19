@@ -104,6 +104,7 @@ import { createRng, nextInt, type Rng } from '@arcade/shared/rng'
 import { stepNameEntry } from '@arcade/shared/name-entry'
 import {
   spawnTrenchObstacles,
+  streamForceFields,
   TRENCH_TURRET_SCORE,
   TRENCH_SQUARE_SCORE,
   OBSTACLE_HIT_RADIUS,
@@ -1544,7 +1545,17 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     // Seeded per-run variation (sw3-7): the trench chain's picked tail is drawn
     // from the run RNG via a LOCAL cursor (createRng(s.rng.seed)), so different
     // runs get different obstacle chains while `s.rng` stays unmutated (purity).
-    trenchObstacles: phase === 'trench' ? spawnTrenchObstacles(createRng(s.rng.seed)) : [],
+    // The turret/square furniture PLUS the wedge grid's streamed wall force fields
+    // (sw7-22 / R6d) — both seeded per-run from a LOCAL RNG cursor so `s.rng` stays
+    // unmutated (purity). The force-field grid is data-driven off the wave's pie, so
+    // PIE1 (all guns) carries none until a later wave.
+    trenchObstacles:
+      phase === 'trench'
+        ? [
+            ...spawnTrenchObstacles(createRng(s.rng.seed)),
+            ...streamForceFields(romWave0(s.wave), createRng(s.rng.seed)),
+          ]
+        : [],
     // The "Use the Force" clean-run tell resets on every phase entry, like
     // phaseKills/trenchScrollZ (fidelity epic, task 4) — `clearRun` below
     // re-stamps `forceBonusAwardedAt` after this reset so the banner survives
@@ -1602,15 +1613,16 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
   }
 }
 
-/** A fresh exhaust port: centred on the run, at the wave's chain-derived BS.PLC
- *  offset down −Z (finding B-009), clamped into the beam's `#7000` forward reach
- *  (TRENCH_FAR — WSLAZR CLBLZ) so the port that must exist to scroll is seated at
- *  the farthest point still under the beam. The location is read from the wedge
- *  chain (`trenchPortDistance`), not the old fixed −2400; the run RNG is threaded
- *  through a LOCAL cursor so the seed is never consumed here (core purity),
+/** A fresh exhaust port: centred on the run, at the wave's real BS.PLC distance down
+ *  −Z (finding B-009) — the full chain-derived length (`trenchPortDistance`, ≈327,680
+ *  on the balanced pies), NOT the old TRENCH_FAR port-clamp stub (sw7-22 / R6d). The
+ *  pilot now flies the full ~21s channel; the port only becomes SHOOTABLE in the final
+ *  ~1.8s because the beam is clipped at `#7000` = TRENCH_FAR (WSLAZR CLBLZ) in the
+ *  `beamHit` port test — that clip, not the spawn, is the beam reach. The run RNG is
+ *  threaded through a LOCAL cursor so the seed is never consumed here (core purity),
  *  matching how `enterPhase` seeds the trench obstacles. */
 function spawnPort(baseWave: number, rng: Rng): { pos: Vec3 } {
-  return { pos: [0, 0, -Math.min(trenchPortDistance(baseWave, rng), TRENCH_FAR)] }
+  return { pos: [0, 0, -trenchPortDistance(baseWave, rng)] }
 }
 
 /**
