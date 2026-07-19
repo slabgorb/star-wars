@@ -682,29 +682,35 @@ export const EXHAUST_PORT: Model3D = {
 }
 
 /**
- * Trench wall turret — a squat wall-mounted emplacement (fidelity epic task 3;
- * findings ## Trench catwalks, turrets & wall squares — `sub_6FD9` "Draws
- * trench turrets"). No authentic vertex table is directly portable: the ROM's
- * `off_7CC0` → `off_7Bxx` shape blobs are confirmed (type-byte,dx,dy) draw
- * scripts where type 2 = "turret housing", but the extraction notes flag it
- * uncertain whether those blobs are placement or silhouette data, and there is
- * no recovered ROM↔world-unit scale to turn either into exact vertices (Open
- * follow-ups #1/#3). Authored here as a simple box-housing + barrel silhouette
- * consistent with that "housing" description; PROVISIONAL pending a dedicated
- * shape-decode pass.
+ * Trench wall turret — the authentic WALL GUN TYPE A (`.WP WGA` / `.WGD WGA`,
+ * WSOBJ.MAC:576-599 / 1780-1789; finding M-011). PROVISIONAL box+barrel REPLACED:
+ * the disassembly lacked the table but the MACRO-11 source carries it in full, so
+ * this is a straight data re-port — a 4-corner wall base (±256/±192 after ×8), a
+ * 6-point gun body, and a 4-point nozzle.
+ *
+ * ⚠ THE LITERALS ARE DECIMAL — the OPPOSITE of WFF's hex `.PH` (M-012). `.WP WGA`
+ * uses `.P`, whose macro (WSOBJ.MAC:136) appends a decimal-forcing `'.` suffix
+ * before ×`.S`, so `.P -32` is decimal −32 × 8 = −256 (NOT hex −0x32 × 8 = −400).
+ * The `.P 0,0,0` origin (ROM index 0, referenced by no draw stroke) is dropped and
+ * the 14 real points reindexed 0-13, matching `ROM_MODELS.WGA` and the WFF
+ * precedent. Vertices are raw ROM units; ORIENTATION is the shell's job (render.ts).
+ * Edges from `.WGD WGA` (`PLOT 4 / DRAWTO … / BDRAWTO …`, VGCRED), reindexed −1.
+ * tests/core/trench-wall-gun-rom.test.ts pins the transcription.
  */
 export const TRENCH_TURRET: Model3D = {
   name: 'Trench Turret',
   vertices: [
-    [-30, 0, -30], [30, 0, -30], [30, 0, 30], [-30, 0, 30], // base
-    [-16, 44, -16], [16, 44, -16], [16, 44, 16], [-16, 44, 16], // cap
-    [0, 44, 0], [0, 72, 0], // barrel
+    [-256, 0, 192], [256, 0, 192], [256, 0, -192], [-256, 0, -192], // 0-3 WALL BASE
+    [-96, 96, 64], [96, 32, 64], [96, 32, -64], [-96, 96, -64], [-96, 32, -64], [-96, 32, 64], // 4-9 GUN BODY
+    [-96, 72, 32], [-96, 56, 32], [-96, 72, -32], [-96, 56, -32], // 10-13 GUN NOZZLE
   ],
   edges: [
-    [0, 1], [1, 2], [2, 3], [3, 0],
-    [4, 5], [5, 6], [6, 7], [7, 4],
-    [0, 4], [1, 5], [2, 6], [3, 7],
-    [8, 9],
+    [3, 2], [2, 1], [1, 0], [0, 3], [3, 8], [8, 9], [9, 0], // DRAWTO 3,2,1,4,9,10,1
+    [9, 5], [5, 1], // BDRAWTO 10,6,2
+    [2, 6], [6, 5], [5, 4], [4, 7], [7, 6], [6, 8], [8, 7], // BDRAWTO 3,7,6,5,8,7,9,8
+    [7, 12], [12, 13], [13, 8], // DRAWTO 13,14,9
+    [13, 11], [11, 9], [9, 4], [4, 10], [10, 11], // BDRAWTO 14,12,10,5,11,12
+    [10, 12], // BDRAWTO 11,13
   ],
 }
 
