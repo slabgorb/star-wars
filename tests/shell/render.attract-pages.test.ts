@@ -106,3 +106,25 @@ describe('sw7-10 H-017 — the INSTRUCTIONS page shows the ROM flight brief', ()
     expect(has('SCORING')).toBe(false)
   })
 })
+
+// sw7-10 rework (finding F5). `drawAttract` dispatches on the page with a bare
+// `default: drawBannerPage` and no exhaustiveness check (lang-review typescript #3), so a
+// page that falls through the switch silently renders the MARQUEE instead of itself —
+// a regression that looks like a working attract screen. The two "is NOT" tests above
+// only pin instructions-vs-scoring; these close the other two pages.
+describe('sw7-10 F5 — no page silently falls through to the banner', () => {
+  it('the non-banner pages do NOT draw the marquee', () => {
+    for (const page of ['instructions', 'scoring', 'hiscore'] as const) {
+      font.calls.length = 0
+      render(makeCtx(), attractOn(page), W, H, [])
+      expect(has('PULL TRIGGER TO START'), `the ${page} page must not render the banner`).toBe(false)
+    }
+  })
+
+  it('the banner page draws the marquee and NEITHER text page', () => {
+    render(makeCtx(), attractOn('banner'), W, H, [])
+    expect(has('PULL TRIGGER TO START')).toBe(true)
+    expect(has('FLIGHT INSTRUCTIONS TO RED FIVE')).toBe(false)
+    expect(has('SCORING')).toBe(false)
+  })
+})
