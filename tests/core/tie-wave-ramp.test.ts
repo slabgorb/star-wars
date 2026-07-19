@@ -150,15 +150,16 @@ describe("Story 9-5 — waveParams.maxConcurrentShots ports the RE'd fire table 
 })
 
 describe('Story 9-5 — the existing scalar ramp is untouched (AC3 — no flight regression)', () => {
-  it("wave 1 still reproduces today's speed / spawn / fire-interval baseline exactly", () => {
+  it("wave 1 still reproduces today's spawn / fire-interval baseline exactly", () => {
     const p = waveParams(1)
     expect(p.spawnInterval).toBe(SPAWN_INTERVAL)
-    expect(p.enemySpeed).toBe(ENEMY_SPEED)
     expect(p.enemyFireInterval).toBe(ENEMY_FIRE_INTERVAL)
   })
 
-  it('still speeds up the approach and tightens fire cadence on later waves (8-6 ramp intact)', () => {
-    expect(waveParams(5).enemySpeed).toBeGreaterThan(waveParams(1).enemySpeed)
+  // sw7-23: the `enemySpeed` ramp was retired (it only seeded the unread `Enemy.vel`).
+  // The surviving difficulty axes still tighten with the wave.
+  it('still tightens spawn + fire cadence on later waves (8-6 ramp intact)', () => {
+    expect(waveParams(5).spawnInterval).toBeLessThan(waveParams(1).spawnInterval)
     expect(waveParams(5).enemyFireInterval).toBeLessThan(waveParams(1).enemyFireInterval)
   })
 })

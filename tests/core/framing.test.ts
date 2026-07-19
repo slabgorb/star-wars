@@ -33,7 +33,7 @@
 //    complete a run. This story delivers the ramp machinery + a wave-1 baseline;
 //    8-9 calls the increment. Raised as a Delivery Finding.
 import { describe, it, expect } from 'vitest'
-import { initialState, STARTING_LIVES, SPAWN_INTERVAL, ENEMY_SPEED, type GameState } from '../../src/core/state'
+import { initialState, STARTING_LIVES, SPAWN_INTERVAL, type GameState } from '../../src/core/state'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
 
@@ -62,8 +62,6 @@ const start = (s: GameState): GameState => stepGame(s, START, DT)
 const attractState = (seed = 1): GameState => withMode(initialState(seed), 'attract')
 // A finished run parked on the game-over screen.
 const gameoverState = (seed = 1): GameState => withMode(initialState(seed), 'gameover')
-
-const mag = (v: readonly number[]): number => Math.hypot(v[0], v[1], v[2])
 
 // --- The wave counter (the HUD's wave indicator) ----------------------------
 
@@ -147,23 +145,19 @@ describe('framing — the space spawner reads waveParams(wave)', () => {
     expect(out.enemies).toHaveLength(1)
   })
 
-  it('keeps wave-1 balance: the spawned TIE approaches at today\'s speed and cadence', () => {
+  it('keeps wave-1 balance: the spawned TIE rearms the timer at today\'s cadence', () => {
     const out = stepGame(spawnAtWave(1), NO_INPUT, 0.001)
-    // A wave-1 TIE approaches at exactly ENEMY_SPEED and the timer rearms at
-    // today's SPAWN_INTERVAL — wiring waveParams in must NOT shift wave-1 balance
-    // (this guard holds in both RED and GREEN; the 8-3 suite depends on it).
-    expect(mag(out.enemies[0].vel)).toBeCloseTo(ENEMY_SPEED, 5)
+    // The timer rearms at today's SPAWN_INTERVAL — wiring waveParams in must NOT shift
+    // wave-1 balance (the 8-3 suite depends on it). NOTE (sw7-23): the companion
+    // "approaches at exactly ENEMY_SPEED" assertion was removed — TIE motion is
+    // VM-driven and no longer reads a per-wave approach speed (Enemy.vel retired).
     expect(out.spawnTimer).toBe(SPAWN_INTERVAL)
   })
 
-  it('makes wave-2 TIEs approach FASTER than wave-1 TIEs (same seed, same spawn)', () => {
-    const w1 = stepGame(spawnAtWave(1), NO_INPUT, 0.001)
-    const w2 = stepGame(spawnAtWave(2), NO_INPUT, 0.001)
-    // Identical seed -> identical spawn position -> identical approach direction;
-    // only the SPEED (waveParams(wave).enemySpeed) differs. RED: the sim ignores
-    // wave, so the two are equal and this fails. GREEN: wave 2 is strictly faster.
-    expect(mag(w2.enemies[0].vel)).toBeGreaterThan(mag(w1.enemies[0].vel))
-  })
+  // NOTE (sw7-23): "makes wave-2 TIEs approach FASTER" was removed. The per-wave
+  // approach-speed ramp was inert (it only seeded the unread Enemy.vel), so later
+  // waves never actually closed faster; the wave-2 cadence tightening below is the
+  // real difficulty axis. See tie-flight-cleanup.test.ts.
 
   it('tightens the wave-2 spawn cadence below wave 1 (TIEs keep coming sooner)', () => {
     const w1 = stepGame(spawnAtWave(1), NO_INPUT, 0.001)

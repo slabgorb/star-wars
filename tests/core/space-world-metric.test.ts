@@ -53,7 +53,6 @@ import {
   TIE_SPAWN_DISTANCE,
   TIE_NEAR_BOUND,
   TIE_EXIT_RANGE,
-  ENEMY_SPEED,
   PROJECTILE_SPEED,
   PROJECTILE_TTL,
   STARTING_LIVES,
@@ -246,24 +245,12 @@ describe('sw4-1 §A — TIEs spawn on the far plane with the TBG lateral table',
   })
 })
 
-// --- AC#6 — ENEMY_SPEED: PROVISIONAL, guarded by policy not exact value --------
-
-describe('sw4-1 §A — enemy approach speed (PROVISIONAL, transit-time policy)', () => {
-  it('is restored well beyond the compressed-world value (not the un-migrated 1300)', () => {
-    // NOT pinned to an exact figure (cabinet tick unpinned → PROVISIONAL). This only
-    // rules out the old 1300 surviving the migration. RED today: 1300.
-    expect(ENEMY_SPEED).toBeGreaterThan(5000)
-  })
-
-  it('yields a playable full-depth transit in the spec target neighbourhood (~2.5–4 s)', () => {
-    // The design target is a 2.5–4 s spawn→near-bound transit; asserted as a LOOSE
-    // band (PROVISIONAL latitude), not an exact time. RED today: (8000−350)/1300 ≈
-    // 5.9 s — a slow crawl, above the 5 s ceiling. GREEN: (31744−2048)/10000 ≈ 3.0 s.
-    const transit = (TIE_SPAWN_DISTANCE - TIE_NEAR_BOUND) / ENEMY_SPEED
-    expect(transit).toBeGreaterThanOrEqual(1.5)
-    expect(transit).toBeLessThanOrEqual(5.0)
-  })
-})
+// --- AC#6 — ENEMY_SPEED: RETIRED (sw7-23) --------------------------------------
+//
+// The "enemy approach speed (PROVISIONAL, transit-time policy)" block was removed in
+// sw7-23. ENEMY_SPEED only ever seeded the unread Enemy.vel once TIE motion became
+// VM-driven (PR #110), so there is no approach-speed constant left to guard, and no
+// spawn→near-bound transit time to assert. See tie-flight-cleanup.test.ts.
 
 // --- AC#7 — TICK_HZ: one shared PROVISIONAL cabinet-tick constant --------------
 
