@@ -29,7 +29,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1833,
+      "line": 1847,
       "verbatim": "const ROM_LATERAL_UNIT = 0x400 // 1024 — the ×$400 STARTING-LOCATION lateral step"
     }
   },
@@ -46,7 +46,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1844,
+      "line": 1858,
       "verbatim": "  [-2 * ROM_LATERAL_UNIT, 0], // 1D1"
     }
   },
@@ -80,7 +80,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 468,
+      "line": 482,
       "verbatim": "        killedTie.add(hitTie)"
     }
   },
@@ -131,7 +131,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1872,
+      "line": 1886,
       "verbatim": "  return { pos, kind, orient: lookRotation(dir), vm, firedGun: false }"
     }
   },
@@ -170,7 +170,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 505,
+      "line": 519,
       "verbatim": "  const liveEnemies = standingEnemies.filter((e) => {"
     },
     "recommendation": "fix",
@@ -270,7 +270,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1856,
+      "line": 1870,
       "verbatim": "  const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]"
     },
     "recommendation": "accept",

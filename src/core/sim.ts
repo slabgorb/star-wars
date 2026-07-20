@@ -152,15 +152,20 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     // The idle screen is not idle: the page machine rotates BNR→INS→SCR→HIS with the
     // intro crawl receding through the banner (sw7-10 / H-017 + H-018), over the same
     // drifting starfield the flight phases fly through (M-015).
-    return {
+    return finalizeFrame(state, {
       ...state,
       t,
       attract: stepAttract(state.attract, dt),
-      starfield: stepStarfield(state.starfield, dt),
       events: [],
-    }
+    })
   }
   if (state.mode === 'gameover' || state.gameOver) {
+    // The end-of-run hold is still a FRAME, not a freeze (sw7-10 rework, finding F3).
+    // Every return below goes through `finalizeFrame` for the same reason the
+    // active-play returns do: the WSSTAR field keeps sliding past the eye — the cabinet
+    // never shows a dead sky — and `coaching` is re-derived rather than carried, which
+    // is what actually clears the hint (`coachingFor` returns null once `gameOver`).
+    // Leaving this branch outside the closing pass is what froze both.
     const startHeld = input.start === true
     if (state.entry !== null) {
       // SH2-13: the ARMED initials entry gates the exit. A start press can
@@ -171,7 +176,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       // latch) never commits. The commit is announced as a GameEvent; the
       // shell owns the table and persists on the cue.
       if (startHeld && !state.startPrev && state.entry.initials.length === MAX_INITIALS) {
-        return {
+        return finalizeFrame(state, {
           ...state,
           mode: 'attract',
           gameOver: false,
@@ -181,14 +186,23 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
           aimX,
           aimY,
           events: [{ type: 'name-entered', name: state.entry.initials }],
-        }
+        })
       }
-      return { ...state, startPrev: startHeld, t, aimX, aimY, events: [] }
+      return finalizeFrame(state, { ...state, startPrev: startHeld, t, aimX, aimY, events: [] })
     }
     if (startHeld) {
-      return { ...state, mode: 'attract', gameOver: false, startPrev: startHeld, t, aimX, aimY, events: [] }
+      return finalizeFrame(state, {
+        ...state,
+        mode: 'attract',
+        gameOver: false,
+        startPrev: startHeld,
+        t,
+        aimX,
+        aimY,
+        events: [],
+      })
     }
-    return { ...state, startPrev: startHeld, t, aimX, aimY, events: [] }
+    return finalizeFrame(state, { ...state, startPrev: startHeld, t, aimX, aimY, events: [] })
   }
 
   // Clone the RNG so the step never mutates its input — purity intact.

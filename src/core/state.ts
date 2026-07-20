@@ -1054,8 +1054,16 @@ export interface GameState {
    * `mode === 'attract'`; see `src/core/attract.ts`. */
   attract: AttractState
   /** The in-flight coaching hint the shell should draw this frame, or `null`
-   * (sw7-10 / H-022). Derived fresh every active-play step by `coachingFor` — never
-   * accumulated, so it cannot get stuck on screen. */
+   * (sw7-10 / H-022). Derived fresh by `coachingFor` at EVERY step that returns
+   * through `finalizeFrame` — which is every active-play return, the attract
+   * rotation, and the end-of-run hold — so it is never accumulated and cannot get
+   * stuck on screen.
+   *
+   * The end-of-run hold is called out because it is where this claim was FALSE:
+   * that branch used to return early, outside the closing pass, so a wave-1 death
+   * left the hint frozen on screen permanently (sw7-10 rework, finding F3, pinned by
+   * `tests/core/coaching-clears-on-death.test.ts`). `coachingFor` gates on `gameOver`
+   * as well as `mode`, since production death keeps `mode === 'playing'`. */
   coaching: string | null
 }
 

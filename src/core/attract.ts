@@ -26,8 +26,22 @@ import { TICK_HZ } from './state'
 /** The four idle pages, in TPHASE order (WSMAIN.MAC:335-338). */
 export type AttractPage = 'banner' | 'instructions' | 'scoring' | 'hiscore'
 
-/** One live crawl line. `size` is the ROM's scale accumulator normalised 0→1: 0 at
- *  the vanishing point, 1 at the `#0F000` retirement (TCMES.MAC:415). */
+/** One live crawl line. `size` is the ROM's scale accumulator normalised 0→1, and it
+ *  runs NEAR→FAR: **0 is birth** — near, large, low on screen — and **1 is the
+ *  vanishing point**, where the `#0F000` retirement drops the line (TCMES.MAC:415).
+ *
+ *  The ROM settles the direction without needing the AVG scale field's polarity:
+ *  TCMES.MAC:167 calls this list "MESSAGES THAT RECEDE INTO THE DISTANCE", `SPMON`
+ *  seeds the accumulator at 0 (`LDD #0000 ;SIZE ALWAYS STARTS AT LINEAR SCALE OF 0`,
+ *  :183), and :415 retires the line at the accumulator's MAXIMUM. Start-at-0 across a
+ *  RECEDING life therefore means 0 = nearest. `COMB ;BRIGHTNESS RELATIVE TO INVERSE OF
+ *  SCALE` (:262) corroborates it — the line DIMS as the accumulator grows.
+ *
+ *  This docstring previously stated the exact inverse, which is what got the story
+ *  rejected: the code was right and its own type contract disagreed with it, and no
+ *  test varied `size` so nothing caught acting on the comment. It is now pinned by
+ *  `tests/shell/render.crawl-recession.test.ts`. Do not "correct" the render to match
+ *  a reading of this line — the inverted crawl already shipped once in this story. */
 export interface CrawlLine {
   text: string
   size: number
@@ -130,8 +144,11 @@ export const INSTRUCTIONS_HEADER = 'FLIGHT INSTRUCTIONS TO RED FIVE'
 
 /** The numbered flight brief, MS.FLI+1 .. MS.FLZ (TCMES.MAC:554-568).
  *  The gap in "FOR   COLLISIONS." is authentic — the cabinet paints the shield count
- *  into it at runtime from a nibble (VWNIBL); the clone has no operator option feeding
- *  that number, so the gap is left as the ROM authored it. */
+ *  into it, but NOT via `VWNIBL` as this comment used to claim. It ships four
+ *  pre-positioned single-digit messages `<6> <7> <8> <9>` (TCMES.MAC:569-572), all at
+ *  x=`0084`, y=`0144` — exactly the y of the COLLISIONS line at :556 — and draws
+ *  whichever one the operator's shield-count option selects. The clone models no
+ *  operator options, so the gap is left as the ROM authored it. */
 export const INSTRUCTIONS_BODY: readonly string[] = [
   '1.  YOUR X-WING IS EQUIPPED WITH AN',
   'INVISIBLE DEFLECTOR SHIELD THAT',

@@ -5,72 +5,53 @@
 // declaring the TARGET shape here lets the four RED suites stay `tsc --noEmit`
 // clean while the real GameState does not yet carry any of them.
 //
-// The bridge is the rb4-7 idiom: the source genuinely has the OLD shape, this is
-// the target mirror, so we cross the seam with `as unknown as` (a plain `as`
-// would TS2352 on the structural mismatch). Runtime access via `ext()` returns
-// `undefined` today — that undefined IS the RED signal; guard on it so no test
-// passes vacuously. When Dev lands the fields, `ext()` returns real data and the
-// same suites go GREEN with no edit.
+// THE BRIDGE IS GONE (sw7-10 rework, finding F6). This file was written against a
+// GameState that did not yet carry these fields, so it declared a target mirror and
+// crossed the seam with `as unknown as` (the rb4-7 idiom — a plain `as` would TS2352
+// on the structural mismatch). GREEN landed the fields, so the mirror is now a
+// duplicate of a real type and the double-casts are dead weight: the TYPES below are
+// re-exported straight from `src/core`, and `ext()` / `withExt()` are plain typed
+// accessors. Every suite that imported them keeps working unchanged.
+//
+// WHAT DELIBERATELY DID NOT COLLAPSE: the string DATA further down. `INTRO_CRAWL`,
+// the page copy and the message strings are the INDEPENDENT spec that the suites
+// compare production output against — `tests/core/intro-crawl.test.ts:45` asserts the
+// export equals this list. Re-pointing these at `src/core/attract.ts` would make that
+// assertion compare the export to itself and go tautological. They are transcribed
+// from the ROM, not imported from the code, and must stay that way.
 //
 // ROM provenance for every literal here is pinned in the suites that use them,
 // verbatim from the 1983 "Warp Speed" source (TCMES.MAC / WSMAIN.MAC / WSSTAR.MAC,
 // all .RADIX 16 via WSCOMN.MAC:5). Do NOT paraphrase a string in this file.
 
 import { initialState, type GameState } from '../../src/core/state'
+import type { Star } from '../../src/core/starfield'
+import type { AttractPage, AttractState, CrawlLine } from '../../src/core/attract'
 
-// --- M-015: the starfield --------------------------------------------------
-/** One WSSTAR star in world space. The cabinet places 50 (`M$STNM==50.`). */
-export interface Star {
-  x: number
-  y: number
-  z: number
-}
+// The shapes the suites type against — now the production types themselves, so a
+// change to either can no longer drift silently past this file.
+export type { Star, AttractPage, AttractState, CrawlLine }
 
-// --- H-017: the rotating attract pages -------------------------------------
-/** The four idle attract pages, in `WSMAIN.MAC` TPHASE order (BNR→INS→SCR→HIS). */
-export type AttractPage = 'banner' | 'instructions' | 'scoring' | 'hiscore'
+/** The sw7-10 fields on GameState. A `Pick` rather than a hand-written mirror, so it
+ *  cannot describe a shape the real state does not have. */
+export type Sw710Fields = Pick<GameState, 'starfield' | 'attract' | 'coaching'>
 
-// --- H-018: the receding intro crawl ---------------------------------------
-/** One live line of the banner-phase special-message crawl. `size` grows 0→1 as
- *  the line recedes to its vanishing point (ROM: a 16-bit size accumulator whose
- *  high byte drives the AVG linear-scale, `SPMESS` TCMES.MAC:402-404). */
-export interface CrawlLine {
-  text: string
-  size: number
-}
 
-/** The attract sub-state Dev threads onto GameState. `pageAge` is seconds on the
- *  current page; the crawl is only live during the 'banner' page. */
-export interface AttractState {
-  page: AttractPage
-  pageAge: number
-  crawl: readonly CrawlLine[]
-}
-
-/** The full sw7-10 extension GameState gains in GREEN. */
-export interface Sw710Fields {
-  /** 50 WSSTAR stars, seeded-deterministic (cabinet uses a hardware RNG — the
-   *  clone's seeded RNG is a logged divergence, not infidelity). */
-  starfield: readonly Star[]
-  /** The rotating attract page machine + intro crawl (idle screen). */
-  attract: AttractState
-  /** The current in-flight coaching / bonus message, or null. */
-  coaching: string | null
-}
-
-/** Read the (maybe-absent) sw7-10 fields off a state without a tsc error.
- *  Returns `undefined` per field until Dev lands it — that IS the red. */
+/** Read the sw7-10 fields off a state. Kept as a named accessor (rather than folded
+ *  into every call site) so the suites read the same as they did through the bridge;
+ *  the `Partial` is retained because the suites guard each field with `toBeDefined()`
+ *  before use, and those guards are what stopped them ever passing vacuously. */
 export function ext(s: GameState): Partial<Sw710Fields> {
-  return s as unknown as Partial<Sw710Fields>
+  return s
 }
 
-/** Build a GameState carrying a sw7-10 extension, bridged past the not-yet-present
- *  fields. `base` should come from `initialState()` so every real field is valid. */
-export function withExt(base: GameState, patch: Partial<Sw710Fields> & Partial<GameState>): GameState {
-  return { ...base, ...patch } as unknown as GameState
+/** Build a GameState carrying a sw7-10 patch. `base` should come from `initialState()`
+ *  so every real field is valid. */
+export function withExt(base: GameState, patch: Partial<GameState>): GameState {
+  return { ...base, ...patch }
 }
 
-/** A neutral attract-mode state seeded with an explicit attract page (bridged). */
+/** A neutral attract-mode state seeded with an explicit attract page. */
 export function attractOn(page: AttractPage, seed = 1983): GameState {
   return withExt(initialState(seed), {
     mode: 'attract',

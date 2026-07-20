@@ -10,7 +10,7 @@
 //     flight ST.UX is driven straight off the frame counter (`LDD FRAME / JSR LSLD7 /
 //     STD ST.UX`, WSMAIN.MAC:2525-2528). The field is never still.
 //   * each star is drawn as the single-point glyph VGSTAR in white (VGCWHT,
-//     WSSTAR.MAC:110) — the shell owns that.
+//     WSSTAR.MAC:113, `LDA #VGCWHT*100+VGCOPC&0FF00/100`) — the shell owns that.
 //
 // PURITY. `STARNW` (WSSTAR.MAC:362-364) places a star from `RND8`, which reads the
 // cabinet's HARDWARE random byte P.RND1 — non-deterministic silicon. CLAUDE.md's hard

@@ -1150,7 +1150,7 @@ function drawCoaching(ctx: CanvasRenderingContext2D, state: GameState, w: number
  * The 50-star WSSTAR backdrop (sw7-10 / M-015).
  *
  * The cabinet draws each star as the single-point glyph VGSTAR in white (VGCWHT,
- * WSSTAR.MAC:110) — so this is a plain screen-space point divide, NOT a wireframe
+ * WSSTAR.MAC:113) — so this is a plain screen-space point divide, NOT a wireframe
  * through the camera: `state.starfield` already carries each star's depth AHEAD of the
  * eye, and the core slides the field past every step. A star nearer the eye sits further
  * out from the vanishing point and burns a touch brighter, which is what sells the drift.
@@ -1208,8 +1208,9 @@ function drawBannerPage(ctx: CanvasRenderingContext2D, state: GameState, w: numb
   // :231). A line is born BIG and low, then shrinks away toward a vanishing point as it
   // recedes. `size` (0→1) is the ROM's scale accumulator, and it runs that way round:
   // the AVG scale field is a shift count, so a SMALLER field draws BIGGER — which the
-  // ROM states outright at WSMAIN.MAC:3176, `LDD #VGSCAL-100 ;DOUBLE SIZE`. So the
+  // ROM states outright at WSMAIN.MAC:3178, `LDD #VGSCAL-100 ;DOUBLE SIZE`. So the
   // accumulator counting UP from 0 (SPMON) is the line getting SMALLER, not larger.
+  // (:3176 is `JSR VWMTWZ`; the anchor was off by two and is corrected here.)
   //
   // `remaining` runs 1 at birth (near, big, low) to 0 at retirement (the vanishing
   // point). Drawn FAR first so nearer lines overlap them, as the cabinet stacks them.

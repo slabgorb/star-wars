@@ -294,7 +294,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 850,
+      "line": 864,
       "verbatim": "      vel: scale(normalize(sub(ship, muzzle)), ENEMY_SHOT_SPEED),"
     },
     "recommendation": "accept",
@@ -364,7 +364,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 751,
+      "line": 765,
       "verbatim": "  if (altitude < MIN_SKIM_ALTITUDE) {"
     },
     "recommendation": "accept",
