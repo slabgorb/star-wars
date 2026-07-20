@@ -28,12 +28,11 @@
 //    deep wave never drives a cadence to zero (the game stays finite/playable).
 //  - waveParams is PURE: same wave -> deep-equal params; no time, no randomness.
 import { describe, it, expect } from 'vitest'
-import { SPAWN_INTERVAL, ENEMY_SPEED, ENEMY_FIRE_INTERVAL } from '../../src/core/state'
+import { SPAWN_INTERVAL, ENEMY_FIRE_INTERVAL } from '../../src/core/state'
 import * as gameRules from '../../src/core/gameRules'
 
 interface WaveParams {
   spawnInterval: number
-  enemySpeed: number
   enemyFireInterval: number
 }
 
@@ -45,7 +44,6 @@ describe('waveParams — wave 1 is the unchanged baseline (parity with 8-3)', ()
   it('reproduces today\'s space-combat constants exactly at wave 1', () => {
     const p = waveParams(1)
     expect(p.spawnInterval).toBe(SPAWN_INTERVAL)
-    expect(p.enemySpeed).toBe(ENEMY_SPEED)
     expect(p.enemyFireInterval).toBe(ENEMY_FIRE_INTERVAL)
   })
 })
@@ -61,10 +59,10 @@ describe('waveParams — escalates with the wave number (AC: difficulty ramp)', 
     expect(waveParams(3).enemyFireInterval).toBeLessThan(waveParams(2).enemyFireInterval)
   })
 
-  it('speeds up the enemy approach on later waves', () => {
-    expect(waveParams(2).enemySpeed).toBeGreaterThan(waveParams(1).enemySpeed)
-    expect(waveParams(10).enemySpeed).toBeGreaterThan(waveParams(2).enemySpeed)
-  })
+  // NOTE: the "speeds up the enemy approach on later waves" case was removed in sw7-23.
+  // The `enemySpeed` ramp only ever seeded the unread `Enemy.vel`, so later-wave TIEs
+  // never actually approached faster; difficulty escalates through spawn + fire cadence
+  // (above) and the TGPROB concurrency cap. See tie-flight-cleanup.test.ts.
 })
 
 describe('waveParams — clamps timing to positive playable floors (AC: stays finite)', () => {

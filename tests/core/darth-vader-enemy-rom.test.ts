@@ -89,11 +89,11 @@ import { IDENTITY, type Vec3 } from '@arcade/shared/math3d'
 const TINY = 0.001 // one hit-test, negligible movement
 const TICK = 1 / 60
 const DOWNRANGE: Vec3 = [0, 0, -400]
-const tie = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
+const tie = (pos: Vec3): Enemy => ({ pos, kind: 'tie', orient: IDENTITY })
 // `kind: 'darth'` does not typecheck until GREEN widens the Enemy.kind union —
 // that widening is part of this story. Vitest (esbuild) runs it regardless; the
 // assertions, not the compiler, are what carry the RED signal.
-const darth = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'darth', orient: IDENTITY })
+const darth = (pos: Vec3): Enemy => ({ pos, kind: 'darth', orient: IDENTITY })
 
 /** A fresh space wave with spawns + enemy fire suppressed, so a test sees only
  *  the enemies it places. The gun is ready and the trigger is up (`initialState` gives

@@ -30,7 +30,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   initialState,
-  ENEMY_SPEED,
   ENEMY_SHOT_TTL,
   ENEMY_FIRE_INTERVAL,
   MAX_FIREBALL_SLOTS,
@@ -44,32 +43,19 @@ import {
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
 import { fireAt } from '../support/aim'
-import { normalize, sub, scale, length, type Vec3, type Mat4 } from '@arcade/shared/math3d'
-
-const COCKPIT: Vec3 = [0, 0, 0]
+import { sub, length, type Vec3, type Mat4 } from '@arcade/shared/math3d'
 const DT = 0.05
 const IDENTITY: Mat4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 
-/** A TIE making its pass: at `pos`, thrusting toward the cockpit at `speed`, with
- * swoop `bank` (0 = pure homing). Mirrors `tieToward` in tie-peel-away.test.ts. */
-const tieToward = (pos: Vec3, speed = ENEMY_SPEED, bank = 0): Enemy => ({
-  pos,
-  vel: scale(normalize(sub(COCKPIT, pos)), speed),
-  kind: 'tie',
-  orient: IDENTITY,
-  bank,
-})
+/** A TIE making its pass at `pos`, holding station (no VM). Flight is VM-driven now,
+ * so the fixture just places the fighter; the fire gate reads pos/orient/range. */
+const tieToward = (pos: Vec3): Enemy => ({ pos, kind: 'tie', orient: IDENTITY })
 
-/** A fighter that has finished its pass and is peeling away (out of the firing
- * arc): velocity points OUTWARD and the peel latch is set, so it recedes. */
-const peelingTie = (pos: Vec3, speed = ENEMY_SPEED): Enemy => ({
-  pos,
-  vel: scale(normalize(pos), speed),
-  kind: 'tie',
-  orient: IDENTITY,
-  bank: 1,
-  peeling: true,
-})
+// NOTE (sw7-23): the `peelingTie` helper (which set the retired `peeling` latch + a
+// receding `vel`) was removed. The peel-away lifecycle it modelled no longer exists —
+// TIE flight is VM-driven and `peeling` was never assigned in production. Its one test
+// ("a peeled-away fighter never originates fire") is subsumed by the near-bound gate
+// test below: a TIE inside TIE_NEAR_BOUND does not strafe regardless of any peel state.
 
 /** A playing state with the given TIEs, the enemy-fire clock READY (cooldown 0 —
  * so the OLD formation timer fires immediately, making the contrast tests RED),
@@ -129,18 +115,6 @@ describe('Story 9-4 — fire is per-TIE, not a whole-formation timer (AC1)', () 
       peak = Math.max(peak, s.enemyShots.length)
     }
     expect(peak).toBeGreaterThanOrEqual(3)
-  })
-
-  it('a peeled-away fighter (pass complete, out of arc) never originates fire', () => {
-    // A peeling TIE has finished its pass and is receding — out of the firing arc.
-    // The formation timer fires whatever TIE it randomly grabs, peeling ones
-    // included; strafe fire must come only from fighters still making a pass.
-    // RED today: the global timer fires this lone peeling TIE on the first tick.
-    let s = fireReady([peelingTie([200, 0, -400])])
-    for (let i = 0; i < TWO_INTERVALS; i++) {
-      s = stepGame(s, NO_INPUT, DT)
-      expect(s.enemyShots).toHaveLength(0)
-    }
   })
 
   it('a fighter that has bored past the strafe window (too close) never originates fire', () => {

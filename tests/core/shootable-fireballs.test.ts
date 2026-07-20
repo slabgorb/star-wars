@@ -93,7 +93,7 @@ const DOWNRANGE: Vec3 = [0, 0, -400]
 const fireball = (pos: Vec3): Projectile => ({ pos, vel: [0, 0, 1], ttl: ENEMY_SHOT_TTL })
 // A fully-typed TIE fixture (stepGame reads `.pos` for the hit-test; vel/orient
 // keep it a real Enemy, no type-escape cast).
-const tie = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
+const tie = (pos: Vec3): Enemy => ({ pos, kind: 'tie', orient: IDENTITY })
 
 /**
  * The trigger pulled with the yoke hard over to the left — a shot at empty sky, the beam's

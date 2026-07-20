@@ -36,7 +36,6 @@ import { describe, it, expect } from 'vitest'
 import {
   initialState,
   SPAWN_INTERVAL,
-  ENEMY_SPEED,
   ENEMY_FIRE_INTERVAL,
   MAX_FIREBALL_SLOTS,
   type GameState,
@@ -45,9 +44,8 @@ import {
 import * as gameRules from '../../src/core/gameRules'
 import { stepGame } from '../../src/core/sim'
 import { NO_INPUT } from '../../src/core/input'
-import { normalize, sub, scale, type Vec3, type Mat4 } from '@arcade/shared/math3d'
+import { type Vec3, type Mat4 } from '@arcade/shared/math3d'
 
-const COCKPIT: Vec3 = [0, 0, 0]
 const DT = 0.05
 const IDENTITY: Mat4 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 /** Two seconds of frames — long enough that every in-window TIE gets several
@@ -59,21 +57,14 @@ const TWO_SECONDS = Math.round(2 / DT)
 // missing-feature RED — never a module-load crash (gameRules already exists).
 interface WaveParams {
   spawnInterval: number
-  enemySpeed: number
   enemyFireInterval: number
   maxConcurrentShots: number
 }
 const waveParams = (gameRules as unknown as { waveParams: (wave: number) => WaveParams }).waveParams
 
-/** A TIE squarely in its strafe/pass window: approaching the cockpit at `speed`,
- * range > TIE_NEAR_BOUND, in front of the camera (mirrors the 9-4 helper). */
-const tieToward = (pos: Vec3, speed = ENEMY_SPEED): Enemy => ({
-  pos,
-  vel: scale(normalize(sub(COCKPIT, pos)), speed),
-  kind: 'tie',
-  orient: IDENTITY,
-  bank: 0,
-})
+/** A TIE squarely in its strafe/pass window: range > TIE_NEAR_BOUND, in front of
+ * the camera (mirrors the 9-4 helper). Holds station (no VM) at `pos`. */
+const tieToward = (pos: Vec3): Enemy => ({ pos, kind: 'tie', orient: IDENTITY })
 
 /** Three fighters spread across the sky, all in their pass window — range beyond
  * the restored TIE_NEAR_BOUND (2048, sw4-1) so they are "not too close" and strafe.
@@ -150,15 +141,16 @@ describe("Story 9-5 — waveParams.maxConcurrentShots ports the RE'd fire table 
 })
 
 describe('Story 9-5 — the existing scalar ramp is untouched (AC3 — no flight regression)', () => {
-  it("wave 1 still reproduces today's speed / spawn / fire-interval baseline exactly", () => {
+  it("wave 1 still reproduces today's spawn / fire-interval baseline exactly", () => {
     const p = waveParams(1)
     expect(p.spawnInterval).toBe(SPAWN_INTERVAL)
-    expect(p.enemySpeed).toBe(ENEMY_SPEED)
     expect(p.enemyFireInterval).toBe(ENEMY_FIRE_INTERVAL)
   })
 
-  it('still speeds up the approach and tightens fire cadence on later waves (8-6 ramp intact)', () => {
-    expect(waveParams(5).enemySpeed).toBeGreaterThan(waveParams(1).enemySpeed)
+  // sw7-23: the `enemySpeed` ramp was retired (it only seeded the unread `Enemy.vel`).
+  // The surviving difficulty axes still tighten with the wave.
+  it('still tightens spawn + fire cadence on later waves (8-6 ramp intact)', () => {
+    expect(waveParams(5).spawnInterval).toBeLessThan(waveParams(1).spawnInterval)
     expect(waveParams(5).enemyFireInterval).toBeLessThan(waveParams(1).enemyFireInterval)
   })
 })

@@ -47,11 +47,11 @@
 // they fail.
 
 import { describe, it, expect } from 'vitest'
-import { spawnTrenchObstacles } from '../../src/core/trench-obstacles'
 import { initialState, type GameState, type TrenchObstacle } from '../../src/core/state'
 import { stepGame, enterPhase } from '../../src/core/sim'
 import { NO_INPUT, type Input } from '../../src/core/input'
 import {
+  TRENCH_HALF_W,
   TRENCH_EYE_MIN,
   TRENCH_EYE_MAX,
   TRENCH_EYE_SEAT,
@@ -65,11 +65,13 @@ const DOWN: Input = { aimX: 0, aimY: -1, fire: false }
 const LEFT: Input = { aimX: -1, aimY: 0, fire: false }
 const RIGHT: Input = { aimX: 1, aimY: 0, fire: false }
 
-/** The catwalk hazard exactly as the game spawns it (station 4, y-offset intact). */
+/** The wall force-field hazard the viewpoint tests fly against: a LEFT-wall field at
+ *  the seated pilot's height, just downrange. MIGRATED (sw7-22 / R6d): force fields are
+ *  now STREAMED from the wedge grid, not carried by `spawnTrenchObstacles`, so this
+ *  fixture builds the field it needs directly — exactly as trench-force-field-hazard.test.ts
+ *  stages it — instead of pulling a placeholder catwalk out of the obstacle table. */
 function spawnedCatwalk(): TrenchObstacle {
-  const catwalk = spawnTrenchObstacles().find((o) => o.kind === 'catwalk')
-  if (!catwalk) throw new Error('expected a catwalk in the trench obstacle table')
-  return catwalk
+  return { kind: 'catwalk', pos: [-TRENCH_HALF_W, TRENCH_EYE_SEAT, -2000] }
 }
 
 /**

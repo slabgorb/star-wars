@@ -8,7 +8,6 @@
 import { length, sub, add, scale, dot, normalize, type Vec3 } from '@arcade/shared/math3d'
 import {
   SPAWN_INTERVAL,
-  ENEMY_SPEED,
   ENEMY_FIRE_INTERVAL,
   FIRE_MASK,
   FIRE_THRESHOLD,
@@ -18,6 +17,21 @@ import {
  * single source of truth shared by the camera (shell/render.ts) and the aim
  * below, so a bolt flies toward exactly what the crosshair covers. */
 export const FOV_Y = Math.PI / 3
+
+/** The player's cockpit in SPACE — the world origin. */
+const COCKPIT: Vec3 = [0, 0, 0]
+
+/** Unit vector from a world position back toward the cockpit at the origin.
+ *
+ * ⚠ SPACE ONLY — the ship IS the world origin here (the TIE flight model's homing
+ * target). It is NOT the surface's ship: `stepSurface` aims its fire with
+ * `surfaceShip(altitude)` instead. Retargeting this helper would break space.
+ *
+ * The single shared copy (sw7-23): `spawnTie`'s initial heading and `aimOrient`'s
+ * VM steer target (sim.ts), and `computeStatus`'s C_AS/C_PN geometry (tie-status.ts). */
+export function toCockpit(pos: Vec3): Vec3 {
+  return normalize(sub(COCKPIT, pos))
+}
 
 /**
  * Unit firing direction for a given yoke position. At rest (0,0) it points
@@ -146,8 +160,6 @@ export function beamHit(
 export interface WaveParams {
   /** Seconds between TIE spawns into a free slot (tightens with the wave). */
   spawnInterval: number
-  /** TIE approach speed, units/second (rises with the wave). */
-  enemySpeed: number
   /** Seconds between enemy fireballs (tightens with the wave). */
   enemyFireInterval: number
   /** How many TIE fireballs may share the sky at once — the RE'd per-wave
@@ -206,7 +218,6 @@ export function waveParams(wave: number): WaveParams {
   const fireIndex = Math.max(0, Math.min(wave - 1, FIRE_CONCURRENCY.length - 1))
   return {
     spawnInterval: Math.max(SPAWN_INTERVAL_FLOOR, SPAWN_INTERVAL / ramp),
-    enemySpeed: ENEMY_SPEED * ramp,
     enemyFireInterval: Math.max(ENEMY_FIRE_INTERVAL_FLOOR, ENEMY_FIRE_INTERVAL / ramp),
     maxConcurrentShots: FIRE_CONCURRENCY[fireIndex],
     fireMask: FIRE_MASK[fireIndex],

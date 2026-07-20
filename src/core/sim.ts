@@ -14,6 +14,9 @@
 // rule helpers — there is no ad-hoc geometry in here.
 
 import { initialState } from './state'
+import { stepAttract } from './attract'
+import { stepStarfield } from './starfield'
+import { coachingFor } from './coaching'
 import { mazeForWave } from './surfaceMazes'
 import type { GameState, Projectile, Enemy, Turret, Phase, TrenchObstacle, DyingTie, GroundDebris } from './state'
 import {
@@ -78,7 +81,6 @@ import {
   TIE_THRUST_RATE,
   TIE_THRUST_RATE_SLOW,
   TIE_NEAR_BOUND,
-  TIE_EXIT_RANGE,
   BONUS_FLASH_MAX,
   BONUS_FLASH_DECAY,
 } from './state'
@@ -99,11 +101,12 @@ import {
   type Vec3,
   type Mat4,
 } from '@arcade/shared/math3d'
-import { aimDirection, beamHit, collides, waveParams } from './gameRules'
+import { aimDirection, beamHit, collides, toCockpit, waveParams } from './gameRules'
 import { createRng, nextInt, type Rng } from '@arcade/shared/rng'
 import { stepNameEntry } from '@arcade/shared/name-entry'
 import {
   spawnTrenchObstacles,
+  streamForceFields,
   TRENCH_TURRET_SCORE,
   TRENCH_SQUARE_SCORE,
   OBSTACLE_HIT_RADIUS,
@@ -146,9 +149,23 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // loop. Active play is the fall-through below (mode === 'playing').
   if (state.mode === 'attract') {
     if (input.start) return startRun(state)
-    return { ...state, t, events: [] }
+    // The idle screen is not idle: the page machine rotates BNR→INS→SCR→HIS with the
+    // intro crawl receding through the banner (sw7-10 / H-017 + H-018), over the same
+    // drifting starfield the flight phases fly through (M-015).
+    return finalizeFrame(state, {
+      ...state,
+      t,
+      attract: stepAttract(state.attract, dt),
+      events: [],
+    })
   }
   if (state.mode === 'gameover' || state.gameOver) {
+    // The end-of-run hold is still a FRAME, not a freeze (sw7-10 rework, finding F3).
+    // Every return below goes through `finalizeFrame` for the same reason the
+    // active-play returns do: the WSSTAR field keeps sliding past the eye — the cabinet
+    // never shows a dead sky — and `coaching` is re-derived rather than carried, which
+    // is what actually clears the hint (`coachingFor` returns null once `gameOver`).
+    // Leaving this branch outside the closing pass is what froze both.
     const startHeld = input.start === true
     if (state.entry !== null) {
       // SH2-13: the ARMED initials entry gates the exit. A start press can
@@ -159,7 +176,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       // latch) never commits. The commit is announced as a GameEvent; the
       // shell owns the table and persists on the cue.
       if (startHeld && !state.startPrev && state.entry.initials.length === MAX_INITIALS) {
-        return {
+        return finalizeFrame(state, {
           ...state,
           mode: 'attract',
           gameOver: false,
@@ -169,14 +186,23 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
           aimX,
           aimY,
           events: [{ type: 'name-entered', name: state.entry.initials }],
-        }
+        })
       }
-      return { ...state, startPrev: startHeld, t, aimX, aimY, events: [] }
+      return finalizeFrame(state, { ...state, startPrev: startHeld, t, aimX, aimY, events: [] })
     }
     if (startHeld) {
-      return { ...state, mode: 'attract', gameOver: false, startPrev: startHeld, t, aimX, aimY, events: [] }
+      return finalizeFrame(state, {
+        ...state,
+        mode: 'attract',
+        gameOver: false,
+        startPrev: startHeld,
+        t,
+        aimX,
+        aimY,
+        events: [],
+      })
     }
-    return { ...state, startPrev: startHeld, t, aimX, aimY, events: [] }
+    return finalizeFrame(state, { ...state, startPrev: startHeld, t, aimX, aimY, events: [] })
   }
 
   // Clone the RNG so the step never mutates its input — purity intact.
@@ -283,8 +309,9 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // Each phase runs its own combat, then `progress` checks the kill quota and
   // drops the run into the next phase once the wave is cleared. The trench is
   // terminal here — its gameplay is story 8-5; for now it just holds safely.
-  if (state.phase === 'surface') return finalizeScore(state, progress(stepSurface(state, input, dt, common)))
-  if (state.phase === 'trench') return finalizeScore(state, stepTrench(state, common, dt))
+  if (state.phase === 'surface')
+    return finalizeFrame(state, finalizeScore(state, progress(stepSurface(state, input, dt, common))))
+  if (state.phase === 'trench') return finalizeFrame(state, finalizeScore(state, stepTrench(state, common, dt)))
 
   // The wave's difficulty knobs: later waves spawn TIEs sooner, send them in
   // faster, and lob fireballs more often (gameRules.waveParams; wave 1 is today's
@@ -369,7 +396,6 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     .map((e) => applyManeuver(e, e.vm?.twist ?? 0, e.vm?.move ?? 0, dt))
     // Decay Darth's post-hit glow (the A$GLW window); plain TIEs never carry it.
     .map((e) => (e.glow ? { ...e, glow: Math.max(0, e.glow - dt) } : e))
-    .filter((e) => !(e.peeling && length(e.pos) > TIE_EXIT_RANGE))
   let spawnTimer = state.spawnTimer - dt
   let spawnCount = state.spawnCount
   if (spawnTimer <= 0 && movedEnemies.length < WAVE_SIZE) {
@@ -377,7 +403,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
     // the deterministic per-slot index, advanced only when a fighter actually spawns.
     // The counter also indexes the wave's TSPWAV plan (sw7-12) so the RTH slot spawns
     // Darth; the plan is per-wave, walked 0-based from SP.WAV = state.wave − 1.
-    movedEnemies.push(spawnTie(rng, params.enemySpeed, spawnCount, state.wave - 1))
+    movedEnemies.push(spawnTie(rng, spawnCount, state.wave - 1))
     spawnCount += 1
     spawnTimer = params.spawnInterval
   }
@@ -511,7 +537,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   const lives = spaceHit.lives
   pushFarewell(events, lives) // fatal hit → the end-of-game farewell (sw7-8, U-017)
 
-  return finalizeScore(
+  const stepped = finalizeScore(
     state,
     progress({
       ...state,
@@ -541,6 +567,28 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       frameAcc,
     }),
   )
+  return finalizeFrame(state, stepped)
+}
+
+/**
+ * The frame's closing pass over the whole-screen furniture (sw7-10), run at every
+ * active-play return alongside `finalizeScore` so no phase can forget it:
+ *
+ * - the WSSTAR field slides past the eye (M-015 — the cabinet drives it in flight too,
+ *   `LDD FRAME / JSR LSLD7 / STD ST.UX`, WSMAIN.MAC:2525-2528);
+ * - the coaching hint is RE-DERIVED from the finished frame (H-022), never accumulated,
+ *   so it appears and clears exactly when the ROM's gates say it should.
+ *
+ * `dt` is recovered as the frame's own elapsed time. Every active-play path advances
+ * `t` by exactly `dt` before returning, so this is the step's real `dt` and not an
+ * approximation of it.
+ */
+export function finalizeFrame(prev: GameState, next: GameState): GameState {
+  return {
+    ...next,
+    starfield: stepStarfield(next.starfield, next.t - prev.t),
+    coaching: coachingFor(next),
+  }
 }
 
 /**
@@ -1544,7 +1592,17 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
     // Seeded per-run variation (sw3-7): the trench chain's picked tail is drawn
     // from the run RNG via a LOCAL cursor (createRng(s.rng.seed)), so different
     // runs get different obstacle chains while `s.rng` stays unmutated (purity).
-    trenchObstacles: phase === 'trench' ? spawnTrenchObstacles(createRng(s.rng.seed)) : [],
+    // The turret/square furniture PLUS the wedge grid's streamed wall force fields
+    // (sw7-22 / R6d) — both seeded per-run from a LOCAL RNG cursor so `s.rng` stays
+    // unmutated (purity). The force-field grid is data-driven off the wave's pie, so
+    // PIE1 (all guns) carries none until a later wave.
+    trenchObstacles:
+      phase === 'trench'
+        ? [
+            ...spawnTrenchObstacles(createRng(s.rng.seed)),
+            ...streamForceFields(romWave0(s.wave), createRng(s.rng.seed)),
+          ]
+        : [],
     // The "Use the Force" clean-run tell resets on every phase entry, like
     // phaseKills/trenchScrollZ (fidelity epic, task 4) — `clearRun` below
     // re-stamps `forceBonusAwardedAt` after this reset so the banner survives
@@ -1602,15 +1660,16 @@ export function enterPhase(s: GameState, phase: Phase): GameState {
   }
 }
 
-/** A fresh exhaust port: centred on the run, at the wave's chain-derived BS.PLC
- *  offset down −Z (finding B-009), clamped into the beam's `#7000` forward reach
- *  (TRENCH_FAR — WSLAZR CLBLZ) so the port that must exist to scroll is seated at
- *  the farthest point still under the beam. The location is read from the wedge
- *  chain (`trenchPortDistance`), not the old fixed −2400; the run RNG is threaded
- *  through a LOCAL cursor so the seed is never consumed here (core purity),
+/** A fresh exhaust port: centred on the run, at the wave's real BS.PLC distance down
+ *  −Z (finding B-009) — the full chain-derived length (`trenchPortDistance`, ≈327,680
+ *  on the balanced pies), NOT the old TRENCH_FAR port-clamp stub (sw7-22 / R6d). The
+ *  pilot now flies the full ~21s channel; the port only becomes SHOOTABLE in the final
+ *  ~1.8s because the beam is clipped at `#7000` = TRENCH_FAR (WSLAZR CLBLZ) in the
+ *  `beamHit` port test — that clip, not the spawn, is the beam reach. The run RNG is
+ *  threaded through a LOCAL cursor so the seed is never consumed here (core purity),
  *  matching how `enterPhase` seeds the trench obstacles. */
 function spawnPort(baseWave: number, rng: Rng): { pos: Vec3 } {
-  return { pos: [0, 0, -Math.min(trenchPortDistance(baseWave, rng), TRENCH_FAR)] }
+  return { pos: [0, 0, -trenchPortDistance(baseWave, rng)] }
 }
 
 /**
@@ -1801,13 +1860,13 @@ const SPAWN_LATERALS: ReadonlyArray<readonly [number, number]> = [
   [0, 2 * ROM_LATERAL_UNIT], // 1D3
 ]
 
-/** A fresh TIE spawned far down −Z at the authentic depth, aimed at the cockpit at
- * the wave's approach speed (gameRules.waveParams). The LATERAL comes from the ROM
- * TBG table walked in order by `spawnIndex` (sw4-1, spec §A) — so every fighter
- * appears on one of the authentic {0, ±1024, ±2048} starting slots. Task 4 (sw7
- * TIE-VM wiring) retired the invented swoop `bank` (moveEnemy is gone; the VM
- * governs the approach), so `spawnTie` no longer seeds it and draws no RNG. */
-export function spawnTie(_rng: Rng, speed: number, spawnIndex: number, spaceWave: number): Enemy {
+/** A fresh TIE spawned far down −Z at the authentic depth, its nose aimed at the
+ * cockpit. The LATERAL comes from the ROM TBG table walked in order by `spawnIndex`
+ * (sw4-1, spec §A) — so every fighter appears on one of the authentic {0, ±1024,
+ * ±2048} starting slots. Flight is VM-driven (applyManeuver); `spawnTie` seeds only
+ * the initial facing and the choreography VM, and draws no RNG (the invented swoop
+ * `bank` and the unread `Enemy.vel` were retired in sw7-23). */
+export function spawnTie(_rng: Rng, spawnIndex: number, spaceWave: number): Enemy {
   const [x, y] = SPAWN_LATERALS[spawnIndex % SPAWN_LATERALS.length]
   const pos: Vec3 = [x, y, -TIE_SPAWN_DISTANCE]
   const dir = toCockpit(pos)
@@ -1824,7 +1883,7 @@ export function spawnTie(_rng: Rng, speed: number, spawnIndex: number, spaceWave
   // default to the first mook script, '1A1' (TCH1A1) — the same fallback the
   // `?? 'TIE'` shape above uses.
   const vm = initVm(choreoPc(entry?.choreography ?? '1A1'))
-  return { pos, vel: scale(dir, speed), kind, orient: lookRotation(dir), vm, firedGun: false }
+  return { pos, kind, orient: lookRotation(dir), vm, firedGun: false }
 }
 
 /**
@@ -1873,21 +1932,3 @@ export function shipPoint(s: GameState): Vec3 {
   }
 }
 
-/** Unit vector from a world position back toward the cockpit at the origin.
- *
- * ⚠ SPACE ONLY — this is the TIE flight model's homing target, where the ship really is the
- * origin. It is NOT the surface's ship: `stepSurface` aims its fire with `surfaceShip(altitude)`
- * instead. Retargeting this helper would break space the way the surface was broken before sw7-16.
- *
- * Both `moveEnemy` and `tests/core/tie-peel-away.test.ts` (story 9-3) — the guard that used to
- * catch a regression here — are gone (sw7 Task 4: VM-driven flight retired the invented
- * swoop/weave `moveEnemy` for space; see `docs/superpowers/specs/
- * 2026-07-18-star-wars-tie-vm-fire-wiring-design.md` §5). This module's remaining caller is
- * `aimOrient`, which `applyManeuver` uses for the VM's `AIM_PLAYER`/`AIM_AHEAD` steer-toward-target
- * rotation — exercised by `tests/core/tie-vm-flight.test.ts`. (`tie-status.ts`'s `computeStatus`
- * derives `C_AS`/`C_PN` from an equivalent inline `normalize(sub(COCKPIT, e.pos))`, not a call to
- * this function — same math, separate copy; see `tests/core/tie-status.test.ts`.) `spawnTie`'s use
- * of `toCockpit` for the initial `dir` remains unguarded by any test in the repo, as before. */
-function toCockpit(pos: Vec3): Vec3 {
-  return normalize(sub(COCKPIT, pos))
-}

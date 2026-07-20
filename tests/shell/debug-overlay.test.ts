@@ -101,7 +101,7 @@ function makeCtx() {
   return { ctx: ctx as unknown as CanvasRenderingContext2D, segments, arcs, texts }
 }
 
-const tieAt = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
+const tieAt = (pos: Vec3): Enemy => ({ pos, kind: 'tie', orient: IDENTITY })
 
 // A space-phase run (mode 'playing') so the overlay has on-screen TIE models to
 // ring. Space puts the camera at the origin looking down -Z, so a TIE in front is

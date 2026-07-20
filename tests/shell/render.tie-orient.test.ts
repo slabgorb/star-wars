@@ -59,7 +59,7 @@ function makeCtx() {
 /** A single-TIE space wave with the enemy at a fixed front position, differing
  *  only in its `orient`, so any drawn difference is attributable to orientation. */
 const sceneWith = (orient: Mat4): GameState => {
-  const enemy: Enemy = { pos: [0, 0, -1200], vel: [0, 0, 0], kind: 'tie', orient }
+  const enemy: Enemy = { pos: [0, 0, -1200], kind: 'tie', orient }
   return { ...initialState(1983), enemies: [enemy] }
 }
 

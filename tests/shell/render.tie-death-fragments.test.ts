@@ -88,7 +88,7 @@ const aimAt = (pos: Vec3): { aimX: number; aimY: number } => {
   const ndc = transform(proj, pos)
   return { aimX: ndc[0], aimY: ndc[1] }
 }
-const tieStill = (pos: Vec3): Enemy => ({ pos, vel: [0, 0, 0], kind: 'tie', orient: IDENTITY })
+const tieStill = (pos: Vec3): Enemy => ({ pos, kind: 'tie', orient: IDENTITY })
 /** A lone TIE with spawns and enemy fire suppressed — the only thing that can
  *  change the sky is the player's own fire. */
 const loneWave = (enemy: Enemy, over: Partial<GameState> = {}): GameState => ({
@@ -138,6 +138,11 @@ const emptyBaseline = (like: GameState): GameState => ({
   lives: like.lives,
   phaseKills: like.phaseKills,
   t: like.t,
+  // sw7-10 / H-022: a first-wave space frame also carries a coaching hint, which is
+  // several dozen stroked glyph edges. It is backdrop for THIS suite's purposes, so it
+  // is matched out like the score/lives/phaseKills above — otherwise the burst measure
+  // is really measuring "SHOOT FIREBALLS".
+  coaching: like.coaching,
   aimX: 0,
   aimY: 0,
 })
@@ -185,10 +190,14 @@ describe('sw3-8 — a destroyed TIE breaks into a visible fragment burst', () =>
 
   it('the burst is BOUNDED — it clears within a few seconds, leaving no permanent cloud', () => {
     const postKill = destroyTie()
-    const base = segCount(emptyBaseline(postKill))
 
     let s: GameState = { ...postKill, projectiles: [], enemyShots: [] }
     for (let i = 0; i < 300; i++) s = advanceEmpty(s) // ~5s at 60fps
+
+    // Baseline taken against the FINAL frame, not the kill frame: the coaching hint
+    // alternates every 16 game frames (SFB ⇄ STF, different lengths), so a baseline
+    // built 300 steps earlier could be matching the wrong string.
+    const base = segCount(emptyBaseline(s))
 
     // A death animation must be transient: once it has fully aged out, the sky is
     // back to the empty baseline (a burst that never ends would be a regression).

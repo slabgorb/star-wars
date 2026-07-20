@@ -131,7 +131,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 682,
+      "line": 723,
       "verbatim": "const FIREBALL_FRAMES: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = ["
     }
   },
@@ -250,7 +250,7 @@
     },
     "ours": {
       "file": "src/shell/render.ts",
-      "line": 231,
+      "line": 238,
       "verbatim": "const PORT_GLOW = GLOW_FOR['Exhaust Port'] // exhaust-port target amber (shared)"
     },
     "recommendation": "wont_fix",

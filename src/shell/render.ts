@@ -44,6 +44,13 @@ import {
   TRENCH_SQUARE,
   TRENCH_CATWALK,
 } from '../core/models'
+import { STAR_FAR, type Star } from '../core/starfield'
+import {
+  INSTRUCTIONS_HEADER,
+  INSTRUCTIONS_BODY,
+  SCORING_HEADER,
+  SCORING_ROWS,
+} from '../core/attract'
 import { surfaceGrid } from '../core/surface-grid'
 import { trenchChannel } from '../core/trench-channel'
 import { trenchWallDetail } from '../core/trench-detail'
@@ -370,6 +377,34 @@ export function trenchPlacement(state: GameState): { floor: Vec3; port: Vec3 } {
 const HUD_TEXT_PX = 18
 const BANNER_TEXT_PX = 48
 const TITLE_TEXT_PX = 64
+// sw7-10 attract-page type. The brief and the score table are dense multi-line pages,
+// so they set smaller and tighter than the HUD.
+const PAGE_TEXT_PX = 14
+const PAGE_LINE_H = 26
+/** Advance of one glyph as a fraction of the cap height, for laying the fixed-width ROM
+ *  page strings into columns. Matches the VGMSGA cell the shared font ships. */
+const PAGE_CHAR_W = 0.62
+/** Widest line in the flight brief (TCMES.MAC:554-568) — sets the block's left margin. */
+const INSTRUCTIONS_COLS = 35
+const PAGE_HEADER_GLOW = '#ff3b30' // VGCRED — the brief is drawn RED (TCMES.MAC:553-568)
+const SCORING_GLOW = '#c77dff' // VGCPRP — the score table is PURPLE (TCMES.MAC:573-581)
+// The intro crawl's recession. A line is born big and low (just off the bottom) and
+// travels up to CRAWL_VANISH_FRAC, shrinking to CRAWL_FAR_PX as it goes.
+//
+// Both the row and the type size taper LINEARLY in the line's remaining life rather than
+// through a true 1/depth perspective. A strict perspective looks right for two or three
+// lines but collapses with eight: measured on the running game, the six late-cycle
+// survivors landed inside 36 px of each other at 3.5 px type — a solid unreadable bar.
+// Linear keeps ~30 px of leading between consecutive lines across the whole run. The
+// cabinet gets away with a harder taper because its crawl does not drift at a constant
+// rate at all (it FREEZES between BN.CNT $E0 and $160, then accelerates 4× to clear the
+// screen — TCMES.MAC:395-420); that pacing machine is not ported, so a constant-rate
+// crawl needs the gentler curve to stay legible. See the sw7-10 Delivery Findings.
+const CRAWL_GLOW = '#ffd60a'
+const CRAWL_NEAR_PX = 26
+const CRAWL_FAR_PX = 10
+const CRAWL_VANISH_FRAC = 0.46
+const CRAWL_NEAR_FRAC = 1.02
 
 // Inter-glyph tracking for the thin caps-only face — it reads cramped at zero.
 // glowText's old canvas tracking was 0.1em (0.1 × the font px: 1.80/4.80/6.40px
@@ -388,6 +423,11 @@ export function render(
 ): void {
   ctx.fillStyle = '#000'
   ctx.fillRect(0, 0, w, h)
+
+  // The WSSTAR field goes down FIRST, so everything else flies in front of it — the
+  // attract pages and all three flight phases alike (sw7-10 / M-015; the cabinet drives
+  // the field in flight too, WSMAIN.MAC:2525-2528).
+  drawStarfield(ctx, state.starfield, w, h)
 
   const proj = perspective(FOV_Y, w / h, NEAR, FAR)
   // The cockpit IS the camera (story 11-2): one view matrix from sim state places
@@ -530,13 +570,14 @@ export function render(
   // screen at idle, the game-over board after. The 3D scene above renders behind
   // all of them (an empty starfield on the framing screens).
   if (state.mode === 'attract') {
-    drawAttract(ctx, highScores, w, h)
+    drawAttract(ctx, state, highScores, w, h)
   } else if (state.mode === 'gameover') {
     drawGameOver(ctx, state, highScores, w, h)
   } else {
     drawCrosshair(ctx, state, w, h)
     drawHudHeader(ctx, state, w, h)
     drawTrenchBanners(ctx, state, w, h)
+    drawCoaching(ctx, state, w, h)
   }
 }
 
@@ -1090,21 +1131,127 @@ function glowLine(
   ctx.shadowBlur = 0
 }
 
+/**
+ * The in-flight coaching hint (sw7-10 / H-022) — whatever `state.coaching` holds this
+ * frame, drawn on the ROM's VGRW7 text row high in the cockpit view.
+ *
+ * The shell paints the string and nothing more: WHICH message, and whether there is one
+ * at all, is entirely the core's ruling (`coachingFor`). That is what keeps the stale
+ * "DEATH STAR BONUS EARNED" call-site comment (WSMAIN.MAC:3362) out of the cabinet —
+ * there is no second place where a message string could be invented.
+ */
+function drawCoaching(ctx: CanvasRenderingContext2D, state: GameState, w: number, h: number): void {
+  if (state.coaching === null) return
+  glowText(ctx, state.coaching, w / 2, h * 0.2, HUD_TEXT_PX, 'center', GLOW, 12)
+  ctx.shadowBlur = 0
+}
+
+/**
+ * The 50-star WSSTAR backdrop (sw7-10 / M-015).
+ *
+ * The cabinet draws each star as the single-point glyph VGSTAR in white (VGCWHT,
+ * WSSTAR.MAC:113) — so this is a plain screen-space point divide, NOT a wireframe
+ * through the camera: `state.starfield` already carries each star's depth AHEAD of the
+ * eye, and the core slides the field past every step. A star nearer the eye sits further
+ * out from the vanishing point and burns a touch brighter, which is what sells the drift.
+ */
+function drawStarfield(ctx: CanvasRenderingContext2D, stars: readonly Star[], w: number, h: number): void {
+  const focal = w / 2
+  for (const s of stars) {
+    if (s.z <= 0) continue // behind the eye — nothing to project
+    const sx = w / 2 + (s.x / s.z) * focal
+    const sy = h / 2 - (s.y / s.z) * focal
+    if (sx < 0 || sx >= w || sy < 0 || sy >= h) continue // streamed off the edge
+    // Nearer stars read brighter (the ROM's ST.BRT outside-brightness term).
+    const near = Math.max(0, Math.min(1, 1 - s.z / STAR_FAR))
+    ctx.fillStyle = `rgba(244, 244, 255, ${(0.35 + 0.65 * near).toFixed(3)})`
+    ctx.fillRect(Math.round(sx), Math.round(sy), 1, 1)
+  }
+}
+
 /** The attract/title screen: the marquee, a start prompt, and the high-score board. */
 function drawAttract(
   ctx: CanvasRenderingContext2D,
+  state: GameState,
   highScores: HighScoreTable<'wave'>,
   w: number,
   h: number,
 ): void {
+  // sw7-10 / H-017: the idle screen ROTATES through four pages (WSMAIN.MAC:335-338),
+  // it is not one static marquee. The core owns which page is up and how long it has
+  // been there; the shell only paints whichever one it is handed.
+  switch (state.attract.page) {
+    case 'instructions':
+      drawInstructionsPage(ctx, w, h)
+      break
+    case 'scoring':
+      drawScoringPage(ctx, w, h)
+      break
+    case 'hiscore':
+      drawHighScoreBoard(ctx, highScores, w, h)
+      break
+    default:
+      drawBannerPage(ctx, state, w, h)
+  }
+
+  ctx.shadowBlur = 0
+}
+
+/** PH$BNR — the marquee, the start invitation, and the receding intro crawl. */
+function drawBannerPage(ctx: CanvasRenderingContext2D, state: GameState, w: number, h: number): void {
   glowText(ctx, 'STAR WARS', w / 2, h * 0.26, TITLE_TEXT_PX, 'center', GLOW, 28)
   // sw7-3 H-010: the ROM's start invitation is message STR (TCMES.MAC:549), not
   // a 'PRESS START' string the cabinet never had.
   glowText(ctx, 'PULL TRIGGER TO START', w / 2, h * 0.38, HUD_TEXT_PX, 'center', BOLT_GLOW, 12)
 
-  drawHighScoreBoard(ctx, highScores, w, h)
+  // sw7-10 / H-018 — "RECEDE INTO THE DISTANCE … THE 'STAR WARS' EFFECT" (TCMES.MAC:167,
+  // :231). A line is born BIG and low, then shrinks away toward a vanishing point as it
+  // recedes. `size` (0→1) is the ROM's scale accumulator, and it runs that way round:
+  // the AVG scale field is a shift count, so a SMALLER field draws BIGGER — which the
+  // ROM states outright at WSMAIN.MAC:3178, `LDD #VGSCAL-100 ;DOUBLE SIZE`. So the
+  // accumulator counting UP from 0 (SPMON) is the line getting SMALLER, not larger.
+  // (:3176 is `JSR VWMTWZ`; the anchor was off by two and is corrected here.)
+  //
+  // `remaining` runs 1 at birth (near, big, low) to 0 at retirement (the vanishing
+  // point). Drawn FAR first so nearer lines overlap them, as the cabinet stacks them.
+  for (const line of [...state.attract.crawl].sort((a, b) => b.size - a.size)) {
+    const remaining = 1 - line.size
+    const px = CRAWL_FAR_PX + (CRAWL_NEAR_PX - CRAWL_FAR_PX) * remaining
+    const y = h * (CRAWL_VANISH_FRAC + (CRAWL_NEAR_FRAC - CRAWL_VANISH_FRAC) * remaining)
+    glowText(ctx, line.text, w / 2, y, px, 'center', CRAWL_GLOW, 10)
+  }
+}
 
-  ctx.shadowBlur = 0
+/** PH$INS — the flight brief, MS.FLI..FLZ (TCMES.MAC:553-568), drawn RED like the cabinet. */
+function drawInstructionsPage(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  glowText(ctx, INSTRUCTIONS_HEADER, w / 2, h * 0.12, HUD_TEXT_PX, 'center', PAGE_HEADER_GLOW, 12)
+  // The cabinet sets this brief LEFT-aligned on two x-coordinates: a numbered item opens
+  // at -444 and its continuation lines sit at -420 (TCMES.MAC:554-568). That 24-unit step
+  // is ≈ one character at the ROM's ~25-units-per-glyph pitch, so the paragraphs read as
+  // hanging indents. Centring every line (which is what this page did first) throws that
+  // structure away and leaves a ragged diamond — so the block is set from one margin and
+  // the continuations are pushed in by a single character.
+  const char = PAGE_TEXT_PX * PAGE_CHAR_W
+  const left = w / 2 - (INSTRUCTIONS_COLS * char) / 2
+  let y = h * 0.2
+  for (const line of INSTRUCTIONS_BODY) {
+    const numbered = /^\d/.test(line)
+    glowText(ctx, line, numbered ? left : left + char, y, PAGE_TEXT_PX, 'left', PAGE_HEADER_GLOW, 6)
+    y += PAGE_LINE_H
+  }
+}
+
+/** PH$SCR — the per-enemy point table, MS.SCR..SCZ (TCMES.MAC:573-581), drawn PURPLE.
+ *  Each row is one fixed-width ROM string, so it is set LEFT-aligned from a common
+ *  margin: that is what keeps the point values in their column. */
+function drawScoringPage(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  glowText(ctx, SCORING_HEADER, w / 2, h * 0.16, BANNER_TEXT_PX, 'center', SCORING_GLOW, 18)
+  const left = w / 2 - (SCORING_ROWS[0].length * PAGE_TEXT_PX * PAGE_CHAR_W) / 2
+  let y = h * 0.3
+  for (const row of SCORING_ROWS) {
+    glowText(ctx, row, left, y, PAGE_TEXT_PX, 'left', SCORING_GLOW, 8)
+    y += PAGE_LINE_H * 1.35
+  }
 }
 
 /** The game-over screen: the banner, the run's final score, and the board. */

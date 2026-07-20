@@ -13,6 +13,8 @@ import type { Vec3, Mat4 } from '@arcade/shared/math3d'
 import type { GameEvent } from './events'
 import type { ChoreoVm } from './tie-vm'
 import { createRng, type Rng } from '@arcade/shared/rng'
+import { makeStarfield, type Star } from './starfield'
+import type { AttractState } from './attract'
 import { mazeForWave } from './surfaceMazes'
 import { TRENCH_EYE_SEAT, TRENCH_FAR } from './trench-channel'
 import { TRENCH_PORT_OFFSET } from './trench-wedges'
@@ -42,27 +44,15 @@ export interface Projectile {
 export interface Enemy {
   /** World-space position. The hit-test reads this. */
   pos: Vec3
-  /** World-space velocity (units/second), pointed at the cockpit. */
-  vel: Vec3
   /** Enemy type — a string union (no enum) so it stays cheap and serialisable.
    * `'darth'` is Darth Vader's TIE (ROM shape RTH): a distinct enemy that is
    * immortal to player fire and scores VADER_SCORE per hit (sw7-13, A-016/S-002). */
   kind: 'tie' | 'darth'
-  /** Per-enemy facing (sim state; render only applies it). Story 8-13 made it a
-   * look-toward-the-cockpit rotation; story 9-2 evolves it to BANK along the
-   * flight path — the look-along-heading frame rolled into the swoop. Maps the
-   * model's forward axis (+Z) onto the TIE's heading. */
+  /** Per-enemy facing (sim state; render only applies it). A rotation mapping the
+   * model's forward axis (+Z) onto the TIE's heading. Story 8-13 made it a
+   * look-toward-the-cockpit rotation; since PR #110 the choreography VM drives it —
+   * `applyManeuver` steers/rolls it from the live twist bits every frame. */
   orient: Mat4
-  /** Per-TIE lateral swoop bias (signed), seeded from the RNG at spawn: which way
-   * the fighter banks its approach arc so it curves in instead of flying straight
-   * at the cockpit (story 9-2, the RE'd flight model). Optional — collision/test
-   * fixtures that only exercise hit-tests omit it (treated as 0: no swoop). */
-  bank?: number
-  /** True once this TIE has begun its peel-away / fly-past exit (story 9-3): it
-   * completed its attack pass without landing a hit and is now thrusting outward,
-   * receding out of the play volume. Latched — an approaching TIE omits it (treated
-   * as false), so a fighter already peeling never re-homes on the cockpit. */
-  peeling?: boolean
   /** Post-hit cooldown in seconds — the ROM A$GLW "glowing from a hit" flag
    * (WSCPU.MAC:346-348,371). Set when Darth takes a scoring hit and decays each
    * frame; while it is > 0 CPHTSA leaves him alone, so a burst of fire scores 2,000
@@ -180,7 +170,10 @@ export const STARTING_LIVES = 6
 // has NO score-threshold life/shield grant (the 2026-07-15 audit's refuter did the
 // exhaustive BCD hunt). Those numbers are the Death-Star-SELECTION start-bonus
 // DISPLAY strings (TSCBN1..4 = 200k/400k/600k/800k, WSGAS.MAC:527-530; banner
-// MS.BON "DEATH STAR BONUS EARNED"), which the clone misread as a recurring ladder.
+// MS.BON, which is defined `<STARTING WAVE BONUS>` at TCMES.MAC:617 — the
+// "DEATH STAR BONUS EARNED" this comment used to quote is the STALE call-site
+// comment at WSMAIN.MAC:3362, never the on-screen text), which the clone misread
+// as a recurring ladder.
 // The genuine selection bonus is a separate, unmodelled feature (see the sw7-4
 // session Delivery Findings).
 /** The bonus/extra-life HUD flash (`bonusFlash`) re-arms to this on any score
@@ -272,20 +265,9 @@ export const SPAWN_DISTANCE = 1200
  * fresh fighter read as a screen-filling wall and the whole wave a turkey shoot.
  * At 31744 a spawn is a distant speck that swoops in and grows dramatically. */
 export const TIE_SPAWN_DISTANCE = 0x7c00 // 31744 — WSCPU STARTING LOCATIONS depth word
-/** TIE approach speed (units/second). PROVISIONAL (sw4-1, spec §A): the cabinet
- * advances the range by $200/tick, but that per-tick delta is NOT pinned to a
- * source-true units/second figure (docs/tie-flight-ai-model.md porting caveat).
- * This was applied as a units/second rate — the retired `moveEnemy` (sim.ts)
- * stepped pos by ENEMY_SPEED × dt — so it was frame-rate independent of TICK_HZ.
- * sw7 Task 4 retired `moveEnemy` for space: flight is now VM-driven (`applyManeuver`
- * thrusts at the §5.3 `TIE_THRUST_RATE`/`TIE_THRUST_RATE_SLOW` rates, gated by the
- * VM's FWD/FWD2 bits), so ENEMY_SPEED no longer drives ongoing motion — `spawnTie`
- * still threads it through as `speed` to seed the initial (now-vestigial, unread)
- * `Enemy.vel`. Kept at its tuned value pending a follow-up that either retires it
- * or re-derives an equivalent approach-speed target from the VM rates. The design
- * target below (spawn→near-bound transit time) is stale for the same reason;
- * retune in playtest. The 8-6 difficulty ramp still rides this as the wave-1 base. */
-export const ENEMY_SPEED = 10000
+// The ENEMY_SPEED approach-speed constant was retired in sw7-23. Once TIE flight
+// became VM-driven (PR #110), it only seeded the never-read `Enemy.vel`; difficulty
+// escalates through spawn + fire cadence (gameRules.waveParams), not a scalar speed.
 /** Cabinet game-frame rate (Hz) — the shared basis for every ROM per-game-frame
  *  rate ported from the 1983 source, which counts in game frames (fireball life
  *  `5,u = $40` = 64 frames; docs/tie-flight-ai-model.md §6). The PRIMARY SOURCE pins
@@ -476,38 +458,28 @@ export const TIE_THRUST_RATE = 0x200 * TICK_HZ
  *  basis scaled ÷64 = `$100` (256) per game frame (`sub_8D9D`+`sub_8AB6`), × TICK_HZ. */
 export const TIE_THRUST_RATE_SLOW = 0x100 * TICK_HZ
 
-// --- Wave 1 — TIE peel-away / fly-past lifecycle (story 9-3) -----------------
+// --- Wave 1 — TIE approach floor --------------------------------------------
 //
 // An un-killed TIE must not fly all the way into the cockpit and balloon to a
-// full-frame wall (the Image-1 defect). When it closes to TIE_NEAR_BOUND without
-// landing a hit, it completes its pass and PEELS AWAY — thrusting outward so it
-// flies past the cockpit and recedes out of the play volume, freeing its slot
-// (docs/tie-flight-ai-model.md §7). A near-dead-center fighter (lateral offset
-// inside the cockpit hit sphere) has no room to veer and still strafes through —
-// a genuine collision still costs a shield (story AC#3; the model itself has no
-// body collision, but the story deliberately keeps it — see the session
-// deviations). Authentic-FEEL values, single-sourced here like the rest of the
-// Wave-1 constants.
+// full-frame wall (the Image-1 defect). TIE_NEAR_BOUND is the "not too close"
+// floor: once a fighter closes inside it, it has finished its pass and stops both
+// homing and strafing (the §6 fire gate reads it as the strafe floor). The
+// peel-away / fly-past lifecycle (Enemy.peeling + a TIE_EXIT_RANGE recession cull)
+// this floor used to feed was retired in sw7-23 once flight became VM-driven — the
+// choreography VM (applyManeuver) governs the whole approach, so nothing recedes on
+// a latch. Authentic-FEEL values, single-sourced here like the Wave-1 constants.
 
-/** Range at which an un-killed TIE stops homing and peels away — the RESTORED ROM
- * fire/peel floor (sw4-1, spec §A). The authentic cabinet's "not too close" gate is
- * $800 = 2048 (WSCPU.MAC): a fighter that closes inside it has finished its pass and
- * stops both homing and strafing. It doubles as the strafe fire floor (sim.ts
- * inPassWindow) and bounds the nearest a peeling fighter ever gets, so no TIE renders
- * as a full-frame wall. Sits well outside the cockpit hit sphere and far inside the
- * spawn distance (31744). Replaces the compressed 350 the clone was carrying. */
-export const TIE_NEAR_BOUND = 0x800 // 2048 — WSCPU "not too close" fire/peel floor
-/** Once a PEELING TIE has receded past this range it has left the play volume and
- * its slot is freed. Only peeling fighters are culled (the cull is gated on the
- * peel latch), so this sits well outside the peel trigger (TIE_NEAR_BOUND) — it
- * bounds the recession, not the spawn. Fresh, still-approaching TIEs spawn far
- * beyond it (at TIE_SPAWN_DISTANCE = 31744) and are never culled on arrival.
- * Rescaled to the restored world (sw4-1): ~8000, comfortably above the 2048 near
- * bound and well inside the 31744 spawn depth. Tuning latitude (spec §A). */
-export const TIE_EXIT_RANGE = 8000
-// TIE_PEEL_SWEEP (the departing tangential sweep) was retired with `moveEnemy` in
-// the sw7 VM-flight wiring (task 4): the choreography VM now governs the approach,
-// so the invented peel-away sweep no longer exists.
+/** Range at which an un-killed TIE stops homing — the RESTORED ROM fire floor
+ * (sw4-1, spec §A). The authentic cabinet's "not too close" gate is $800 = 2048
+ * (WSCPU.MAC): a fighter that closes inside it has finished its pass and stops both
+ * homing and strafing. It doubles as the strafe fire floor (sim.ts inPassWindow), so
+ * no TIE renders as a full-frame wall. Sits well outside the cockpit hit sphere and
+ * far inside the spawn distance (31744). Replaces the compressed 350 the clone had. */
+export const TIE_NEAR_BOUND = 0x800 // 2048 — WSCPU "not too close" fire floor
+// TIE_EXIT_RANGE (the peel-away recession cull threshold) and TIE_PEEL_SWEEP (the
+// departing tangential sweep) were retired with `moveEnemy` / `Enemy.peeling` in the
+// sw7 VM-flight wiring: the choreography VM governs the approach, so there is no
+// invented peel-away lifecycle left to bound.
 
 // --- Wave 2 surface constants -----------------------------------------------
 //
@@ -1070,6 +1042,29 @@ export interface GameState {
    * game-frame `frameAcc` didn't consume yet. Required alongside `frame` for the
    * same tsc-exhaustiveness reason. Same citations as `frame`. */
   frameAcc: number
+  /** The 50-star WSSTAR field (sw7-10 / M-015) — the backdrop behind BOTH the attract
+   * screen and the space run, since the cabinet drives it in flight too (ST.UX off
+   * FRAME, WSMAIN.MAC:2525-2528). Laid out from the run seed and slid past the eye
+   * every step; see `src/core/starfield.ts` for the ROM anchors and for the two logged
+   * divergences (seeded rather than hardware-random placement, wrap rather than
+   * re-roll on recycle). */
+  starfield: readonly Star[]
+  /** The rotating attract machine — which idle page is up, how long it has been up,
+   * and the live intro-crawl lines (sw7-10 / H-017 + H-018). Advanced only while
+   * `mode === 'attract'`; see `src/core/attract.ts`. */
+  attract: AttractState
+  /** The in-flight coaching hint the shell should draw this frame, or `null`
+   * (sw7-10 / H-022). Derived fresh by `coachingFor` at EVERY step that returns
+   * through `finalizeFrame` — which is every active-play return, the attract
+   * rotation, and the end-of-run hold — so it is never accumulated and cannot get
+   * stuck on screen.
+   *
+   * The end-of-run hold is called out because it is where this claim was FALSE:
+   * that branch used to return early, outside the closing pass, so a wave-1 death
+   * left the hint frozen on screen permanently (sw7-10 rework, finding F3, pinned by
+   * `tests/core/coaching-clears-on-death.test.ts`). `coachingFor` gates on `gameOver`
+   * as well as `mode`, since production death keeps `mode === 'playing'`. */
+  coaching: string | null
 }
 
 export function initialState(seed = 1983): GameState {
@@ -1125,5 +1120,10 @@ export function initialState(seed = 1983): GameState {
     events: [],
     frame: 0,
     frameAcc: 0,
+    // The sky is drawn from its OWN cursor off the same seed, so it reproduces exactly
+    // per seed WITHOUT consuming draws `rng` owes the gameplay (sw7-10 / M-015).
+    starfield: makeStarfield(seed),
+    attract: { page: 'banner', pageAge: 0, crawl: [] },
+    coaching: null,
   }
 }
