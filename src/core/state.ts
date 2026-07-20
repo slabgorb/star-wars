@@ -13,6 +13,8 @@ import type { Vec3, Mat4 } from '@arcade/shared/math3d'
 import type { GameEvent } from './events'
 import type { ChoreoVm } from './tie-vm'
 import { createRng, type Rng } from '@arcade/shared/rng'
+import { makeStarfield, type Star } from './starfield'
+import type { AttractState } from './attract'
 import { mazeForWave } from './surfaceMazes'
 import { TRENCH_EYE_SEAT, TRENCH_FAR } from './trench-channel'
 import { TRENCH_PORT_OFFSET } from './trench-wedges'
@@ -168,7 +170,10 @@ export const STARTING_LIVES = 6
 // has NO score-threshold life/shield grant (the 2026-07-15 audit's refuter did the
 // exhaustive BCD hunt). Those numbers are the Death-Star-SELECTION start-bonus
 // DISPLAY strings (TSCBN1..4 = 200k/400k/600k/800k, WSGAS.MAC:527-530; banner
-// MS.BON "DEATH STAR BONUS EARNED"), which the clone misread as a recurring ladder.
+// MS.BON, which is defined `<STARTING WAVE BONUS>` at TCMES.MAC:617 — the
+// "DEATH STAR BONUS EARNED" this comment used to quote is the STALE call-site
+// comment at WSMAIN.MAC:3362, never the on-screen text), which the clone misread
+// as a recurring ladder.
 // The genuine selection bonus is a separate, unmodelled feature (see the sw7-4
 // session Delivery Findings).
 /** The bonus/extra-life HUD flash (`bonusFlash`) re-arms to this on any score
@@ -1037,6 +1042,29 @@ export interface GameState {
    * game-frame `frameAcc` didn't consume yet. Required alongside `frame` for the
    * same tsc-exhaustiveness reason. Same citations as `frame`. */
   frameAcc: number
+  /** The 50-star WSSTAR field (sw7-10 / M-015) — the backdrop behind BOTH the attract
+   * screen and the space run, since the cabinet drives it in flight too (ST.UX off
+   * FRAME, WSMAIN.MAC:2525-2528). Laid out from the run seed and slid past the eye
+   * every step; see `src/core/starfield.ts` for the ROM anchors and for the two logged
+   * divergences (seeded rather than hardware-random placement, wrap rather than
+   * re-roll on recycle). */
+  starfield: readonly Star[]
+  /** The rotating attract machine — which idle page is up, how long it has been up,
+   * and the live intro-crawl lines (sw7-10 / H-017 + H-018). Advanced only while
+   * `mode === 'attract'`; see `src/core/attract.ts`. */
+  attract: AttractState
+  /** The in-flight coaching hint the shell should draw this frame, or `null`
+   * (sw7-10 / H-022). Derived fresh by `coachingFor` at EVERY step that returns
+   * through `finalizeFrame` — which is every active-play return, the attract
+   * rotation, and the end-of-run hold — so it is never accumulated and cannot get
+   * stuck on screen.
+   *
+   * The end-of-run hold is called out because it is where this claim was FALSE:
+   * that branch used to return early, outside the closing pass, so a wave-1 death
+   * left the hint frozen on screen permanently (sw7-10 rework, finding F3, pinned by
+   * `tests/core/coaching-clears-on-death.test.ts`). `coachingFor` gates on `gameOver`
+   * as well as `mode`, since production death keeps `mode === 'playing'`. */
+  coaching: string | null
 }
 
 export function initialState(seed = 1983): GameState {
@@ -1092,5 +1120,10 @@ export function initialState(seed = 1983): GameState {
     events: [],
     frame: 0,
     frameAcc: 0,
+    // The sky is drawn from its OWN cursor off the same seed, so it reproduces exactly
+    // per seed WITHOUT consuming draws `rng` owes the gameplay (sw7-10 / M-015).
+    starfield: makeStarfield(seed),
+    attract: { page: 'banner', pageAge: 0, crawl: [] },
+    coaching: null,
   }
 }

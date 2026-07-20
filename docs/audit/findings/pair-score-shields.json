@@ -12,7 +12,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 185,
+      "line": 190,
       "verbatim": "export const TIE_SCORE = 1000"
     }
   },
@@ -47,7 +47,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 196,
+      "line": 201,
       "verbatim": "export const FIREBALL_SCORE = 33"
     }
   },
@@ -64,7 +64,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 499,
+      "line": 504,
       "verbatim": "export const TURRET_SCORE = 200"
     }
   },
@@ -81,7 +81,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 846,
+      "line": 895,
       "verbatim": "      score += TURRET_SCORE"
     }
   },
@@ -132,7 +132,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 662,
+      "line": 667,
       "verbatim": "export const TRENCH_BONUS = 25000"
     }
   },
@@ -149,7 +149,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 818,
+      "line": 823,
       "verbatim": "export const SURFACE_CLEAR_BONUS = 50000"
     }
   },
@@ -166,7 +166,7 @@
     },
     "ours": {
       "file": "src/core/state.ts",
-      "line": 166,
+      "line": 168,
       "verbatim": "export const STARTING_LIVES = 6"
     }
   },
@@ -183,7 +183,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 1437,
+      "line": 1486,
       "verbatim": "  return { lives: Math.max(0, lives - 1), shieldHitAt: t }"
     }
   },
@@ -273,7 +273,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 494,
+      "line": 521,
       "verbatim": "      damage++"
     },
     "recommendation": "fix",

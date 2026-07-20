@@ -14,6 +14,9 @@
 // rule helpers — there is no ad-hoc geometry in here.
 
 import { initialState } from './state'
+import { stepAttract } from './attract'
+import { stepStarfield } from './starfield'
+import { coachingFor } from './coaching'
 import { mazeForWave } from './surfaceMazes'
 import type { GameState, Projectile, Enemy, Turret, Phase, TrenchObstacle, DyingTie, GroundDebris } from './state'
 import {
@@ -146,9 +149,23 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // loop. Active play is the fall-through below (mode === 'playing').
   if (state.mode === 'attract') {
     if (input.start) return startRun(state)
-    return { ...state, t, events: [] }
+    // The idle screen is not idle: the page machine rotates BNR→INS→SCR→HIS with the
+    // intro crawl receding through the banner (sw7-10 / H-017 + H-018), over the same
+    // drifting starfield the flight phases fly through (M-015).
+    return finalizeFrame(state, {
+      ...state,
+      t,
+      attract: stepAttract(state.attract, dt),
+      events: [],
+    })
   }
   if (state.mode === 'gameover' || state.gameOver) {
+    // The end-of-run hold is still a FRAME, not a freeze (sw7-10 rework, finding F3).
+    // Every return below goes through `finalizeFrame` for the same reason the
+    // active-play returns do: the WSSTAR field keeps sliding past the eye — the cabinet
+    // never shows a dead sky — and `coaching` is re-derived rather than carried, which
+    // is what actually clears the hint (`coachingFor` returns null once `gameOver`).
+    // Leaving this branch outside the closing pass is what froze both.
     const startHeld = input.start === true
     if (state.entry !== null) {
       // SH2-13: the ARMED initials entry gates the exit. A start press can
@@ -159,7 +176,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       // latch) never commits. The commit is announced as a GameEvent; the
       // shell owns the table and persists on the cue.
       if (startHeld && !state.startPrev && state.entry.initials.length === MAX_INITIALS) {
-        return {
+        return finalizeFrame(state, {
           ...state,
           mode: 'attract',
           gameOver: false,
@@ -169,14 +186,23 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
           aimX,
           aimY,
           events: [{ type: 'name-entered', name: state.entry.initials }],
-        }
+        })
       }
-      return { ...state, startPrev: startHeld, t, aimX, aimY, events: [] }
+      return finalizeFrame(state, { ...state, startPrev: startHeld, t, aimX, aimY, events: [] })
     }
     if (startHeld) {
-      return { ...state, mode: 'attract', gameOver: false, startPrev: startHeld, t, aimX, aimY, events: [] }
+      return finalizeFrame(state, {
+        ...state,
+        mode: 'attract',
+        gameOver: false,
+        startPrev: startHeld,
+        t,
+        aimX,
+        aimY,
+        events: [],
+      })
     }
-    return { ...state, startPrev: startHeld, t, aimX, aimY, events: [] }
+    return finalizeFrame(state, { ...state, startPrev: startHeld, t, aimX, aimY, events: [] })
   }
 
   // Clone the RNG so the step never mutates its input — purity intact.
@@ -283,8 +309,9 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // Each phase runs its own combat, then `progress` checks the kill quota and
   // drops the run into the next phase once the wave is cleared. The trench is
   // terminal here — its gameplay is story 8-5; for now it just holds safely.
-  if (state.phase === 'surface') return finalizeScore(state, progress(stepSurface(state, input, dt, common)))
-  if (state.phase === 'trench') return finalizeScore(state, stepTrench(state, common, dt))
+  if (state.phase === 'surface')
+    return finalizeFrame(state, finalizeScore(state, progress(stepSurface(state, input, dt, common))))
+  if (state.phase === 'trench') return finalizeFrame(state, finalizeScore(state, stepTrench(state, common, dt)))
 
   // The wave's difficulty knobs: later waves spawn TIEs sooner, send them in
   // faster, and lob fireballs more often (gameRules.waveParams; wave 1 is today's
@@ -510,7 +537,7 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   const lives = spaceHit.lives
   pushFarewell(events, lives) // fatal hit → the end-of-game farewell (sw7-8, U-017)
 
-  return finalizeScore(
+  const stepped = finalizeScore(
     state,
     progress({
       ...state,
@@ -540,6 +567,28 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
       frameAcc,
     }),
   )
+  return finalizeFrame(state, stepped)
+}
+
+/**
+ * The frame's closing pass over the whole-screen furniture (sw7-10), run at every
+ * active-play return alongside `finalizeScore` so no phase can forget it:
+ *
+ * - the WSSTAR field slides past the eye (M-015 — the cabinet drives it in flight too,
+ *   `LDD FRAME / JSR LSLD7 / STD ST.UX`, WSMAIN.MAC:2525-2528);
+ * - the coaching hint is RE-DERIVED from the finished frame (H-022), never accumulated,
+ *   so it appears and clears exactly when the ROM's gates say it should.
+ *
+ * `dt` is recovered as the frame's own elapsed time. Every active-play path advances
+ * `t` by exactly `dt` before returning, so this is the step's real `dt` and not an
+ * approximation of it.
+ */
+export function finalizeFrame(prev: GameState, next: GameState): GameState {
+  return {
+    ...next,
+    starfield: stepStarfield(next.starfield, next.t - prev.t),
+    coaching: coachingFor(next),
+  }
 }
 
 /**
