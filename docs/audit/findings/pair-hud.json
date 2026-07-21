@@ -284,7 +284,7 @@
     },
     "ours": {
       "file": "src/core/sim.ts",
-      "line": 649,
+      "line": 651,
       "verbatim": "const MAX_INITIALS = 3"
     }
   },

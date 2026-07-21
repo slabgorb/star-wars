@@ -323,20 +323,22 @@ export const MAX_FIREBALL_SLOTS = 6
 // guns]` row from `TGPROB` (WSCPU.MAC:736). The GUNS column is already ported as
 // `FIRE_CONCURRENCY` (gameRules.ts); these are the two columns that were missing.
 //
-// Verbatim from the `.PROB mask,threshold,guns` rows of `TGPROB` (WSCPU.MAC:736), the
-// first 8 rows (fire-index 0..7) the design §6 table pins:
-//   0F,80 · 0F,80 · 0F,80 · 0F,40 · 07,80 · 07,20 · 07,20 · 03,80
+// Verbatim from the `.PROB mask,threshold,guns` rows of `TGPROB` (WSCPU.MAC:736-748), ALL
+// 11 defined rows (fire-index 0..10 — the table ENDS at `TGPROZ:`, row 10):
+//   0F,80 · 0F,80 · 0F,80 · 0F,40 · 07,80 · 07,20 · 07,20 · 03,80 · 03,60 · 03,40 · 03,30
 // `mask` is ANDed with the low frame byte, so 0F opens a window every 16 game frames
 // (≈0.78 s at TICK_HZ), 07 every 8 (≈0.39 s), 03 every 4 (≈0.20 s). `threshold` is the
 // unsigned `CMPA/BLS` compare against P.RND1: a shot fires when the draw is STRICTLY
-// GREATER, so P(fire | window open) = (255 − threshold)/256 (80 ≈ 50 %, 40 ≈ 75 %,
-// 20 ≈ 87 %). Aggression ramps three ways at once — shorter window, lower threshold,
-// more slots.
+// GREATER, so P(fire | window open) = (255 − threshold)/256 (80 ≈ 50 %, 60 ≈ 62 %,
+// 40 ≈ 75 %, 30 ≈ 81 %). Aggression ramps three ways at once — shorter window, lower
+// threshold, more slots.
 //
 // Length 16 with the SAME fire-index as `FIRE_CONCURRENCY` (min(wave-1, 15)), so
-// `waveParams` addresses all three columns with one index. Indices 8..15 SATURATE the
-// last ported row (03,80), matching FIRE_CONCURRENCY's own saturation; the ROM's deeper
-// TGPROB rows 8..10 (03,60 · 03,40 · 03,30) are not ported — the design pins 8 rows.
+// `waveParams` addresses all three columns with one index. The ROM CLAMPS the fire-index
+// to the last DEFINED row (WSCPU.MAC:636-644 `CMPB #TGPROZ-TGPROB/4 / IFHS / LDU #TGPROZ-4`
+// → row 10), so indices 11..15 SATURATE row 10 (03,30), NOT row 7's 03,80 — the deeper
+// rows 8..10 (03,60 · 03,40 · 03,30) are now ported (sw8-2 T5a). FIRE_CONCURRENCY (guns
+// 1,1,2,3,4,5,6,6,6,6,6 → saturates 6) already matches through row 10.
 
 /** TGPROB cadence-window MASK per fire-index (WSCPU.MAC:736). ANDed with the frame
  *  counter: a fire opening is when `(frame & mask) === 0`. */
@@ -346,7 +348,7 @@ export const FIRE_MASK: readonly number[] = [
 /** TGPROB probability THRESHOLD per fire-index (WSCPU.MAC:736). A shot fires when
  *  `nextInt(rng, 256) > threshold`; P(fire | window) = (255 − threshold)/256. */
 export const FIRE_THRESHOLD: readonly number[] = [
-  0x80, 0x80, 0x80, 0x40, 0x80, 0x20, 0x20, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+  0x80, 0x80, 0x80, 0x40, 0x80, 0x20, 0x20, 0x80, 0x60, 0x40, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30,
 ]
 
 // --- Trench wall-gun fire cadence: the base-gun TGPROB (B-017, WSBASE.MAC) -----
