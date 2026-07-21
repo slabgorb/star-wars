@@ -51,6 +51,18 @@ export const STAR_SPREAD = 3000
 export const STAR_SPEED = 0x40 * (246.094 / 12)
 
 /**
+ * Lateral viewer drift — the ST.UX slide (sw8-1), ported the same per-game-frame × TICK_HZ
+ * way as STAR_SPEED. In space flight the cabinet drives ST.UX STRAIGHT off the frame counter
+ * (`S1MV: LDD FRAME / JSR LSLD7 / STD ST.UX`, WSMAIN.MAC:2529-2531 — a viewer *translation*
+ * labelled "STARS RELATIVE MOVEMENT", NOT a rotation; that is the sw8-1 AC1 ruling), so the
+ * whole field slides one way past the moving eye. The authentic slope is FRAME<<7 = 0x80 raw
+ * units/game-frame; that sweeps our ±STAR_SPREAD band in ~1 s, so the rate here is tuned DOWN
+ * to a gentle ≈2 u/frame (`0x02`, design §3 "tuning" — eyeball-owned, not test-pinned). The
+ * drift is UNIFORM in world-x; the shell's per-star x/z divide (drawStarfield) turns that into
+ * depth-correct screen parallax for free (near stars sweep faster than far ones). */
+export const STAR_LATERAL_SPEED = 0x02 * (246.094 / 12)
+
+/**
  * Lay out the 50-star field from `seed`.
  *
  * Drawn from its OWN cursor (`createRng(seed)`) rather than from `state.rng`, so
@@ -83,9 +95,15 @@ export function makeStarfield(seed: number): Star[] {
  */
 export function stepStarfield(stars: readonly Star[], dt: number): Star[] {
   const band = STAR_FAR - STAR_NEAR
+  // The eye's lateral slide this step (ST.UX). The whole field shifts the SAME way, so it
+  // reads as the world sweeping past a moving viewpoint rather than only streaming forward.
+  // Left un-wrapped on purpose: the ROM re-rolls exited stars from its hardware RNG; our
+  // seeded field has no such source, and at this gentle rate the field only thins slightly on
+  // the trailing edge over a full wave — a documented minor divergence (sw8-1), not a defect.
+  const dx = STAR_LATERAL_SPEED * dt
   return stars.map((s) => {
     let z = s.z - STAR_SPEED * dt
     while (z < STAR_NEAR) z += band
-    return { x: s.x, y: s.y, z }
+    return { x: s.x - dx, y: s.y, z }
   })
 }
