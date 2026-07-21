@@ -55,7 +55,7 @@ import { surfaceGrid } from '../core/surface-grid'
 import { trenchChannel } from '../core/trench-channel'
 import { trenchWallDetail } from '../core/trench-detail'
 import { crosshairNdc, FOV_Y } from '../core/gameRules'
-import { surfaceShip } from '../core/sim' // the ship point itself (sw7-16), not a copy of it
+import { surfaceShip, spaceEye } from '../core/sim' // the ship point / space eye (sw7-16, sw8-1), not a copy
 import {
   perspective,
   multiply,
@@ -343,7 +343,16 @@ export function cameraView(state: GameState): Mat4 {
   if (state.phase === 'trench')
     // `trenchView` IS the eye: lateral offset, height above the y=0 trench floor (sw5-6).
     return viewMatrix(state.trenchView, IDENTITY)
-  return IDENTITY // space: the camera sits at the origin looking down −Z
+  // space: the MOVING EYE (sw8-1). The cabinet slides the viewpoint laterally, driving the
+  // viewer translation ST.UX off the frame counter (`S1MV`, WSMAIN.MAC:2529-2531) — so the
+  // whole world (Death Star, TIEs, fireballs — everything drawn through this view) sweeps
+  // past the eye and the Death Star can leave frame. `spaceEye` is the SAME core function the
+  // player's gun (`beamOrigin`) fires from, so what the pilot sees and what he shoots cannot
+  // drift apart (the sw7-16 invariant). Derived purely from the deterministic `state.frame`
+  // (open-Q #4 ruling: the eye is DERIVED, not stored), so the camera path is seeded-
+  // deterministic with no new core state. At frame 0 the shift is 0 ⇒ IDENTITY, so nothing
+  // moves until flight begins.
+  return viewMatrix(spaceEye(state), IDENTITY)
 }
 
 /**

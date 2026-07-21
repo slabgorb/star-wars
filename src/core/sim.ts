@@ -278,7 +278,13 @@ export function stepGame(state: GameState, input: Input, dt: number): GameState 
   // FRONT`, `LDD M$TY` (lateral), `LDD M$TZ` (height). The site is re-latched EVERY frame of the
   // sweep (`LDD VG.RSX / STD LZ.RSX` sits inside the `IFGT`), never frozen at the pull — which is
   // why the direction is read from THIS frame's aim and the beam tracks the reticle while it is on.
-  const beamOrigin: Vec3 = shipPoint(state)
+  // sw8-1 — the gun leaves from the SAME moving eye the camera builds. `shipPoint(state)` seats
+  // the muzzle at the cockpit ORIGIN in space; once `cameraView` slides the space viewpoint off
+  // that origin, the beam must slide with it or the pilot can no longer hit what the crosshair is
+  // on (the sw7-16 promise: aim == view). `spaceEye` is that shared point; surface/trench are
+  // unchanged (their eye already IS `shipPoint`). The cockpit hit-test below still centres on
+  // `shipPoint` (origin), so the collision frame — and fireball homing — is untouched (sw8-2).
+  const beamOrigin: Vec3 = state.phase === 'space' ? spaceEye(state) : shipPoint(state)
   const beamDir: Vec3 = aimDirection(aimX, aimY, input.aspect)
 
   // Enemy fire advances & expires each step. SPACE-phase TIE fireballs HOME on the
@@ -1897,6 +1903,26 @@ export function spawnTie(_rng: Rng, spawnIndex: number, spaceWave: number): Enem
  */
 export function surfaceShip(altitude: number): Vec3 {
   return [0, altitude, 0]
+}
+
+/**
+ * sw8-1 — THE SPACE MOVING EYE. In space flight the cabinet slides the viewpoint laterally,
+ * driving the viewer translation ST.UX straight off the frame counter
+ * (`S1MV: LDD FRAME / JSR LSLD7 / STD ST.UX`, WSMAIN.MAC:2529-2531 — a viewer TRANSLATION,
+ * not a rotation; that is the sw8-1 AC1 ruling). The authentic slope FRAME<<7 = 0x80/frame
+ * sweeps our play cube in ~1 s, so it is scaled to SPACE_EYE_SHIFT_PER_FRAME so the Death Star
+ * drifts off frame over a wave like the longplay (design §3 "tuning" — eyeball-owned).
+ *
+ * A PURE function of the deterministic `state.frame` (open-Q #4 ruling: the eye is DERIVED,
+ * never stored — src/core owns `frame`, and both the shell's camera `cameraView` and the
+ * player's gun `beamOrigin` read THIS one function, so — per the sw7-16 invariant — what the
+ * pilot sees and what he shoots cannot drift apart). The INCOMING half of sw7-16's "one point,
+ * four jobs" — the cockpit hit-test and the fireball homing target — stays at the origin: sw8-1
+ * moves only the OUTGOING viewpoint; reconciling incoming fire with the moved eye is sw8-2.
+ */
+export const SPACE_EYE_SHIFT_PER_FRAME = 8
+export function spaceEye(s: GameState): Vec3 {
+  return [s.frame * SPACE_EYE_SHIFT_PER_FRAME, 0, 0]
 }
 
 /**
