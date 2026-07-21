@@ -106,13 +106,20 @@ interface Spawn {
 function collectSpawns(dt: number, steps: number, seed = 4041): Spawn[] {
   let s: GameState = { ...initialState(seed), lives: 1e9 }
   const out: Spawn[] = []
+  const atPlane = (e: Enemy) => Math.abs(e.pos[2] + TIE_SPAWN_DISTANCE) < 1e-6
   for (let i = 0; i < steps; i++) {
     s = stepGame(s, NO_INPUT, dt)
-    for (const e of s.enemies) {
-      if (Math.abs(e.pos[2] + TIE_SPAWN_DISTANCE) < 1e-6) {
-        out.push({ x: e.pos[0], y: e.pos[1], z: e.pos[2] })
-      }
-    }
+    for (const e of s.enemies) if (atPlane(e)) out.push({ x: e.pos[0], y: e.pos[1], z: e.pos[2] })
+    // sw8-2 RE-SEAT: force slot turnover independent of the flight model. sw8-2 ports the ROM's
+    // rate-limited $67 aim (4.48°/frame, `aimOrient`), so a homing TIE now curves at turn radius
+    // v/ω ≈ 3–6k units — far outside the 80u cockpit hit sphere — and ORBITS instead of snap-homing
+    // into a ram (this is authentic: the ROM's homing does not ram either; the space threat is
+    // enemy FIRE). Under NO_INPUT slots therefore no longer free by ramming, which stalls the TBG
+    // table walk this suite exercises. Clearing TIEs that have LEFT the spawn plane frees a slot so a
+    // fresh one spawns next window and the table keeps walking to the ±2048 D-group — the SAME spawn
+    // GEOMETRY (depth/lateral/one-offset), now decoupled from ram turnover. (Was: turnover-limited to
+    // ~8–10 spawns per long window; see the AC#2/#14 non-vacuity note below.)
+    s = { ...s, enemies: s.enemies.filter(atPlane) }
   }
   return out
 }
@@ -179,17 +186,13 @@ describe('sw4-1 §A — TIEs spawn on the far plane with the TBG lateral table',
   it('the wave actually spawns a healthy sample of fighters', () => {
     // Guards the observation itself: if spawning were broken the coverage checks
     // below would pass vacuously on an empty set.
-    // sw7 task-4 re-baseline (15 → 10): VM-driven TIEs now LOITER (design §7 —
-    // slots free only when a fighter is shot or rams) instead of the old fast
-    // home→peel→exit cycle, so fewer slots turn over per unit time under NO_INPUT.
-    // sw7 task-5 re-baseline (window 1500 → 3000 steps): the authentic §6 fire gate
-    // now feeds C_AG on every shot, so a fighter runs its roll-away-after-shooting
-    // maneuver (WSCPU.MAC:646-651 → the script's `.CUNTIL C_AG`) instead of boring
-    // straight in — under NO_INPUT (nothing shoots the loiterers down) slots turn
-    // over even slower, so the SAME sample needs a longer window to walk the 12-slot
-    // table to index 9 (the first ±2048 D-group slot) the coverage test below needs.
-    // The spawn SEQUENCE is unchanged; only turnover time is. 3000 steps ⇒ 14 spawns
-    // (spawnCount), non-vacuously past that slot. Deterministic from seed 4041.
+    // History: sw7 task-4/5 re-baselined this count DOWN (15 → 10, window 1500 → 3000) as
+    // VM-driven TIEs began to LOITER instead of the old fast home→peel→exit cycle, so slots
+    // turned over slower under NO_INPUT and the 12-slot TBG table walked to index 9 (the first
+    // ±2048 D-group slot the coverage test needs) more slowly. sw8-2 took that to its authentic
+    // limit — the ROM $67 aim orbits rather than rams (see the collectSpawns RE-SEAT above) — so
+    // turnover is now FORCED there and this count is a healthy, flight-independent sample (>>10)
+    // walking well past the D-group slot. The spawn SEQUENCE and GEOMETRY are unchanged.
     expect(spawns.length).toBeGreaterThanOrEqual(10)
   })
 

@@ -92,6 +92,8 @@ import {
   sub,
   normalize,
   length,
+  dot,
+  transform,
   multiply,
   rotationX,
   rotationY,
@@ -1758,24 +1760,46 @@ function homeShots(shots: readonly Projectile[], dt: number): Projectile[] {
 }
 
 /**
- * The homing rotation, extracted from the retired `moveEnemy` (story 9-2) and
- * gated by the VM's `AIM_PLAYER`/`AIM_AHEAD` bits (design §5): re-point the TIE's
- * nose (model +Z) straight at the cockpit. This is `moveEnemy`'s homing law with
- * the invented swoop bias/bank removed (those constants are retired) — a re-point
- * toward the target, NOT a fixed rate. The ROM's exact Math-Box `$67` steer law
- * (§5.2c) is a deferred refinement (design §9); AIM_AHEAD ("aim in front of the
- * player") has no lead point modeled here and aims at the cockpit too.
+ * THE HOMING STEER (sw8-2 AC4) — the ROM's Math Box `$67` aim law (§5.2c, ROM:8C44-8D66),
+ * gated by the VM's `AIM_PLAYER`/`AIM_AHEAD` bits (design §5). Each frame it decomposes the
+ * TIE→cockpit direction into the TIE's OWN frame, then YAWS on the lateral error and PITCHES
+ * on the vertical error to null them — a RATE-LIMITED steer at the recovered turn rate
+ * (`word_89A8[#$14]` ≈ 4.48°/frame, live as TIE_YAW_RATE / TIE_PITCH_RATE), NOT the one-tick
+ * `lookRotation` re-point sw8-1/9-2 shipped. A snap cannot spin; combined with roll this
+ * incremental steer visibly tracks across the field. Because the step is CLAMPED to one frame
+ * of the rate and multiplies onto the CURRENT orientation, where the TIE was already pointing
+ * carries forward — the property a snap (which ignores the current orient) cannot fake.
  *
- * TODO(playtest): approach aggressiveness. A TIE runs its choreography's opening
- * straight forward `.CT …,0,MF` (no AIM/twist) and beelines the cockpit, reaching
- * cockpit-collision range at ~frame 93 — before the weave/loiter segments engage.
- * The authentic loiter needs the §5 play-cube clamp (`sub_8DE3`) + §7
- * cockpit-collision-drop (out of this task's scope); tune once those land.
+ * When the target is already within a frame's turn the clamp is inert and it re-points exactly,
+ * so a TIE that is lined up stays lined up. AIM_AHEAD ("aim in front of the player") has no lead
+ * point modeled here and steers at the cockpit too.
+ *
+ * TODO(playtest): approach aggressiveness / the §5 play-cube clamp (`sub_8DE3`, sw8-2 AC3) is a
+ * deferred tuning item — TIEs still beeline before the weave engages; tune against the longplay.
  *
  * SPACE ONLY — the cockpit is the origin here (see `toCockpit`).
  */
-function aimOrient(e: Enemy): Mat4 {
-  return lookRotation(toCockpit(e.pos))
+function aimOrient(e: Enemy, dt: number): Mat4 {
+  const orient = e.orient ?? IDENTITY
+  const want = toCockpit(e.pos) // world unit direction from the TIE to the cockpit
+  // Decompose `want` into the TIE's local right/up/forward — the columns of its orientation,
+  // recovered by transforming each basis vector (a rotation, so no inverse needed).
+  const lx = dot(want, transform(orient, [1, 0, 0])) // lateral error (local +X)
+  const ly = dot(want, transform(orient, [0, 1, 0])) // vertical error (local +Y)
+  const lz = dot(want, transform(orient, [0, 0, 1])) // forward component (local +Z, the nose)
+  // Yaw about local up to null the lateral error, pitch about local right to null the vertical
+  // error — each clamped to one frame of the ROM turn rate (`atan2(err, forward)` is the full
+  // angle to the target in that plane; clamping makes it a bounded step). rotationY(+yaw) turns
+  // the nose toward +X; pitching UP toward +Y is rotationX(−pitch) (the applyManeuver PITCH_U
+  // convention).
+  const yaw = clampStep(Math.atan2(lx, lz), TIE_YAW_RATE * dt)
+  const pitch = clampStep(Math.atan2(ly, lz), TIE_PITCH_RATE * dt)
+  return multiply(multiply(orient, rotationY(yaw)), rotationX(-pitch))
+}
+
+/** Clamp `angle` to ±`limit` — one frame of a fixed turn rate. */
+function clampStep(angle: number, limit: number): number {
+  return Math.max(-limit, Math.min(limit, angle))
 }
 
 /**
@@ -1792,7 +1816,7 @@ function aimOrient(e: Enemy): Mat4 {
  * homing), THEN rebuild velocity from the rotated basis and integrate position —
  * `sub_8D9D` builds velocity from the just-rotated matrix, which is exactly what
  * curves the path. Roll/yaw/pitch post-multiply so each turns about the TIE's OWN
- * (local) axis; `AIM_*` re-points the nose via `aimOrient` (a re-point, not a rate).
+ * (local) axis; `AIM_*` steers the nose via `aimOrient` (a rate-limited $67 steer, sw8-2).
  *
  * Pure: orient/pos derive only from the inputs — no time beyond `dt`, no randomness.
  */
@@ -1802,8 +1826,9 @@ export function applyManeuver(e: Enemy, twist: number, move: number, dt: number)
   // here too by defaulting to IDENTITY rather than crashing on `orient[2]`.
   let orient = e.orient ?? IDENTITY
 
-  // Homing (AIM_PLAYER 0x80 / AIM_AHEAD 0x40): steer the nose toward the cockpit.
-  if (twist & (Twist.AIM_PLAYER | Twist.AIM_AHEAD)) orient = aimOrient(e)
+  // Homing (AIM_PLAYER 0x80 / AIM_AHEAD 0x40): steer the nose toward the cockpit at the ROM
+  // turn rate (sw8-2 $67 law), integrating one frame of `dt` from the CURRENT orientation.
+  if (twist & (Twist.AIM_PLAYER | Twist.AIM_AHEAD)) orient = aimOrient({ ...e, orient }, dt)
 
   // Roll about the nose (+Z), yaw about the local up (+Y), pitch about the local
   // right (+X) — the §5.3 fixed per-frame deltas as rad/s, integrated by dt.
@@ -1913,16 +1938,34 @@ export function surfaceShip(altitude: number): Vec3 {
  * sweeps our play cube in ~1 s, so it is scaled to SPACE_EYE_SHIFT_PER_FRAME so the Death Star
  * drifts off frame over a wave like the longplay (design §3 "tuning" — eyeball-owned).
  *
+ * sw8-2 — THE EYE IS BOUNDED (AC11/AC9/AC12). ST.UX is a 16-bit SIGNED register: `FRAME<<7`
+ * is a bounded SAWTOOTH (0 → +32768 → wraps to −32768 → 0, a 512-frame period), NOT the
+ * monotonic slide sw8-1 shipped. Unbounded, the eye slid without limit on a long space run and
+ * pushed the origin-anchored fight (TIEs spawn origin-relative; the crosshair NDC clamps ±1)
+ * off the side of the screen — combat and incoming fire went unreachable / soft-locked (sw8-1
+ * Reviewer finding). We restore the register WRAP, scaled by the same 1/16 as the velocity
+ * (ROM SHIFT 128 → our 8, so ROM wrap 65536 → our EYE_WRAP 4096): the PERIOD (EYE_WRAP / SHIFT
+ * = 512 frames) matches the ROM exactly while the AMPLITUDE (±EYE_WRAP/2 = ±2048) stays well
+ * inside the space-combat FOV envelope, so combat stays reachable AND the Death Star still
+ * drifts (sw8-1). AC12 RULING: the ROM homes incoming fire toward the cockpit — which IS the
+ * origin — so the faithful reconciliation is to BOUND this eye (origin ≈ view) rather than move
+ * the origin-anchored hit-test / `homeShots` target; those stay put (see `homeShots`). Amplitude
+ * is eyeball-owned tuning (design §3); ACs 5/10 verify the on-screen feel against the longplay.
+ *
  * A PURE function of the deterministic `state.frame` (open-Q #4 ruling: the eye is DERIVED,
  * never stored — src/core owns `frame`, and both the shell's camera `cameraView` and the
  * player's gun `beamOrigin` read THIS one function, so — per the sw7-16 invariant — what the
- * pilot sees and what he shoots cannot drift apart). The INCOMING half of sw7-16's "one point,
- * four jobs" — the cockpit hit-test and the fireball homing target — stays at the origin: sw8-1
- * moves only the OUTGOING viewpoint; reconciling incoming fire with the moved eye is sw8-2.
+ * pilot sees and what he shoots cannot drift apart).
  */
 export const SPACE_EYE_SHIFT_PER_FRAME = 8
+export const EYE_WRAP = 4096 // ST.UX register period, scaled 1/16 from the ROM's 65536 (AC11)
 export function spaceEye(s: GameState): Vec3 {
-  return [s.frame * SPACE_EYE_SHIFT_PER_FRAME, 0, 0]
+  // Signed wrap of the frame-driven slide into [−EYE_WRAP/2, +EYE_WRAP/2): the ROM's 16-bit
+  // ST.UX register, scaled. `s.frame >= 0` so the inner modulo is already non-negative; the
+  // `+ EYE_WRAP) % EYE_WRAP` keeps it correct if that ever changes.
+  const half = EYE_WRAP / 2
+  const x = ((((s.frame * SPACE_EYE_SHIFT_PER_FRAME + half) % EYE_WRAP) + EYE_WRAP) % EYE_WRAP) - half
+  return [x, 0, 0]
 }
 
 /**
